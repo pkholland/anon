@@ -8,9 +8,11 @@
 #include <time.h>
 #include <chrono>
 #include <iomanip>
+#include <system_error>
+#include <errno.h>
 
-#define anon_log(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) { formatter << _body;}, false)
-#define anon_log_error(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) { formatter << _body;}, true)
+#define anon_log(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) {formatter << _body;}, false)
+#define anon_log_error(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) {formatter << _body;}, true)
 
 namespace Log
 {
@@ -65,5 +67,7 @@ inline std::string errno_string()
       return std::to_string(errno);
     }
 }
+
+#define do_error(fn) {anon_log_error(fn << " failed with errno: " << errno_string()); throw std::system_error(errno, std::system_category());}
 
 
