@@ -74,7 +74,7 @@ extern "C" int main(int argc, char** argv)
           io_d.while_paused([]{anon_log("all io threads now paused");});
           anon_log("resuming io threads");
         } else if (!strcmp(&msgBuff[0], "s")) {
-          int num_messages = 2000;
+          int num_messages = 20;
           anon_log("sending " << num_messages << " udp packet" << (num_messages == 1 ? "" : "s") << " to my_udp on loopback addr");
           
           struct sockaddr_in6 addr = { 0 };
@@ -82,7 +82,6 @@ extern "C" int main(int argc, char** argv)
           addr.sin6_port = htons(udp_port);
           addr.sin6_addr = in6addr_loopback;
 
-          num_calls = 0;
           for (int i=0; i<num_messages; i++) {
             std::ostringstream msg;
             msg << "hello world (" << std::to_string(i) << ")" /*<< rand_id()*/;
