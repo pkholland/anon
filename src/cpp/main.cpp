@@ -19,6 +19,7 @@ public:
                         socklen_t sockaddr_len)
   {
     anon_log("received msg of: \"" << (char*)msg << "\"");
+    //std::this_thread::sleep_for(std::chrono::milliseconds( 0 ));
   }
 
 };
@@ -39,7 +40,7 @@ extern "C" int main(int argc, char** argv)
   big_id id(id_data);
   anon_log("id: (short) " << id << " (long) " << ldisp(id));
   anon_log("random id: " << ldisp(rand_id()));
-  anon_log("sha256 id: " << ldisp(sha256_id("hello world", strlen("hello world"))));
+  anon_log("sha256 id: " << ldisp(sha256_id("hello world\n", strlen("hello world\n"))));
   
   
   {
@@ -73,19 +74,21 @@ extern "C" int main(int argc, char** argv)
           io_d.while_paused([]{anon_log("all io threads now paused");});
           anon_log("resuming io threads");
         } else if (!strcmp(&msgBuff[0], "s")) {
-          int num_messages = 20;
+          int num_messages = 2000;
           anon_log("sending " << num_messages << " udp packet" << (num_messages == 1 ? "" : "s") << " to my_udp on loopback addr");
           
-          const char* message = "hello world";
-          size_t len = strlen(message) + 1; // including null byte
           struct sockaddr_in6 addr = { 0 };
           addr.sin6_family = AF_INET6;
           addr.sin6_port = htons(udp_port);
           addr.sin6_addr = in6addr_loopback;
 
-          for (int i=0; i<num_messages; i++)
-            if (sendto(m_udp.get_sock(), message, len, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+          num_calls = 0;
+          for (int i=0; i<num_messages; i++) {
+            std::ostringstream msg;
+            msg << "hello world (" << std::to_string(i) << ")" /*<< rand_id()*/;
+            if (sendto(m_udp.get_sock(), msg.str().c_str(), strlen(msg.str().c_str()) + 1, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
               anon_log_error("sendto failed with errno: " << errno_string());
+          }
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");

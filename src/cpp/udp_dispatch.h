@@ -21,22 +21,19 @@ public:
                         const struct sockaddr_storage *sockaddr,
                         socklen_t sockaddr_len) = 0;
 
-  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event)
-  {
-    io_avail2(io_d, event, false);
-  }
+  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event);
                         
   void attach(io_dispatch& io_d)
   {
     struct epoll_event evt;
     evt.events = EPOLLIN;
-    io_avail2(io_d, evt, true);
+    evt.data.ptr = this;
+    io_d.epoll_ctl(EPOLL_CTL_ADD, sock_, &evt);
   }
   
   int get_sock() { return sock_; }
                         
 private:  
-  void io_avail2(io_dispatch& io_d, const struct epoll_event& event, bool first_time);
   
   int sock_;
   const src_addr_validator& validator_;

@@ -25,7 +25,7 @@ udp_dispatch::udp_dispatch(int udp_port, const src_addr_validator& validator)
   anon_log("listening for udp on port " << udp_port << ", socket " << sock_);
 }
 
-void udp_dispatch::io_avail2(io_dispatch& io_d, const struct epoll_event& event, bool first_time)
+void udp_dispatch::io_avail(io_dispatch& io_d, const struct epoll_event& event)
 {
   if (event.events & EPOLLIN) {
   
@@ -35,15 +35,7 @@ void udp_dispatch::io_avail2(io_dispatch& io_d, const struct epoll_event& event,
       socklen_t host_addr_size = sizeof(struct sockaddr_storage);
       auto dlen = recvfrom(sock_, &msgBuff[0], sizeof(msgBuff), 0, (struct sockaddr*)&host, &host_addr_size);
       if (dlen == -1) {
-        if (errno == EAGAIN) {
-          if (first_time) {
-            struct epoll_event evt;
-            evt.events = EPOLLET | EPOLLIN;
-            evt.data.ptr = this;
-            io_d.epoll_ctl(EPOLL_CTL_ADD, sock_, &evt);
-          }
-        }
-        else
+        if (errno != EAGAIN)
           anon_log_error("recvfrom failed with errno: " << errno_string());
         return;
       }
@@ -54,7 +46,7 @@ void udp_dispatch::io_avail2(io_dispatch& io_d, const struct epoll_event& event,
     }
     
   } else
-    anon_log_error("udp_dispatch::io_avail2 called with no EPOLLIN. event.events = " << event_bits_to_string(event.events));
+    anon_log_error("udp_dispatch::io_avail called with no EPOLLIN. event.events = " << event_bits_to_string(event.events));
 }
 
 

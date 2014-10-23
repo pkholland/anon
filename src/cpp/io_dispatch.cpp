@@ -83,10 +83,12 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
     anon_log_error("initial read on recv_ctl_fd_ did not fail as expected");
     
   // now hook up the handler for the control pipe
-  // we use (level triggered) one-shot to give ourselves a bit
-  // more control in getting the control pipe reads to happen
+  // we use (level triggered) one-shot to give ourselves
+  // control in getting the control pipe reads to happen
   // serially, and not just have all threads simultaneously
-  // processing control commands.
+  // processing control commands (EPOLLIN on its own), or
+  // force us to conintue to call read until we get EAGAIN
+  // in order to re-arm the event (EPOLLET)
   struct epoll_event evt;
   evt.events = EPOLLIN | EPOLLONESHOT;
   evt.data.ptr = &ctl_handler;
