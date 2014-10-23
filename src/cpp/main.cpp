@@ -93,20 +93,10 @@ extern "C" int main(int argc, char** argv)
     }
   }
   
-
-/*
-  udp_dispatch::init(std::thread::hardware_concurrency(),8617,handle_msg,false);
-  
-  udp_dispatch::test_msg();
-  std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  
-  udp_dispatch::stop();
-*/
-  
   term_big_id_crypto();
   
   anon_log("application exit");
 
-	return 0;
+  return 0;
 }
 
