@@ -1,17 +1,27 @@
 
 #include <stdio.h>
 #include <thread>
+#include <arpa/inet.h>
 #include "log.h"
 #include "udp_dispatch.h"
 #include "big_id_serial.h"
 #include "big_id_crypto.h"
 
-static void handle_msg(const unsigned char* msg, ssize_t len,
-                       const struct sockaddr_storage *sockaddr,
-                       socklen_t sockaddr_len)
+class my_udp : public udp_dispatch
 {
-  anon_log("received msg of: \"" << (char*)msg << "\"");
-}
+public:
+  my_udp(int port, const src_addr_validator& validator)
+    : udp_dispatch(port, validator)
+  {}
+
+  virtual void recv_msg(const unsigned char* msg, ssize_t len,
+                        const struct sockaddr_storage *sockaddr,
+                        socklen_t sockaddr_len)
+  {
+    anon_log("received msg of: \"" << (char*)msg << "\"");
+  }
+
+};
 
 extern "C" int main(int argc, char** argv)
 {
@@ -30,13 +40,68 @@ extern "C" int main(int argc, char** argv)
   anon_log("id: (short) " << id << " (long) " << ldisp(id));
   anon_log("random id: " << ldisp(rand_id()));
   anon_log("sha256 id: " << ldisp(sha256_id("hello world", strlen("hello world"))));
+  
+  
+  {
+    int                 udp_port = 8617;
+    src_addr_validator  validator;
+    my_udp              m_udp(udp_port,validator);
+    io_dispatch         io_d(std::thread::hardware_concurrency(),false);
+    m_udp.attach(io_d);
+    
+    while (true)
+    {
+      // read a command from stdin
+      char msgBuff[256];
+      auto bytes_read = read(0/*stdin*/,&msgBuff[0],sizeof(msgBuff));
+      
+      if (bytes_read > 1) {
+        // truncate the return char to a 0 so we can compare to strings
+        msgBuff[bytes_read-1] = 0;
+      
+        if (!strcmp(&msgBuff[0], "q")) {
+          anon_log("quitting");
+          break;
+        } else if (!strcmp(&msgBuff[0], "h")) {
+          anon_log("available commands:");
+          anon_log("  q - quit");
+          anon_log("  p - pause all io threads, print while paused, then resume");
+          anon_log("  s - send some udp packets to the udp handler");
+          anon_log("  h - display this menu");
+        } else if (!strcmp(&msgBuff[0], "p")) {
+          anon_log("pausing io threads");
+          io_d.while_paused([]{anon_log("all io threads now paused");});
+          anon_log("resuming io threads");
+        } else if (!strcmp(&msgBuff[0], "s")) {
+          int num_messages = 20;
+          anon_log("sending " << num_messages << " udp packet" << (num_messages == 1 ? "" : "s") << " to my_udp on loopback addr");
+          
+          const char* message = "hello world";
+          size_t len = strlen(message) + 1; // including null byte
+          struct sockaddr_in6 addr = { 0 };
+          addr.sin6_family = AF_INET6;
+          addr.sin6_port = htons(udp_port);
+          addr.sin6_addr = in6addr_loopback;
 
+          for (int i=0; i<num_messages; i++)
+            if (sendto(m_udp.get_sock(), message, len, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+              anon_log_error("sendto failed with errno: " << errno_string());
+        }
+        else
+          anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
+      }
+    }
+  }
+  
+
+/*
   udp_dispatch::init(std::thread::hardware_concurrency(),8617,handle_msg,false);
   
   udp_dispatch::test_msg();
   std::this_thread::sleep_for(std::chrono::milliseconds(1000));
   
   udp_dispatch::stop();
+*/
   
   term_big_id_crypto();
   

@@ -27,7 +27,10 @@ namespace Log
     if (std::strftime(mbstr, sizeof(mbstr), "%H:%M:%S.", std::localtime(&t))) {
       format << mbstr;
       std::chrono::system_clock::time_point realtime = std::chrono::high_resolution_clock::now();
-      format << (std::chrono::duration_cast<std::chrono::milliseconds>(realtime.time_since_epoch()).count() % 1000);
+      std::ostringstream tm;
+      tm << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3);
+      tm << (std::chrono::duration_cast<std::chrono::milliseconds>(realtime.time_since_epoch()).count() % 1000);
+      format << tm.str();
     }
    
     // (threadID, file_name, line_num)
@@ -63,6 +66,8 @@ inline std::string errno_string()
       return "EROFS";
     case EEXIST:
       return "EEXIST";
+    case EAGAIN:
+      return "EAGAIN";
     default:
       return std::to_string(errno);
     }
