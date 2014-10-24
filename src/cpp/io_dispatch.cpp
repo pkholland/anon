@@ -6,30 +6,27 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/timerfd.h>
 
 class io_ctl_handler : public io_dispatch::handler
 {
 public:
   virtual void io_avail(io_dispatch& io_d, const struct epoll_event& evt)
   {
-    if (evt.events & EPOLLIN)
-    {
+    if (evt.events & EPOLLIN) {
       char cmd;
       if (read(io_d.recv_ctl_fd_, &cmd, 1) != 1)
         do_error("read(io_d.recv_ctl_fd_, &cmd, 1)");
         
       // re-arm
-      struct epoll_event evt;
-      evt.events = EPOLLIN | EPOLLONESHOT;
-      evt.data.ptr = this;
-      io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, &evt);
+      io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
         
       if (cmd == io_dispatch::k_wake)
         io_d.wake_next_thread();
         
       else if (cmd == io_dispatch::k_pause) {
       
-        std::unique_lock<std::mutex> lock(io_d.mutex_);
+        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         
         // if this is the last io thread to have paused
         // then signal whatever thread is waiting in
@@ -59,6 +56,54 @@ public:
 
 static io_ctl_handler ctl_handler;
 
+///////////////////////////////////////////////////////////////////////////
+
+class io_timer_handler : public io_dispatch::handler
+{
+  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& evt)
+  {
+    if (evt.events & EPOLLIN) {
+      uint64_t num_expirations;
+      if (read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations)) != sizeof(num_expirations)) {
+        // note that we can get EAGAIN in certain cases where the kernel signals multiple
+        // threads that are calling epoll_wait.  In that case only one will get the data
+        // and the others will get EAGAIN.  So if this is one of those other threads we
+        // ignore it.
+        if (errno == EAGAIN)
+          return;
+        do_error("read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations))");
+      }
+      
+      struct timespec cur_time;
+      if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
+        do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
+        
+      std::vector<io_dispatch::scheduled_task*> ready_tasks;
+      {
+        std::unique_lock<std::mutex> lock(io_d.task_mutex_);
+        std::multimap<struct timespec,io_dispatch::scheduled_task*>::iterator beg;
+        while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= cur_time)) {
+          ready_tasks.push_back(beg->second);
+          io_d.task_map_.erase(beg);
+        }
+        if ((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) {
+          struct itimerspec t_spec = { 0 };
+          t_spec.it_value = beg->first;
+          if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
+            do_error("timerfd_settime(id_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0)");
+        }
+      }
+
+      for (auto task : ready_tasks)
+        task->exec();
+    }
+  }
+};
+
+static io_timer_handler timer_handler;
+
+///////////////////////////////////////////////////////////////////////////
+
 io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
   : running_(true),
     num_threads_(num_threads)
@@ -70,18 +115,11 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
   anon_log("using fd " << ep_fd_ << " for epoll");
     
   int sv[2];
-  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0) {
-    close(ep_fd_);
+  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv)");
-  }
   send_ctl_fd_ = sv[0];
   recv_ctl_fd_ = sv[1];
-  
-  // force recv_ctl_fd_ into EAGAIN state...
-  char cmd;
-  if ((read(recv_ctl_fd_, &cmd, 1) != -1) || (errno != EAGAIN))
-    anon_log_error("initial read on recv_ctl_fd_ did not fail as expected");
-    
+      
   // now hook up the handler for the control pipe
   // we use (level triggered) one-shot to give ourselves
   // control in getting the control pipe reads to happen
@@ -89,13 +127,24 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
   // processing control commands (EPOLLIN on its own), or
   // force us to conintue to call read until we get EAGAIN
   // in order to re-arm the event (EPOLLET)
-  struct epoll_event evt;
-  evt.events = EPOLLIN | EPOLLONESHOT;
-  evt.data.ptr = &ctl_handler;
-  if (::epoll_ctl(ep_fd_, EPOLL_CTL_ADD, recv_ctl_fd_, &evt) < 0)
-    do_error("epoll_ctl(ep_fd_, EPOLL_CTL_ADD, recv_ctl_fd_, &evt)");
+  epoll_ctl(EPOLL_CTL_ADD, recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, &ctl_handler);
   
   anon_log("using fds " << sv[0] << " (send), and " <<  sv[1] << " (receive) for io threads control pipe");
+  
+  // the file descriptor we use for the timer
+  timer_fd_ = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+  if (timer_fd_ == -1)
+    do_error("timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC)");
+  epoll_ctl(EPOLL_CTL_ADD, timer_fd_, EPOLLIN, &timer_handler);
+  anon_log("using fd " << timer_fd_ << " for timer");
+  
+#if 0
+  struct itimerspec t_spec = { 0 };
+  t_spec.it_value.tv_sec = 1;
+  t_spec.it_interval.tv_sec = 1;
+  if (timerfd_settime(timer_fd_, 0/*relative to the current time*/, &t_spec, 0) != 0)
+    do_error("timerfd_settime(timer_fd_, 0/*relative to the current time*/, &t_spec, 0)");
+#endif
   
   io_thread_ids_.resize(num_threads,0);
   thread_init_index_.store(0);
@@ -164,4 +213,33 @@ void io_dispatch::epoll_loop()
   anon_log("exiting io_dispatch::epoll_loop");
 }
 
+void io_dispatch::schedule_task(scheduled_task* task, const timespec& rel_when)
+{
+  struct timespec cur_time;
+  if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
+    do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
+  task->when_ = cur_time + rel_when;
+  
+  std::unique_lock<std::mutex>  lock(task_mutex_);
+  task_map_.insert(std::make_pair(task->when_,task));
+  if (task_map_.begin()->first == task->when_) {
+    struct itimerspec t_spec = { 0 };
+    t_spec.it_value = task->when_;
+    if (timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
+      do_error("timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0)");
+  }
+}
+
+bool io_dispatch::remove_task(scheduled_task* task)
+{
+  std::unique_lock<std::mutex>  lock(task_mutex_);
+  auto it = task_map_.find(task->when_);
+  while (it != task_map_.end() && it->second != task && it->first == task->when_)
+    ++it;
+  if (it != task_map_.end() && it->second == task) {
+    task_map_.erase(it);
+    return true;
+  }
+  return false;
+}
 

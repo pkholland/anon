@@ -5,8 +5,44 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <map>
 #include <atomic>
 #include <sys/epoll.h>
+
+inline bool operator<(const struct timespec& spec1, const struct timespec& spec2)
+{
+  if (spec1.tv_sec != spec2.tv_sec)
+    return spec1.tv_sec < spec2.tv_sec;
+  return spec1.tv_nsec < spec2.tv_nsec;
+}
+
+inline bool operator<=(const struct timespec& spec1, const struct timespec& spec2)
+{
+  return !operator<(spec2, spec1);
+}
+
+inline struct timespec operator+(const struct timespec& spec1, const struct timespec& spec2)
+{
+  struct timespec spec;
+  spec.tv_sec = spec1.tv_sec + spec2.tv_sec;
+  spec.tv_nsec = spec1.tv_nsec + spec2.tv_nsec;
+  if (spec.tv_nsec > 1000000000) {
+    ++spec.tv_sec;
+    spec.tv_nsec -= 1000000000;
+  }
+  return spec;
+}
+
+inline bool operator==(const struct timespec& spec1, const struct timespec& spec2)
+{
+  return (spec1.tv_sec == spec2.tv_sec) && (spec1.tv_nsec == spec2.tv_nsec);
+}
+
+inline bool operator!=(const struct timespec& spec1, const struct timespec& spec2)
+{
+  return !operator==(spec1, spec2);
+}
+
 
 class io_dispatch
 {
@@ -33,6 +69,8 @@ public:
   
   void stop();
   
+  // base class associated with the action taken when there
+  // is io available on a watched file descriptor
   class handler
   {
   public:
@@ -40,17 +78,18 @@ public:
   };
   
   // This function will call the system epoll_ctl, using the given
-  // parameters and this io_dispatch's ep_fd_.  It is a REQUIREMENT that
-  // the given event->data.ptr point to an instance of a subclass of
-  // 'handler'.  Whenever io is available on the given fd (according
-  // to the event->events bits), event->data.ptr will be cast to a
-  // handler* and its handler->io_avail will be called.  For that call
-  // the 'io_d' parameter will be this io_dispatch, and the 'event'
-  // parameter will be the one filled out by epoll_wait
-  void epoll_ctl(int op, int fd, struct epoll_event* event) const
+  // events, hnd, and this io_dispatch's ep_fd_.  Whenever io is
+  // available on the given fd (according to 'events'), the given
+  // hnd->io_avail will be called.  For that call the 'io_d' parameter
+  // will be this io_dispatch, and the 'event' parameter will be the
+  // one filled out by epoll_wait
+  void epoll_ctl(int op, int fd, uint32_t events, handler* hnd) const
   {
-    if (::epoll_ctl(ep_fd_, op, fd, event) < 0)
-      do_error("epoll_ctl(ep_fd_, " << op_string(op) << ", " << fd << ", event)");
+    struct epoll_event evt;
+    evt.events = events;
+    evt.data.ptr = hnd;
+    if (::epoll_ctl(ep_fd_, op, fd, &evt) < 0)
+      do_error("epoll_ctl(ep_fd_, " << op_string(op) << ", " << fd << ", &evt)");
   }
   
   // pause all io threads (other than the one calling this function
@@ -69,7 +108,7 @@ public:
         break;
       }
     
-    std::unique_lock<std::mutex> lock(mutex_);
+    std::unique_lock<std::mutex> lock(pause_mutex_);
     num_paused_threads_ = is_io_thread ? 1 : 0;
     
     // if there is only one io thread, and
@@ -89,6 +128,17 @@ public:
     num_paused_threads_ = 0;
     resume_cond_.notify_all();
   }
+  
+  class scheduled_task
+  {
+    friend class io_dispatch;
+    struct timespec when_;    // set by io_dispatch::schedule_task
+  public:
+    virtual void exec() = 0;
+  };
+  
+  void schedule_task(scheduled_task* task, const struct timespec& rel_when);
+  bool remove_task(scheduled_task* task);
 
 private:
   std::string op_string(int op)
@@ -114,6 +164,7 @@ private:
   io_dispatch(io_dispatch&&);
   
   friend class io_ctl_handler;
+  friend class io_timer_handler;
   
   void epoll_loop();
   void wake_next_thread();
@@ -122,15 +173,19 @@ private:
   int                       ep_fd_;
   int                       send_ctl_fd_;
   int                       recv_ctl_fd_;
+  int                       timer_fd_;
   std::vector<std::thread>  io_threads_;
   std::vector<int>          io_thread_ids_;
   std::atomic_int           thread_init_index_;
   int                       num_threads_;
   
-  std::mutex                mutex_;
+  std::mutex                pause_mutex_;
   std::condition_variable   pause_cond_;
   std::condition_variable   resume_cond_;
   int                       num_paused_threads_;
+  
+  std::mutex                                      task_mutex_;
+  std::multimap<struct timespec,scheduled_task*>  task_map_;
 };
 
 inline std::string event_bits_to_string(uint32_t event_bits)

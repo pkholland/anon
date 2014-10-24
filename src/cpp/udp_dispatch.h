@@ -25,10 +25,7 @@ public:
                         
   void attach(io_dispatch& io_d)
   {
-    struct epoll_event evt;
-    evt.events = EPOLLIN;
-    evt.data.ptr = this;
-    io_d.epoll_ctl(EPOLL_CTL_ADD, sock_, &evt);
+    io_d.epoll_ctl(EPOLL_CTL_ADD, sock_, EPOLLIN, this);
   }
   
   int get_sock() { return sock_; }

@@ -24,6 +24,16 @@ public:
 
 };
 
+class my_task : public io_dispatch::scheduled_task
+{
+public:
+    virtual void exec()
+    {
+      anon_log("task completed");
+      delete this;
+    }
+};
+
 extern "C" int main(int argc, char** argv)
 {
   anon_log("application start");
@@ -69,6 +79,8 @@ extern "C" int main(int argc, char** argv)
           anon_log("  p - pause all io threads, print while paused, then resume");
           anon_log("  s - send some udp packets to the udp handler");
           anon_log("  h - display this menu");
+          anon_log("  t - install a one second timer, which when it expires prints a message");
+          anon_log("  tt - schedule, and then delete a timer before it has a chance to expire");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -88,6 +100,24 @@ extern "C" int main(int argc, char** argv)
             if (sendto(m_udp.get_sock(), msg.str().c_str(), strlen(msg.str().c_str()) + 1, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
               anon_log_error("sendto failed with errno: " << errno_string());
           }
+        } else if (!strcmp(&msgBuff[0], "t")) {
+          anon_log("queueing one second delayed task");
+          struct timespec t_spec;
+          t_spec.tv_sec = 1;
+          t_spec.tv_nsec = 0;
+          io_d.schedule_task(new my_task(), t_spec);
+        } else if (!strcmp(&msgBuff[0], "tt")) {
+          anon_log("queueing one second delayed task and deleting it before it expires");
+          struct timespec t_spec;
+          t_spec.tv_sec = 1;
+          t_spec.tv_nsec = 0;
+          auto t = new my_task;
+          io_d.schedule_task(t, t_spec);
+          if (io_d.remove_task(t)) {
+            anon_log("removed the task");
+            delete t;
+          } else
+            anon_log("failed to remove the task");
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
