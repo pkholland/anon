@@ -75,11 +75,11 @@ extern "C" int main(int argc, char** argv)
           break;
         } else if (!strcmp(&msgBuff[0], "h")) {
           anon_log("available commands:");
-          anon_log("  q - quit");
-          anon_log("  p - pause all io threads, print while paused, then resume");
-          anon_log("  s - send some udp packets to the udp handler");
-          anon_log("  h - display this menu");
-          anon_log("  t - install a one second timer, which when it expires prints a message");
+          anon_log("  q  - quit");
+          anon_log("  p  - pause all io threads, print while paused, then resume");
+          anon_log("  s  - send some udp packets to the udp handler");
+          anon_log("  h  - display this menu");
+          anon_log("  t  - install a one second timer, which when it expires prints a message");
           anon_log("  tt - schedule, and then delete a timer before it has a chance to expire");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
