@@ -1,6 +1,24 @@
 
-.PHONY: all
+.PHONY: all clean debug release
 all:
+
+#
+# set CONFIG for the convenience targets 'debug' and 'run_debug_server'
+# we don't need to worry about either of the release targets because
+# the default CONFIG is release
+#
+ifeq (debug,$(MAKECMDGOALS))
+ CONFIG=debug
+endif
+ifeq (run_debug_server,$(MAKECMDGOALS))
+ CONFIG=debug
+endif
+
+#
+# these two phony targets depend on (and so build) 'all'
+#
+debug: all
+release: all
 
 anon.INTERMEDIATE_DIR=obj
 anon.OUT_DIR=deploy
