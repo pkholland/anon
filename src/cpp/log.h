@@ -36,15 +36,17 @@ namespace Log
     // (threadID, file_name, line_num)
     std::ostringstream loc;
     loc << " (" << syscall(SYS_gettid) << ", " << file_name << ", " << line_num << ")";
-    format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(35) << loc.str();
+    format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(40) << loc.str();
 
     // the "body" of the anon_log message
     func(format);
     format << "\n";
     
     // written to either stderr or stdout
+    // test the return value of write to quite compiler warnings,
+    // but there is nothing we can do if it fails for some reason.
     std::string s = format.str();
-    write(err ? 2 : 1,s.c_str(),s.length());
+    if (write(err ? 2 : 1,s.c_str(),s.length()));
   }
 };
 
