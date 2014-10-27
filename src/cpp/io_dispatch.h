@@ -100,13 +100,7 @@ public:
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to pause
-    bool is_io_thread = false;
-    int tid = syscall(SYS_gettid);
-    for (int i = 0; i < num_threads_; i++)
-      if (tid == io_thread_ids_[i]) {
-        is_io_thread = true;
-        break;
-      }
+    bool is_io_thread = on_io_thread();
     
     std::unique_lock<std::mutex> lock(pause_mutex_);
     num_paused_threads_ = is_io_thread ? 1 : 0;
@@ -127,6 +121,60 @@ public:
     
     num_paused_threads_ = 0;
     resume_cond_.notify_all();
+  }
+  
+  // execute the given function once on each
+  // of the io threads
+  template<typename Fn>
+  void on_each(Fn f)
+  {
+    // if this is called from an io thread, then there
+    // is one less io thread we have to cause to execute f
+    bool is_io_thread = on_io_thread();
+      
+    std::unique_lock<std::mutex> lock(pause_mutex_);
+    num_paused_threads_ = is_io_thread ? 1 : 0;
+    on_each_param_ = &f;
+    on_each_proc_ = &io_dispatch::on_each_tn<Fn>;
+    
+    // if there is only one io thread, and
+    // we are called from that thread, then
+    // we don't want to write a k_on_each command
+    if (num_paused_threads_ < num_threads_) {
+      char cmd = k_on_each;
+      if (write(send_ctl_fd_,&cmd,1) != 1)
+        do_error("write");
+    }
+    
+    while (num_paused_threads_ != num_threads_)
+      pause_cond_.wait(lock);
+      
+    if (is_io_thread)
+      f();
+
+    num_paused_threads_ = 0;
+    resume_cond_.notify_all();
+  }
+  
+  // execute the given function on (exactly) one
+  // of the io threads
+  template<typename Fn>
+  void on_one(Fn f)
+  {
+    // if this is an io thread we can just call it here
+    if (on_io_thread())
+      f();
+    else {
+      std::unique_lock<std::mutex> lock(pause_mutex_);
+      on_each_param_ = &f;
+      on_each_proc_ = &io_dispatch::on_each_tn<Fn>;
+      num_paused_threads_ = 1;
+      char cmd = k_on_one;
+      if (write(send_ctl_fd_,&cmd,1) != 1)
+        do_error("write");
+      while (num_paused_threads_ != 0)
+        pause_cond_.wait(lock);
+    }
   }
   
   class scheduled_task
@@ -154,10 +202,24 @@ private:
         return std::string("unknown (") + std::to_string(op) + ")";
     }
   }
+  
+  bool on_io_thread()
+  {
+    bool is_io_thread = false;
+    int tid = syscall(SYS_gettid);
+    for (int i = 0; i < num_threads_; i++)
+      if (tid == io_thread_ids_[i]) {
+        is_io_thread = true;
+        break;
+      }
+    return is_io_thread;
+  }
 
   enum {
     k_wake = 0,
     k_pause = 1,
+    k_on_each = 2,
+    k_on_one = 3
   };
 
   io_dispatch(const io_dispatch&);
@@ -186,6 +248,15 @@ private:
   
   std::mutex                                      task_mutex_;
   std::multimap<struct timespec,scheduled_task*>  task_map_;
+  
+  template<typename Fn>
+  void on_each_tn()
+  {
+    (*(Fn*)on_each_param_)();
+  }
+  
+  void (io_dispatch::*on_each_proc_)();
+  void* on_each_param_;
 };
 
 inline std::string event_bits_to_string(uint32_t event_bits)

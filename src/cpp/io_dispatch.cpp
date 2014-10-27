@@ -35,7 +35,6 @@ public:
         if (++io_d.num_paused_threads_ == io_d.num_threads_)
           io_d.pause_cond_.notify_one();
         else {
-          char cmd = io_dispatch::k_pause;
           if (write(io_d.send_ctl_fd_,&cmd,1) != 1)
             do_error("write(io_d.send_ctl_fd_,&cmd,1)");
         }
@@ -46,6 +45,36 @@ public:
         while (io_d.num_paused_threads_ != 0)
           io_d.resume_cond_.wait(lock);
           
+      } else if (cmd == io_dispatch::k_on_each) {
+      
+        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        
+        (io_d.*io_d.on_each_proc_)();
+        
+        // if this is the last io thread to have paused
+        // then signal whatever thread is waiting in
+        // io_dispatch::on_each, otherwise get the
+        // next io thread to pause
+        if (++io_d.num_paused_threads_ == io_d.num_threads_)
+          io_d.pause_cond_.notify_one();
+        else {
+          if (write(io_d.send_ctl_fd_,&cmd,1) != 1)
+            do_error("write(io_d.send_ctl_fd_,&cmd,1)");
+        }
+        
+        // wait until the thread that called io_dispatch::on_each
+        // to run its function and signal that everyone can
+        // continue
+        while (io_d.num_paused_threads_ != 0)
+          io_d.resume_cond_.wait(lock);
+          
+      } else if (cmd == io_dispatch::k_on_one) {
+      
+        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        (io_d.*io_d.on_each_proc_)();
+        io_d.num_paused_threads_ = 0;
+        io_d.pause_cond_.notify_one();
+        
       } else
         anon_log_error("unknown command (" << (int)cmd << ") written to control pipe - will be ignored" );
         
@@ -137,14 +166,6 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
     do_error("timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC)");
   epoll_ctl(EPOLL_CTL_ADD, timer_fd_, EPOLLIN, &timer_handler);
   anon_log("using fd " << timer_fd_ << " for timer");
-  
-#if 0
-  struct itimerspec t_spec = { 0 };
-  t_spec.it_value.tv_sec = 1;
-  t_spec.it_interval.tv_sec = 1;
-  if (timerfd_settime(timer_fd_, 0/*relative to the current time*/, &t_spec, 0) != 0)
-    do_error("timerfd_settime(timer_fd_, 0/*relative to the current time*/, &t_spec, 0)");
-#endif
   
   io_thread_ids_.resize(num_threads,0);
   thread_init_index_.store(0);

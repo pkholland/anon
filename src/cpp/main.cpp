@@ -81,6 +81,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  h  - display this menu");
           anon_log("  t  - install a one second timer, which when it expires prints a message");
           anon_log("  tt - schedule, and then delete a timer before it has a chance to expire");
+          anon_log("  e  - execute a print statement once on each io thread");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -118,6 +119,9 @@ extern "C" int main(int argc, char** argv)
             delete t;
           } else
             anon_log("failed to remove the task");
+        } else if (!strcmp(&msgBuff[0], "e")) {
+          anon_log("executing print statement on each io thread");
+          io_d.on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
