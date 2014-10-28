@@ -18,15 +18,15 @@ public:
       if (read(io_d.recv_ctl_fd_, &cmd, 1) != 1)
         do_error("read(io_d.recv_ctl_fd_, &cmd, 1)");
         
-      // re-arm
-      io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
-        
-      if (cmd == io_dispatch::k_wake)
+      if (cmd == io_dispatch::k_wake) {
+      
+        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
         io_d.wake_next_thread();
         
-      else if (cmd == io_dispatch::k_pause) {
+      } else if (cmd == io_dispatch::k_pause) {
       
         std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
         
         // if this is the last io thread to have paused
         // then signal whatever thread is waiting in
@@ -49,17 +49,22 @@ public:
       
         std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         
-        (io_d.*io_d.on_each_proc_)();
+        io_dispatch::thread_caller_ *tc;
+        if (read(io_d.recv_ctl_fd_, &tc, sizeof(tc)) != sizeof(tc))
+          do_error("read(io_d.recv_ctl_fd_, &tc, sizeof(tc))");
+        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
         
-        // if this is the last io thread to have paused
-        // then signal whatever thread is waiting in
-        // io_dispatch::on_each, otherwise get the
-        // next io thread to pause
-        if (++io_d.num_paused_threads_ == io_d.num_threads_)
+        tc->exec();
+        
+        if (++io_d.num_paused_threads_ == io_d.num_threads_) {
+          delete tc;
           io_d.pause_cond_.notify_one();
-        else {
-          if (write(io_d.send_ctl_fd_,&cmd,1) != 1)
-            do_error("write(io_d.send_ctl_fd_,&cmd,1)");
+        } else {
+          char buf[1+sizeof(tc)];
+          buf[0] = io_dispatch::k_on_each;
+          memcpy(&buf[1],&tc,sizeof(tc));
+          if (write(io_d.send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
+            do_error("write(io_d.send_ctl_fd_,&buf[0],sizeof(buf))");
         }
         
         // wait until the thread that called io_dispatch::on_each
@@ -70,10 +75,12 @@ public:
           
       } else if (cmd == io_dispatch::k_on_one) {
       
-        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
-        (io_d.*io_d.on_each_proc_)();
-        io_d.num_paused_threads_ = 0;
-        io_d.pause_cond_.notify_one();
+        io_dispatch::thread_caller_ *tc;
+        if (read(io_d.recv_ctl_fd_, &tc, sizeof(tc)) != sizeof(tc))
+          do_error("read(io_d.recv_ctl_fd_, &tc, sizeof(tc))");
+        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
+        tc->exec();
+        delete tc;
         
       } else
         anon_log_error("unknown command (" << (int)cmd << ") written to control pipe - will be ignored" );

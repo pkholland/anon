@@ -1,6 +1,15 @@
 
 #pragma once
 
+#include "io_dispatch.h"
+#include "log.h"
+#include <ucontext.h>
+#include <vector>
+#include <atomic>
+#include <exception>
+#include <sys/socket.h>
+#include <unistd.h>
+
 class   fiber;
 struct  fiber_mutex;
 struct  fiber_lock;
@@ -33,7 +42,7 @@ struct fiber_mutex
   ~fiber_mutex()
   {
     if (state_)
-      anon_trace_error("destructing fiber_mutex " << this << " while locked (state_ = " << state_ << ")");
+      anon_log_error("destructing fiber_mutex " << this << " while locked (state_ = " << state_ << ")");
   }
 
   void lock();
@@ -71,11 +80,11 @@ private:
 	}
 	
 	void sleep_till_woken();
-	void wake_seepers();
+	void wake_sleepers();
 
-  std::atomic_int state_;
-	fiber*          fiber_wake_head_;
-	fiber*          fiber_wake_tail_;
+  std::atomic<int>  state_;
+	fiber*            fiber_wake_head_;
+	fiber*            fiber_wake_tail_;
 };
 
 struct fiber_lock
@@ -99,85 +108,119 @@ private:
 class fiber
 {
 public:
-  fiber(bool convert_calling_thread_to_fiber = false);
-  ~fiber();
-
-  template<typename FncType>
-  fiber& start(FncType fnc);
-
-  void switch_to_fiber(fiber* target)
+  // singleton call to tell the fiber code
+  // what io_dispatch you are using.
+  static void attach(io_dispatch& io_d);
+  
+  // run the given 'fn' in this fiber.  If you pass 'detached' true
+  // then the code will automatically (attempt to) call 'delete' on
+  // this fiber after 'fn' returns.
+  template<typename Fn>
+  fiber(Fn fn, size_t stack_size=1024*1024, bool detached=false)
+    : stack_(stack_size),
+      detached_(detached),
+      running_(true)
   {
-    fiber_->switch_to_fiber(target->fiber_);
+    getcontext(&ucontext_);
+    ucontext_.uc_stack.ss_sp = &stack_[0];
+    ucontext_.uc_stack.ss_size = stack_size;
+    ucontext_.uc_link = NULL;
+    auto sm = new start_mediator<Fn>(fn);
+    int p1 = (int)((uint64_t)sm);
+    int p2 = (int)(((uint64_t)sm) >> 32);
+    makecontext(&ucontext_, (void (*)())&fiber::start_fiber, 2, p1, p2);
+    start();
+  }
+  
+  // note! calling join can switch threads -- that is, you can
+  // come back from join on a different os thread than the one
+  // you called it on.
+  void join()
+  {
+    fiber_lock lock(stop_mutex_);
+    while (running_)
+      stop_condition_.wait(lock);
   }
 
-  void set_io_record(io_record* rec)
+  // helper to execute 'fn' in a newly allocated fiber, running
+  // on one of the io threads of the io_dispatch passed to attach.
+  // The fiber will automatically be deleted when 'fn' returns.
+  template<typename Fn>
+  static void run_in_fiber(Fn fn, size_t stack_size=1024*1024)
   {
-    io_rec_ = rec;
-  }
-
-  io_record* get_io_record()
-  {
-    return io_rec_;
-  }
-
-  void terminate();
-  void join();
-
-  void set_timestamp()
-  {
-    if (clock_gettime(CLOCK_MONOTONIC, &timestamp_) != 0)
-      do_error("clock_gettime(CLOCK_MONOTONIC, &timestamp_)");
+    if (!io_d_)
+      do_error("must call fiber::attach prior to fiber::run_in_fiber");
+    io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
   }
 
 private:
-  friend bool do_post_switch_params(io_params* this_params, fiber* worker_fiber);
-  friend async_io_action get_next_async_io(fiber*& worker_fiber);
-  friend struct fiber_mutex;
-  friend struct fiber_cond;
-  friend struct io_record;
-
-  bool cancel_async_io();
-
-  void in_thread_start(void (*proc)( void* ), void *proc_param);
-
-  void exit();
-
-  void signal_termination()
+  // a 'parent' -like fiber, illegal to call 'start' on one of these
+  // this is the kind that live in io_params.parent_fiber_
+  fiber()
+    : detached_(false),
+      running_(false)
   {
-    // first block any fiber attempting to lock stop_mutex_ (which happens
-    // when they are calling join).  This lock is done in a way that causes
-    // us, and them, to spin forever waiting for the other side to let go.
-    // Neither side is suspended as a part of this call.
-    stop_mutex_.spin_lock();
-
-    // set stopped_ true so fibers calling join see this fiber as stopped.
-    stopped_ = true;
-
-    // this handles the more common case of a fiber calling join before we got to
-    // to signal_termination.  In that case they made it to wait and got suspended.
-    // So this schedules those fibers to run again after we return from signal_termination
-		terminated_condition_.notify_all();
-
-    // let any fibers calling join succeed in locking
-    stopped_mutex_.spin_unlock();
+    getcontext(&ucontext_);
   }
 
-  friend void handle_read_write_opcode(io_record *next_io_rec, fiber* worker_fiber, bool is_read);
+  struct start_mediator_
+  {
+  public:
+    virtual ~start_mediator_() {}
+    virtual void exec() = 0;
+  };
+  
+  template<typename Fn>
+  struct start_mediator : public start_mediator_
+  {
+  public:
+    start_mediator(Fn fn) : fn_(fn) {}
+    virtual void exec() { fn_(); }
+    Fn fn_;
+  };
+  
+  static void start_fiber(int p1, int p2)
+  {
+    start_mediator_ *sm = (start_mediator_*)(((uint64_t)p1 & 0x0ffffffff) + (((uint64_t)p2) << 32));
+    try {
+      sm->exec();
+    }
+    catch(std::exception& ex)
+    {
+      anon_log_error("uncaught exception in fiber, what() = " << ex.what());
+    }
+    catch(...)
+    {
+      anon_log_error("uncaught exception in fiber");
+    }
+    delete sm;
+    stop_fiber();
+  }
+  
+  void switch_to_fiber(fiber* target)
+  {
+    swapcontext(&ucontext_, &target->ucontext_);
+  }
+  
+  void start();
+  static void stop_fiber();
 
-  bool            running_;
-  fiber_mutex     stop_mutex_;
-  fiber_cond      terminated_condition_;
-  bool            stopped_;
-  bool            stop_;
-  io_record*      io_rec_;
-  fiber*          next_wake_;
-  struct timespec timestamp_;
-  fiber*          prev_timeout_;
-  fiber*          next_timeout_;
-  bool            is_timeout_node_;
-  long            timeout_threshold_;
+  friend struct fiber_mutex;
+  friend struct fiber_cond;
+  friend struct io_params;
+
+  bool              running_;
+  bool              detached_;
+  fiber_mutex       stop_mutex_;
+  fiber_cond        stop_condition_;
+  fiber*            next_wake_;
+  std::vector<char> stack_;
+  ucontext_t        ucontext_;
+  
+  static io_dispatch* io_d_;
 };
 
+////////////////////////////////////////////////////////////////////////
 
 class fiber_pipe : public io_dispatch::handler
 {
@@ -188,7 +231,7 @@ public:
 	};
 
   fiber_pipe(io_dispatch& io_d, int socket_fd, pipe_sock_t socket_type)
-    : fd_(socet_fd),
+    : fd_(socket_fd),
       socket_type_(socket_type),
       io_fiber_(0)
   {
@@ -198,7 +241,7 @@ public:
   ~fiber_pipe()
   {
     if (socket_type_ == network)
-      ::shutdown(fd_, 2/*both*/);
+      shutdown(fd_, 2/*both*/);
     close(fd_);
   }
   
@@ -212,78 +255,54 @@ public:
     return fd_;
   }
 
-  socket_type get_socket_type() const
+  pipe_sock_t get_socket_type() const
   {
     return socket_type_;
   }
 
-  int read(char* buff, int len);
-  void write(const char* buff, int len);
+  size_t read(void* buff, size_t len);
+  void write(const void* buff, size_t len);
 
 private:
+  friend struct io_params;
+  
   int         fd_;
-  socket_type socket_type_;
+  pipe_sock_t socket_type_;
   fiber*      io_fiber_;
 };
+
+////////////////////////////////////////////////////////////////
 
 struct io_params
 {
   enum op_code : char
   {
-    read = 0,
-    write = 1,
-    mutex_suspend = 2,
-    cond_wait = 3
+    oc_read,
+    oc_write,
+    oc_mutex_suspend,
+    oc_cond_wait,
+    oc_exit_fiber
   };
 
   io_params()
-    : worker_fiber_(0)
-    , wake_head_(0)
-    , opcode_((op_code)0)
-    , iod_fiber_(true/*convertToFiber*/)
+    : current_fiber_(0),
+      wake_head_(0)
   {}
   
   void wake_all(fiber* first);
   void sleep_until_data_available(fiber_pipe* pipe);
   void sleep_until_write_possible(fiber_pipe* pipe);
+  void exit_fiber();
 
-  fiber*            current_fiber;
+  fiber*            current_fiber_;
   fiber*            wake_head_;
   op_code           opcode_;
   fiber_pipe*       io_pipe_;
-  fiber             iod_fiber_;
+  fiber             parent_fiber_;
 	std::atomic_int*  mutex_state_;
 	fiber_mutex*      cond_mutex_;
 };
 
-void exit_fiber();
-
-
-template<typename Fn>
-void fiber_start_proc(void* param)
-{
-  Fn* fnc = (Fn*)param;
-  try {
-    (*fnc)();
-  }
-  catch(std::exception& ex)
-  {
-    anon_log_error("uncaught exception in fiber, what() = " << ex.what());
-  }
-  catch(...)
-  {
-    anon_log_error("uncaught exception in fiber");
-  }
-  delete fnc;
-  exit_fiber();
-}
-
-template<typename Fn>
-fiber& fiber::start(io_dispatch& io_d, Fn fnc)
-{
-  io_d.on_one([this]{fiber_start_proc<Fn>(new Fn(fnc));});
-	return *this;
-}
 
 inline void fiber_mutex::lock()
 {

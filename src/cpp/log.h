@@ -75,6 +75,6 @@ inline std::string errno_string()
     }
 }
 
-#define do_error(fn) {anon_log_error(fn << " failed with errno: " << errno_string()); throw std::system_error(errno, std::system_category());}
+#define do_error(fn) do {anon_log_error(fn << " failed with errno: " << errno_string()); throw std::system_error(errno, std::system_category());} while(0)
 
 

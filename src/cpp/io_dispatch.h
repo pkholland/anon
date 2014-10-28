@@ -8,6 +8,7 @@
 #include <map>
 #include <atomic>
 #include <sys/epoll.h>
+#include <string.h>
 
 inline bool operator<(const struct timespec& spec1, const struct timespec& spec2)
 {
@@ -134,16 +135,17 @@ public:
       
     std::unique_lock<std::mutex> lock(pause_mutex_);
     num_paused_threads_ = is_io_thread ? 1 : 0;
-    on_each_param_ = &f;
-    on_each_proc_ = &io_dispatch::on_each_tn<Fn>;
     
     // if there is only one io thread, and
     // we are called from that thread, then
     // we don't want to write a k_on_each command
     if (num_paused_threads_ < num_threads_) {
-      char cmd = k_on_each;
-      if (write(send_ctl_fd_,&cmd,1) != 1)
-        do_error("write");
+      auto tc = new thread_caller<Fn>(f);
+      char buf[1+sizeof(tc)];
+      buf[0] = k_on_each;
+      memcpy(&buf[1],&tc,sizeof(tc));
+      if (write(send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
+        do_error("write(send_ctl_fd_,&buf[0],sizeof(buf))");
     }
     
     while (num_paused_threads_ != num_threads_)
@@ -165,15 +167,12 @@ public:
     if (on_io_thread())
       f();
     else {
-      std::unique_lock<std::mutex> lock(pause_mutex_);
-      on_each_param_ = &f;
-      on_each_proc_ = &io_dispatch::on_each_tn<Fn>;
-      num_paused_threads_ = 1;
-      char cmd = k_on_one;
-      if (write(send_ctl_fd_,&cmd,1) != 1)
-        do_error("write");
-      while (num_paused_threads_ != 0)
-        pause_cond_.wait(lock);
+      auto tc = new thread_caller<Fn>(f);
+      char buf[1+sizeof(tc)];
+      buf[0] = k_on_one;
+      memcpy(&buf[1],&tc,sizeof(tc));
+      if (write(send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
+        do_error("write(send_ctl_fd_,&buf[0],sizeof(buf))");
     }
   }
   
@@ -214,6 +213,30 @@ private:
       }
     return is_io_thread;
   }
+  
+  struct thread_caller_
+  {
+  public:
+    virtual ~thread_caller_() {}
+    virtual void exec() = 0;
+  };
+  
+  template<typename Fn>
+  struct thread_caller : public thread_caller_
+  {
+  public:
+    thread_caller(Fn fn)
+      : fn_(fn)
+    {}
+    
+    virtual void exec()
+    {
+      fn_();
+    }
+    
+  private:
+    Fn fn_;
+  };
 
   enum {
     k_wake = 0,
@@ -248,15 +271,6 @@ private:
   
   std::mutex                                      task_mutex_;
   std::multimap<struct timespec,scheduled_task*>  task_map_;
-  
-  template<typename Fn>
-  void on_each_tn()
-  {
-    (*(Fn*)on_each_param_)();
-  }
-  
-  void (io_dispatch::*on_each_proc_)();
-  void* on_each_param_;
 };
 
 inline std::string event_bits_to_string(uint32_t event_bits)

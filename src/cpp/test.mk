@@ -8,7 +8,8 @@ SOURCES+=\
 $(ANON_ROOT)/src/cpp/main.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
-$(ANON_ROOT)/src/cpp/big_id_crypto.cpp
+$(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
+$(ANON_ROOT)/src/cpp/fiber.cpp
 
 INC_DIRS+=\
 $(ANON_ROOT)

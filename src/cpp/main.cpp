@@ -6,6 +6,7 @@
 #include "udp_dispatch.h"
 #include "big_id_serial.h"
 #include "big_id_crypto.h"
+#include "fiber.h"
 
 class my_udp : public udp_dispatch
 {
@@ -59,6 +60,7 @@ extern "C" int main(int argc, char** argv)
     my_udp              m_udp(udp_port,validator);
     io_dispatch         io_d(std::thread::hardware_concurrency(),false);
     m_udp.attach(io_d);
+    fiber::attach(io_d);
     
     while (true)
     {
@@ -82,6 +84,8 @@ extern "C" int main(int argc, char** argv)
           anon_log("  t  - install a one second timer, which when it expires prints a message");
           anon_log("  tt - schedule, and then delete a timer before it has a chance to expire");
           anon_log("  e  - execute a print statement once on each io thread");
+          anon_log("  o  - execute a print statement once on a single io thread");
+          anon_log("  f  - execute a print statement on a fiber");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -122,8 +126,13 @@ extern "C" int main(int argc, char** argv)
         } else if (!strcmp(&msgBuff[0], "e")) {
           anon_log("executing print statement on each io thread");
           io_d.on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
-        }
-        else
+        } else if (!strcmp(&msgBuff[0], "o")) {
+          anon_log("executing print statement on one io thread");
+          io_d.on_one([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
+        } else if (!strcmp(&msgBuff[0], "f")) {
+          anon_log("executing print statement from a fiber");
+          fiber::run_in_fiber([]{anon_log("hello from fiber");});
+        } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
       }
     }
