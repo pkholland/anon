@@ -86,6 +86,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  e  - execute a print statement once on each io thread");
           anon_log("  o  - execute a print statement once on a single io thread");
           anon_log("  f  - execute a print statement on a fiber");
+          anon_log("  ft - execute some reasonably extensive fiber testing code");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
