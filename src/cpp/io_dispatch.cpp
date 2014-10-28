@@ -151,7 +151,7 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
   anon_log("using fd " << ep_fd_ << " for epoll");
     
   int sv[2];
-  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
+  if (socketpair(AF_UNIX, SOCK_STREAM | /*SOCK_NONBLOCK |*/ SOCK_CLOEXEC, 0, sv) != 0)
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv)");
   send_ctl_fd_ = sv[0];
   recv_ctl_fd_ = sv[1];

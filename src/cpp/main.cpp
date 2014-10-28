@@ -132,6 +132,30 @@ extern "C" int main(int argc, char** argv)
         } else if (!strcmp(&msgBuff[0], "f")) {
           anon_log("executing print statement from a fiber");
           fiber::run_in_fiber([]{anon_log("hello from fiber");});
+        } else if (!strcmp(&msgBuff[0], "ft")) {
+          anon_log("executing fiber test code");
+          for (int i = 0; i < 2000; i++) {
+            int sv[2];
+            if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
+              do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv)");
+            int num_read_writes = 1000;
+            fiber::run_in_fiber([sv, num_read_writes]{
+              fiber_pipe pipe(sv[0],fiber_pipe::unix_domain);
+              for (int i = 0; i < num_read_writes; i++) {
+                unsigned char b;
+                pipe.read(&b, sizeof(b));
+                if (b != (i & 0xff))
+                  anon_log("fiber read/write read " << (int)b << " instead of " << (i & 0xff));
+              }
+            });
+            fiber::run_in_fiber([sv,num_read_writes]{
+              fiber_pipe pipe(sv[1],fiber_pipe::unix_domain);
+              for (int i = 0; i< num_read_writes; i++) {
+                unsigned char b = (unsigned char)i;
+                pipe.write(&b,sizeof(b));
+              }
+            });
+          }
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
       }

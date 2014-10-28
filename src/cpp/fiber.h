@@ -183,6 +183,8 @@ private:
   {
     start_mediator_ *sm = (start_mediator_*)(((uint64_t)p1 & 0x0ffffffff) + (((uint64_t)p2) << 32));
     try {
+      if (++num_running_fibers_ == 1)
+        anon_log("fibers starting");
       sm->exec();
     }
     catch(std::exception& ex)
@@ -194,6 +196,8 @@ private:
       anon_log_error("uncaught exception in fiber");
     }
     delete sm;
+    if (--num_running_fibers_ == 0)
+      anon_log("zero running fibers");
     stop_fiber();
   }
   
@@ -208,6 +212,7 @@ private:
   friend struct fiber_mutex;
   friend struct fiber_cond;
   friend struct io_params;
+  friend class fiber_pipe;
 
   bool              running_;
   bool              detached_;
@@ -218,6 +223,7 @@ private:
   ucontext_t        ucontext_;
   
   static io_dispatch* io_d_;
+  static std::atomic<int> num_running_fibers_;
 };
 
 ////////////////////////////////////////////////////////////////////////
@@ -230,12 +236,12 @@ public:
 		network = 1
 	};
 
-  fiber_pipe(io_dispatch& io_d, int socket_fd, pipe_sock_t socket_type)
+  fiber_pipe(int socket_fd, pipe_sock_t socket_type)
     : fd_(socket_fd),
       socket_type_(socket_type),
       io_fiber_(0)
   {
-    io_d.epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
+    fiber::io_d_->epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
   }
   
   ~fiber_pipe()

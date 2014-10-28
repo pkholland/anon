@@ -275,32 +275,34 @@ private:
 
 inline std::string event_bits_to_string(uint32_t event_bits)
 {
-    std::string eventstr;
-    if (event_bits & EPOLLPRI)
-        eventstr += "EPOLLPRI ";
-    if (event_bits & EPOLLOUT)
-        eventstr += "EPOLLOUT ";
-    if (event_bits & EPOLLRDNORM)
-        eventstr += "EPOLLRDNORM ";
-    if (event_bits & EPOLLRDBAND)
-        eventstr += "EPOLLRDBAND ";
-    if (event_bits & EPOLLWRNORM)
-        eventstr += "EPOLLWRNORM ";
-    if (event_bits & EPOLLWRBAND)
-        eventstr += "EPOLLWRBAND ";
-    if (event_bits & EPOLLMSG)
-        eventstr += "EPOLLMSG ";
-    if (event_bits & EPOLLERR)
-        eventstr += "EPOLLERR ";
-    if (event_bits & EPOLLHUP)
-        eventstr += "EPOLLHUP ";
-    if (event_bits & EPOLLRDHUP)
-        eventstr += "EPOLLRDHUP ";
-    if (event_bits & EPOLLONESHOT)
-        eventstr += "EPOLLONESHOT ";
-    if (event_bits & EPOLLET)
-        eventstr += "EPOLLET ";
-    return eventstr;
+  std::string eventstr;
+  if (event_bits & EPOLLIN)
+    eventstr += "EPOLLIN ";
+  if (event_bits & EPOLLPRI)
+    eventstr += "EPOLLPRI ";
+  if (event_bits & EPOLLOUT)
+    eventstr += "EPOLLOUT ";
+  if (event_bits & EPOLLRDNORM)
+    eventstr += "EPOLLRDNORM ";
+  if (event_bits & EPOLLRDBAND)
+    eventstr += "EPOLLRDBAND ";
+  if (event_bits & EPOLLWRNORM)
+    eventstr += "EPOLLWRNORM ";
+  if (event_bits & EPOLLWRBAND)
+    eventstr += "EPOLLWRBAND ";
+  if (event_bits & EPOLLMSG)
+    eventstr += "EPOLLMSG ";
+  if (event_bits & EPOLLERR)
+    eventstr += "EPOLLERR ";
+  if (event_bits & EPOLLHUP)
+    eventstr += "EPOLLHUP ";
+  if (event_bits & EPOLLRDHUP)
+    eventstr += "EPOLLRDHUP ";
+  if (event_bits & EPOLLONESHOT)
+    eventstr += "EPOLLONESHOT ";
+  if (event_bits & EPOLLET)
+    eventstr += "EPOLLET ";
+  return eventstr;
 }
 
 

@@ -91,6 +91,7 @@ void fiber_mutex::wake_sleepers()
 /////////////////////////////////////////////////
 
 io_dispatch* fiber::io_d_;
+std::atomic<int> fiber::num_running_fibers_;
 
 void fiber::attach(io_dispatch& io_d)
 {
@@ -130,7 +131,8 @@ void fiber::stop_fiber()
 
 void fiber_pipe::io_avail(io_dispatch& io_d, const struct epoll_event& event)
 {
-  tls_io_params.wake_all(io_fiber_);
+  if (event.events & (EPOLLIN | EPOLLOUT))
+    tls_io_params.wake_all(io_fiber_);
 }
 
 size_t fiber_pipe::read(void *buf, size_t count)
@@ -190,7 +192,7 @@ void io_params::wake_all(fiber* first)
       case oc_read:
       case oc_write:
         fiber::io_d_->epoll_ctl(EPOLL_CTL_MOD, io_pipe_->fd_,
-                                (opcode_ == oc_read ? EPOLLIN : EPOLLOUT) | EPOLLET,
+                                (opcode_ == oc_read ? EPOLLIN : EPOLLOUT) | EPOLLONESHOT | EPOLLET,
                                 io_pipe_);
         break;
 
@@ -219,14 +221,18 @@ void io_params::sleep_until_data_available(fiber_pipe* pipe)
 {
 	opcode_ = oc_read;
 	io_pipe_ = pipe;
+	pipe->io_fiber_ = current_fiber_;
 	current_fiber_->switch_to_fiber(&parent_fiber_);
+	pipe->io_fiber_ = 0;
 }
 
 void io_params::sleep_until_write_possible(fiber_pipe* pipe)
 {
 	opcode_ = oc_write;
 	io_pipe_ = pipe;
+	pipe->io_fiber_ = current_fiber_;
 	current_fiber_->switch_to_fiber(&parent_fiber_);
+	pipe->io_fiber_ = 0;
 }
 
 
