@@ -266,9 +266,11 @@ public:
   
   ~fiber_pipe()
   {
-    if (socket_type_ == network)
-      shutdown(fd_, 2/*both*/);
-    close(fd_);
+    if (fd_ != -1) {
+      if (socket_type_ == network)
+        shutdown(fd_, 2/*both*/);
+      close(fd_);
+    }
   }
   
   virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event);
@@ -285,11 +287,26 @@ public:
   {
     return socket_type_;
   }
+  
+  int release()
+  {
+    int ret = fd_;
+    if (fd_ != -1) {
+      fiber::io_d_->epoll_ctl(EPOLL_CTL_DEL,fd_,0,this);
+      fd_ = -1;
+    }
+    return ret;
+  }
 
   size_t read(void* buff, size_t len);
   void write(const void* buff, size_t len);
 
 private:
+  // fiber_pipe's are neither movable, nor copyable.
+  // the address of the pipe is regestered in epoll
+  fiber_pipe(const fiber_pipe&);
+  fiber_pipe(fiber_pipe&&);
+  
   friend struct io_params;
   
   int         fd_;
