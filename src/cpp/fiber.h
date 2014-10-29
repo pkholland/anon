@@ -9,6 +9,7 @@
 #include <exception>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <mutex>
 
 class   fiber;
 struct  fiber_mutex;
@@ -152,6 +153,13 @@ public:
       do_error("must call fiber::attach prior to fiber::run_in_fiber");
     io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
   }
+  
+  static void wait_for_zero_fibers()
+  {
+    std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+    while (num_running_fibers_ != 0)
+      zero_fiber_cond_.wait(lock);
+  }
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
@@ -183,8 +191,10 @@ private:
   {
     start_mediator_ *sm = (start_mediator_*)(((uint64_t)p1 & 0x0ffffffff) + (((uint64_t)p2) << 32));
     try {
-      if (++num_running_fibers_ == 1)
-        anon_log("fibers starting");
+      {
+        std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+        ++num_running_fibers_;
+      }
       sm->exec();
     }
     catch(std::exception& ex)
@@ -196,8 +206,11 @@ private:
       anon_log_error("uncaught exception in fiber");
     }
     delete sm;
-    if (--num_running_fibers_ == 0)
-      anon_log("zero running fibers");
+    {
+      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+      if (--num_running_fibers_ == 0)
+        zero_fiber_cond_.notify_all();
+    }
     stop_fiber();
   }
   
@@ -223,7 +236,9 @@ private:
   ucontext_t        ucontext_;
   
   static io_dispatch* io_d_;
-  static std::atomic<int> num_running_fibers_;
+  static int num_running_fibers_;
+  static std::mutex zero_fiber_mutex_;
+  static std::condition_variable zero_fiber_cond_;
 };
 
 ////////////////////////////////////////////////////////////////////////

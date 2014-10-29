@@ -91,7 +91,9 @@ void fiber_mutex::wake_sleepers()
 /////////////////////////////////////////////////
 
 io_dispatch* fiber::io_d_;
-std::atomic<int> fiber::num_running_fibers_;
+int fiber::num_running_fibers_;
+std::mutex fiber::zero_fiber_mutex_;
+std::condition_variable fiber::zero_fiber_cond_;
 
 void fiber::attach(io_dispatch& io_d)
 {

@@ -34,6 +34,18 @@ inline struct timespec operator+(const struct timespec& spec1, const struct time
   return spec;
 }
 
+inline struct timespec operator-(const struct timespec& spec1, const struct timespec& spec2)
+{
+  struct timespec spec;
+  spec.tv_sec = spec1.tv_sec - spec2.tv_sec;
+  if (spec2.tv_nsec > spec1.tv_nsec) {
+    --spec.tv_sec;
+    spec.tv_nsec = 1000000000 + spec1.tv_nsec - spec2.tv_nsec;
+  } else
+    spec.tv_nsec = spec1.tv_nsec - spec2.tv_nsec;
+  return spec;
+}
+
 inline bool operator==(const struct timespec& spec1, const struct timespec& spec2)
 {
   return (spec1.tv_sec == spec2.tv_sec) && (spec1.tv_nsec == spec2.tv_nsec);

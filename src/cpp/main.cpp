@@ -35,6 +35,18 @@ public:
     }
 };
 
+std::string to_string(const struct timespec& spec)
+{
+  std::ostringstream str;
+  str << spec.tv_sec << ".";
+  
+  std::ostringstream dec;
+  dec << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3) << (spec.tv_nsec / 1000000);
+  
+  str << dec.str();
+  return str.str();
+}
+
 extern "C" int main(int argc, char** argv)
 {
   anon_log("application start");
@@ -62,6 +74,9 @@ extern "C" int main(int argc, char** argv)
     m_udp.attach(io_d);
     fiber::attach(io_d);
     
+    int num_pipe_pairs = 100;
+    int num_read_writes = 10000;
+    
     while (true)
     {
       // read a command from stdin
@@ -87,6 +102,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  o  - execute a print statement once on a single io thread");
           anon_log("  f  - execute a print statement on a fiber");
           anon_log("  ft - execute some reasonably extensive fiber testing code");
+          anon_log("  ot - similar test code to 'ft', except run in os threads instead of fibers");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -134,29 +150,103 @@ extern "C" int main(int argc, char** argv)
           anon_log("executing print statement from a fiber");
           fiber::run_in_fiber([]{anon_log("hello from fiber");});
         } else if (!strcmp(&msgBuff[0], "ft")) {
-          anon_log("executing fiber test code");
-          for (int i = 0; i < 2000; i++) {
-            int sv[2];
-            if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
+        
+          anon_log("executing fiber dispatch timing test code");
+          struct timespec start_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          
+          std::vector<int> fds(num_pipe_pairs*2);
+          for (int i=0; i<num_pipe_pairs; i++) {
+            if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, &fds[i*2]) != 0)
               do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv)");
-            int num_read_writes = 1000;
-            fiber::run_in_fiber([sv, num_read_writes]{
-              fiber_pipe pipe(sv[0],fiber_pipe::unix_domain);
-              for (int i = 0; i < num_read_writes; i++) {
-                unsigned char b;
-                pipe.read(&b, sizeof(b));
-                if (b != (i & 0xff))
-                  anon_log("fiber read/write read " << (int)b << " instead of " << (i & 0xff));
-              }
-            });
-            fiber::run_in_fiber([sv,num_read_writes]{
-              fiber_pipe pipe(sv[1],fiber_pipe::unix_domain);
-              for (int i = 0; i< num_read_writes; i++) {
-                unsigned char b = (unsigned char)i;
-                pipe.write(&b,sizeof(b));
+          }
+          for (int i=0; i<num_pipe_pairs; i++) {
+            fiber::run_in_fiber([fds,i,num_read_writes]{
+              fiber_pipe pipe(fds[i*2],fiber_pipe::unix_domain);
+              for (int rc=0; rc<num_read_writes; rc++) {
+                int v;
+                pipe.read(&v,sizeof(v));
+                if (v != rc)
+                  anon_log("fiber read " << v << " instead of " << rc);
               }
             });
           }
+          fiber::run_in_fiber([fds,num_pipe_pairs,num_read_writes]{
+            std::vector<std::unique_ptr<fiber_pipe> > pipes;
+            for (int pc=0; pc<num_pipe_pairs; pc++)
+              pipes.push_back(std::move(std::unique_ptr<fiber_pipe>(new fiber_pipe(fds[pc*2+1],fiber_pipe::unix_domain))));
+            for (int wc=0; wc<num_read_writes; wc++) {
+              for (int pc=0; pc<num_pipe_pairs; pc++)
+                pipes[pc]->write(&wc,sizeof(wc));
+            }
+          });
+          
+          std::this_thread::sleep_for(std::chrono::milliseconds( 200 ));
+          fiber::wait_for_zero_fibers();
+          
+          struct timespec end_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
+          anon_log("fiber test code done, total time: " << to_string(end_time - start_time) << " seconds");
+            
+        } else if (!strcmp(&msgBuff[0], "ot")) {
+        
+          anon_log("executing thread dispatch timing test code");
+          struct timespec start_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          
+          std::vector<int>          fds(num_pipe_pairs*2);
+          std::vector<std::thread>  threads;
+          for (int i=0; i<num_pipe_pairs; i++) {
+            if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &fds[i*2]) != 0)
+              anon_log_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) failed with errno: " << errno_string());
+          }
+          for (int i=0; i<num_pipe_pairs; i++) {
+            threads.push_back(std::thread([fds,i,num_read_writes]{
+              try {
+                for (int rc=0; rc<num_read_writes; rc++) {
+                  int v;
+                  auto bytes_read = read(fds[i*2],&v,sizeof(v));
+                  if (bytes_read != sizeof(v))
+                    anon_log_error("read(" << fds[i*2] << ",...) returned " << bytes_read << ", errno: " << errno_string());
+                  else if (v != rc)
+                    anon_log_error("thread read " << v << " instead of " << rc);
+                }
+                close(fds[i*2]);
+              } catch (const std::exception& err) {
+                anon_log_error("exception caught, what = " << err.what());
+              } catch (...) {
+                anon_log_error("unknown exception caught");
+              }
+            }));
+          }
+          threads.push_back(std::thread([fds,num_pipe_pairs,num_read_writes]{
+            try {
+              for (int wc=0; wc<num_read_writes; wc++) {
+                for (int pc=0; pc<num_pipe_pairs; pc++) {
+                  if (write(fds[pc*2+1],&wc,sizeof(wc)) != sizeof(wc))
+                    anon_log_error("(write(fds[pc*2+1],&wc,sizeof(wc)) failed with errno: " << errno_string());
+                }
+              }
+              for (int pc=0; pc<num_pipe_pairs; pc++)
+                close(fds[pc*2+1]);
+            } catch (const std::exception& err) {
+              anon_log_error("exception caught, what = " << err.what());
+            } catch (...) {
+              anon_log_error("unknown exception caught");
+            }
+          }));
+          
+          for (auto thread = threads.begin(); thread != threads.end(); ++thread)
+            thread->join();
+          struct timespec end_time;
+          
+          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
+          anon_log("thread test code done, total time: " << to_string(end_time - start_time) << " seconds");
+          
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
       }
