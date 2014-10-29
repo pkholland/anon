@@ -122,6 +122,10 @@ public:
       detached_(detached),
       running_(true)
   {
+    if (!detached_) {
+      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+      ++num_running_fibers_;
+    }
     getcontext(&ucontext_);
     ucontext_.uc_stack.ss_sp = &stack_[0];
     ucontext_.uc_stack.ss_size = stack_size;
@@ -151,6 +155,11 @@ public:
   {
     if (!io_d_)
       do_error("must call fiber::attach prior to fiber::run_in_fiber");
+      
+    {
+      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+      ++num_running_fibers_;
+    }
     io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
   }
   
@@ -191,10 +200,6 @@ private:
   {
     start_mediator_ *sm = (start_mediator_*)(((uint64_t)p1 & 0x0ffffffff) + (((uint64_t)p2) << 32));
     try {
-      {
-        std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
-        ++num_running_fibers_;
-      }
       sm->exec();
     }
     catch(std::exception& ex)

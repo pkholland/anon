@@ -101,8 +101,8 @@ extern "C" int main(int argc, char** argv)
           anon_log("  e  - execute a print statement once on each io thread");
           anon_log("  o  - execute a print statement once on a single io thread");
           anon_log("  f  - execute a print statement on a fiber");
-          anon_log("  ft - execute some reasonably extensive fiber testing code");
-          anon_log("  ot - similar test code to 'ft', except run in os threads instead of fibers");
+          anon_log("  ft - test how long it takes to fiber/context switch " << num_pipe_pairs * num_read_writes << " times");
+          anon_log("  ot - similar test to 'ft', except run in os threads to test thread dispatch speed");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -151,7 +151,7 @@ extern "C" int main(int argc, char** argv)
           fiber::run_in_fiber([]{anon_log("hello from fiber");});
         } else if (!strcmp(&msgBuff[0], "ft")) {
         
-          anon_log("executing fiber dispatch timing test code");
+          anon_log("executing fiber dispatch timing test");
           struct timespec start_time;
           if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
@@ -182,17 +182,16 @@ extern "C" int main(int argc, char** argv)
             }
           });
           
-          std::this_thread::sleep_for(std::chrono::milliseconds( 200 ));
           fiber::wait_for_zero_fibers();
           
           struct timespec end_time;
           if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("fiber test code done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("fiber test done, total time: " << to_string(end_time - start_time) << " seconds");
             
         } else if (!strcmp(&msgBuff[0], "ot")) {
         
-          anon_log("executing thread dispatch timing test code");
+          anon_log("executing thread dispatch timing test");
           struct timespec start_time;
           if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
@@ -245,7 +244,7 @@ extern "C" int main(int argc, char** argv)
           
           if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("thread test code done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
           
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
