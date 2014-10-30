@@ -23,7 +23,7 @@ void fiber_cond::wait(fiber_lock& lock)
 
   params->opcode_ = io_params::oc_cond_wait;
   params->cond_mutex_ = &lock.mutex_;
-  f->switch_to_fiber(&params->parent_fiber_);
+  f->switch_to_fiber(params->parent_fiber_);
   lock.mutex_.lock();
 }
 
@@ -74,7 +74,7 @@ void fiber_mutex::sleep_till_woken()
   // this will atomic-decrement state_
   params->opcode_ = io_params::oc_mutex_suspend;
   params->mutex_state_ = &state_;
-  curF->switch_to_fiber(&params->parent_fiber_);
+  curF->switch_to_fiber(params->parent_fiber_);
 }
 
 void fiber_mutex::wake_sleepers()
@@ -102,12 +102,20 @@ void fiber::attach(io_dispatch& io_d)
   io_d_ = &io_d;
 }
 
-void fiber::start()
+void fiber::in_fiber_start()
 {
   if (!running_)
     anon_log_error("calling fiber::start on an unrunable fiber");
-  else
-    tls_io_params.wake_all(this);
+  else {
+    auto params = &tls_io_params;
+    auto cf = params->current_fiber_;
+    auto p = params->parent_fiber_;
+    if (cf)
+      params->parent_fiber_ = cf;
+    params->wake_all(this);
+    params->parent_fiber_ = p;
+    params->current_fiber_ = cf;
+  }
 }
 
 void fiber::stop_fiber()
@@ -126,7 +134,7 @@ void fiber::stop_fiber()
   params = &tls_io_params;
   
   params->opcode_ = io_params::oc_exit_fiber;
-  f->switch_to_fiber(&params->parent_fiber_);
+  f->switch_to_fiber(params->parent_fiber_);
 }
 
 /////////////////////////////////////////////////
@@ -187,7 +195,7 @@ void io_params::wake_all(fiber* first)
     auto wake = wake_head_;
     wake_head_ = wake->next_wake_;
     current_fiber_ = wake;
-    parent_fiber_.switch_to_fiber(wake);
+    parent_fiber_->switch_to_fiber(wake);
       
     switch(opcode_) {
 
@@ -209,6 +217,9 @@ void io_params::wake_all(fiber* first)
       case oc_exit_fiber: {
         if (current_fiber_->detached_)
           delete current_fiber_;
+        std::unique_lock<std::mutex> lock(fiber::zero_fiber_mutex_);
+        if (--fiber::num_running_fibers_ == 0)
+            fiber::zero_fiber_cond_.notify_all();
       } break;
 
       default:
@@ -217,6 +228,8 @@ void io_params::wake_all(fiber* first)
 
     }
   }
+  
+  current_fiber_ = 0;
 }
 
 void io_params::sleep_until_data_available(fiber_pipe* pipe)
@@ -224,7 +237,7 @@ void io_params::sleep_until_data_available(fiber_pipe* pipe)
 	opcode_ = oc_read;
 	io_pipe_ = pipe;
 	pipe->io_fiber_ = current_fiber_;
-	current_fiber_->switch_to_fiber(&parent_fiber_);
+	current_fiber_->switch_to_fiber(parent_fiber_);
 	pipe->io_fiber_ = 0;
 }
 
@@ -233,7 +246,7 @@ void io_params::sleep_until_write_possible(fiber_pipe* pipe)
 	opcode_ = oc_write;
 	io_pipe_ = pipe;
 	pipe->io_fiber_ = current_fiber_;
-	current_fiber_->switch_to_fiber(&parent_fiber_);
+	current_fiber_->switch_to_fiber(parent_fiber_);
 	pipe->io_fiber_ = 0;
 }
 

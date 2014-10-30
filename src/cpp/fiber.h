@@ -9,7 +9,6 @@
 #include <exception>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <mutex>
 
 class   fiber;
 struct  fiber_mutex;
@@ -134,7 +133,7 @@ public:
     int p1 = (int)((uint64_t)sm);
     int p2 = (int)(((uint64_t)sm) >> 32);
     makecontext(&ucontext_, (void (*)())&fiber::start_fiber, 2, p1, p2);
-    start();
+    in_fiber_start();
   }
   
   // note! calling join can switch threads -- that is, you can
@@ -172,7 +171,7 @@ public:
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
-  // this is the kind that live in io_params.parent_fiber_
+  // this is the kind that live in io_params.iod_fiber_
   fiber()
     : detached_(false),
       running_(false)
@@ -211,11 +210,6 @@ private:
       anon_log_error("uncaught exception in fiber");
     }
     delete sm;
-    {
-      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
-      if (--num_running_fibers_ == 0)
-        zero_fiber_cond_.notify_all();
-    }
     stop_fiber();
   }
   
@@ -224,7 +218,7 @@ private:
     swapcontext(&ucontext_, &target->ucontext_);
   }
   
-  void start();
+  void in_fiber_start();
   static void stop_fiber();
 
   friend struct fiber_mutex;
@@ -329,6 +323,7 @@ struct io_params
 
   io_params()
     : current_fiber_(0),
+      parent_fiber_(&iod_fiber_),
       wake_head_(0)
   {}
   
@@ -338,12 +333,13 @@ struct io_params
   void exit_fiber();
 
   fiber*            current_fiber_;
+  fiber*            parent_fiber_;
   fiber*            wake_head_;
   op_code           opcode_;
   fiber_pipe*       io_pipe_;
-  fiber             parent_fiber_;
-	std::atomic_int*  mutex_state_;
-	fiber_mutex*      cond_mutex_;
+  fiber             iod_fiber_;
+  std::atomic_int*  mutex_state_;
+  fiber_mutex*      cond_mutex_;
 };
 
 

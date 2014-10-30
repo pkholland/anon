@@ -245,6 +245,39 @@ extern "C" int main(int argc, char** argv)
           if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
           anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
+
+        } else if (!strcmp(&msgBuff[0], "m")) {
+        
+          anon_log("test fiber mutex lock/unlock behavior");
+          
+          fiber::run_in_fiber([]{
+            fiber_mutex mutex;
+            int         count;
+            
+            fiber sf1([&mutex, &count]{
+              for (int i = 0; i<1000; i++)
+              {
+                fiber_lock lock(mutex);
+                ++count;
+              }
+            });
+            
+            fiber sf2([&mutex, &count]{
+              for (int i = 0; i<1000; i++)
+              {
+                fiber_lock lock(mutex);
+                ++count;
+              }
+            });
+            
+            sf1.join();
+            sf2.join();
+            anon_log("count = " << count);
+            
+          });
+
+          fiber::wait_for_zero_fibers();
+          anon_log("all fibers done");
           
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
