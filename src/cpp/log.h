@@ -11,6 +11,10 @@
 #include <system_error>
 #include <errno.h>
 
+#if defined(ANON_LOG_FIBER_IDS)
+extern int get_current_fiber_id();
+#endif
+
 #define anon_log(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) {formatter << _body;}, false)
 #define anon_log_error(_body) Log::output(__FILE__, __LINE__, [&](std::ostream& formatter) {formatter << _body;}, true)
 
@@ -35,7 +39,11 @@ namespace Log
    
     // (threadID, file_name, line_num)
     std::ostringstream loc;
-    loc << " (" << syscall(SYS_gettid) << ", " << file_name << ", " << line_num << ")";
+    loc << " (" << syscall(SYS_gettid) << ", ";
+    #if defined(ANON_LOG_FIBER_IDS)
+    loc << get_current_fiber_id() << ", ";
+    #endif
+    loc << file_name << ", " << line_num << ")";
     format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(40) << loc.str();
 
     // the "body" of the anon_log message

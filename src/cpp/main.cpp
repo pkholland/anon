@@ -103,6 +103,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  f  - execute a print statement on a fiber");
           anon_log("  ft - test how long it takes to fiber/context switch " << num_pipe_pairs * num_read_writes << " times");
           anon_log("  ot - similar test to 'ft', except run in os threads to test thread dispatch speed");
+          anon_log("  fi - run a fiber that creates additional fibers using \"in-fiber\" start mechanism");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -246,33 +247,37 @@ extern "C" int main(int argc, char** argv)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
           anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
 
-        } else if (!strcmp(&msgBuff[0], "m")) {
+        } else if (!strcmp(&msgBuff[0], "fi")) {
         
-          anon_log("test fiber mutex lock/unlock behavior");
+          anon_log("starting fiber which \"in-fiber\" starts other fibers");
           
           fiber::run_in_fiber([]{
             fiber_mutex mutex;
-            int         count;
+            mutex.lock();
+            anon_log("main fiber :  start, mutex " << &mutex << " is locked");
             
-            fiber sf1([&mutex, &count]{
-              for (int i = 0; i<1000; i++)
-              {
-                fiber_lock lock(mutex);
-                ++count;
-              }
+            // "in-fiber" start sf1
+            fiber sf1([&mutex]{
+              anon_log("sub fiber 1:  locking mutex " << &mutex);
+              fiber_lock lock(mutex);
+              anon_log("sub fiber 1:  locked mutex, now unlocking and exiting");
             });
             
-            fiber sf2([&mutex, &count]{
-              for (int i = 0; i<1000; i++)
-              {
-                fiber_lock lock(mutex);
-                ++count;
-              }
+            // "in-fiber" start sf2
+            fiber sf2([&mutex]{
+              anon_log("sub fiber 2:  locking mutex " << &mutex);
+              fiber_lock lock(mutex);
+              anon_log("sub fiber 2:  locked mutex, now unlocking and exiting");
             });
             
+            anon_log("main fiber :  sub fibers 1 and 2 both running, now unlocking mutex " << &mutex);
+            mutex.unlock();
+            
+            // wait for sf1 and sf2 to exit
             sf1.join();
             sf2.join();
-            anon_log("count = " << count);
+            
+            anon_log("main fiber :  sub fibers 1 and 2 have exited");
             
           });
 

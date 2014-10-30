@@ -119,7 +119,8 @@ public:
   fiber(Fn fn, size_t stack_size=1024*1024, bool detached=false)
     : stack_(stack_size),
       detached_(detached),
-      running_(true)
+      running_(true),
+      fiber_id_(++next_fiber_id_)
   {
     if (!detached_) {
       std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
@@ -168,6 +169,8 @@ public:
     while (num_running_fibers_ != 0)
       zero_fiber_cond_.wait(lock);
   }
+  
+  static int get_current_fiber_id();
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
@@ -233,12 +236,16 @@ private:
   fiber*            next_wake_;
   std::vector<char> stack_;
   ucontext_t        ucontext_;
+  int               fiber_id_;
   
   static io_dispatch* io_d_;
   static int num_running_fibers_;
   static std::mutex zero_fiber_mutex_;
   static std::condition_variable zero_fiber_cond_;
+  static std::atomic<int> next_fiber_id_;
 };
+
+extern int get_current_fiber_id();
 
 ////////////////////////////////////////////////////////////////////////
 

@@ -94,6 +94,7 @@ io_dispatch* fiber::io_d_;
 int fiber::num_running_fibers_;
 std::mutex fiber::zero_fiber_mutex_;
 std::condition_variable fiber::zero_fiber_cond_;
+std::atomic<int> fiber::next_fiber_id_;
 
 void fiber::attach(io_dispatch& io_d)
 {
@@ -114,7 +115,6 @@ void fiber::in_fiber_start()
       params->parent_fiber_ = cf;
     params->wake_all(this);
     params->parent_fiber_ = p;
-    params->current_fiber_ = cf;
   }
 }
 
@@ -135,6 +135,17 @@ void fiber::stop_fiber()
   
   params->opcode_ = io_params::oc_exit_fiber;
   f->switch_to_fiber(params->parent_fiber_);
+}
+
+int fiber::get_current_fiber_id()
+{
+  auto params = &tls_io_params;
+  return params->current_fiber_ ? params->current_fiber_->fiber_id_ : 0;
+}
+
+int get_current_fiber_id()
+{
+  return fiber::get_current_fiber_id();
 }
 
 /////////////////////////////////////////////////
@@ -187,6 +198,7 @@ void fiber_pipe::write(const void *buf, size_t count)
 
 void io_params::wake_all(fiber* first)
 {
+  auto cf = current_fiber_;
   first->next_wake_ = wake_head_;
   wake_head_ = first;
 
@@ -229,7 +241,7 @@ void io_params::wake_all(fiber* first)
     }
   }
   
-  current_fiber_ = 0;
+  current_fiber_ = cf;
 }
 
 void io_params::sleep_until_data_available(fiber_pipe* pipe)
