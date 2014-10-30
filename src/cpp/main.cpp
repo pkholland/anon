@@ -254,30 +254,30 @@ extern "C" int main(int argc, char** argv)
           fiber::run_in_fiber([]{
             fiber_mutex mutex;
             mutex.lock();
-            anon_log("main fiber :  start, mutex " << &mutex << " is locked");
+            anon_log("start, mutex " << &mutex << " is locked");
             
             // "in-fiber" start sf1
             fiber sf1([&mutex]{
-              anon_log("sub fiber 1:  locking mutex " << &mutex);
+              anon_log("locking mutex " << &mutex);
               fiber_lock lock(mutex);
-              anon_log("sub fiber 1:  locked mutex, now unlocking and exiting");
+              anon_log("locked mutex, now unlocking and exiting");
             });
             
             // "in-fiber" start sf2
             fiber sf2([&mutex]{
-              anon_log("sub fiber 2:  locking mutex " << &mutex);
+              anon_log("locking mutex " << &mutex);
               fiber_lock lock(mutex);
-              anon_log("sub fiber 2:  locked mutex, now unlocking and exiting");
+              anon_log("locked mutex, now unlocking and exiting");
             });
             
-            anon_log("main fiber :  sub fibers 1 and 2 both running, now unlocking mutex " << &mutex);
+            anon_log("sub fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " both running, now unlocking mutex " << &mutex);
             mutex.unlock();
             
             // wait for sf1 and sf2 to exit
             sf1.join();
             sf2.join();
             
-            anon_log("main fiber :  sub fibers 1 and 2 have exited");
+            anon_log("sub fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " have exited");
             
           });
 

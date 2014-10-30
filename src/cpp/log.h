@@ -39,12 +39,22 @@ namespace Log
    
     // (threadID, file_name, line_num)
     std::ostringstream loc;
-    loc << " (" << syscall(SYS_gettid) << ", ";
+    loc << " (" << syscall(SYS_gettid);
     #if defined(ANON_LOG_FIBER_IDS)
-    loc << get_current_fiber_id() << ", ";
+    std::ostringstream fb;
+    fb << ":";
+    int fid = get_current_fiber_id();
+    if (fid)
+      fb << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(5) << get_current_fiber_id();
+    else
+      fb << ".....";
+    loc << fb.str();
+    const int width = 46;
+    #else
+    const int width = 40;
     #endif
-    loc << file_name << ", " << line_num << ")";
-    format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(40) << loc.str();
+    loc << ", " << file_name << ", " << line_num << ")";
+    format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(width) << loc.str();
 
     // the "body" of the anon_log message
     func(format);

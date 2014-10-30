@@ -171,6 +171,10 @@ public:
   }
   
   static int get_current_fiber_id();
+  int get_fiber_id()
+  {
+    return fiber_id_;
+  }
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
