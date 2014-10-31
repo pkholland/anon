@@ -86,17 +86,17 @@ then keeps client machines from being able to connect and send new requests.
 This can create a kind of "back pressure" that `process_connections_loop` can
 assert on the entire Service.  But having client machines fail to connect
 without any understanding of why makes it hard to get those client machines
-working correctly.  So a basic principle of Anon is to propogate the EGAIN
+working correctly.  So a basic principle of Anon is to propogate the EAGAIN
 concept through the entire Service.
 
 In the Anon design `new_connections_loop` does use a non-blocking pipe, and
 so sees that it has gotten too far ahead of `process_connections_loop` (because
 it sees errno as EAGAIN) and can now enter a state where further accept calls
-are immediately replied with a kind of EGAIN message and then shut down.  That
-moves the EGAIN processing throughout the entire service -- thus the name Anon
+are immediately replied with a kind of EAGAIN message and then shut down.  That
+moves the EAGAIN processing throughout the entire service -- thus the name Anon
 for this experiment.
 
-Conveniently, EGAIN is errno 11, letting me tie the name to the other goal
+Conveniently, EAGAIN is errno 11, letting me tie the name to the other goal
 of server design that is as efficient as the machine allows.  A second piece
 of anon is to provide a design that makes good use of Linux's event dispatching
 mechanism "epoll" and then provide a platform where all request processing
