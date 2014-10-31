@@ -7,6 +7,7 @@
 #include "big_id_serial.h"
 #include "big_id_crypto.h"
 #include "fiber.h"
+#include "tcp_server.h"
 
 class my_udp : public udp_dispatch
 {
@@ -68,8 +69,17 @@ extern "C" int main(int argc, char** argv)
   
   {
     int                 udp_port = 8617;
+    int                 tcp_port = 8618;
+    
     src_addr_validator  validator;
     my_udp              m_udp(udp_port,validator);
+    
+    tcp_server          my_tcp(tcp_port, validator, [](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
+                          char buf[12];
+                          pipe->read(&buf[0],sizeof(buf));
+                          anon_log("read \"" << buf << "\" from src addr: " << src_addr);
+                        });
+    
     io_dispatch         io_d(std::thread::hardware_concurrency(),false);
     m_udp.attach(io_d);
     fiber::attach(io_d);
