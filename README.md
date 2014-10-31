@@ -1,8 +1,6 @@
 anon
 ====
 
-Experiments in distributed queueing
-
 ![It Goes To 11!](http://beerpulse.com/wp-content/uploads/2011/08/BellsGoesTo11Front.png?raw=true)
 
 Anon is an experiment in server design for "Services".  It attempts to achieve
@@ -22,11 +20,14 @@ problem.  It can be seen when the server design has components that look somethi
 like the following -- shown in C++, but it can exist in any language:
 
 ```C++
+// some global
+std::deque<int> g_new_connections;
+
 // runs in one thread
-void new_connections_loop(int the_accept_socket)
+void new_connections_loop(int accept_socket)
 {
   while (true) {
-    int new_connection = accept(the_accept_socket, 0, 0);
+    int new_connection = accept(accept_socket, 0, 0);
     g_new_connections.push_back(new_connections);
   }
 }
@@ -43,8 +44,8 @@ void process_connections_loop()
 ```
 
 This code isn't meant to be fully correct, it's missing mutex's and stuff.
-But it shows a central feature of many server designs where there exists
-some kind of queue, here shows as deque `g_new_connections` where one thread
+But it shows a central feature of many server designs where there exists some
+kind of queue, here shows as the std::deque `g_new_connections`, where one thread
 of execution accepts new server connections as fast as it can and puts each
 one on a queue.  Another thread of execution pulls items off the of the queue
 and processes them as fast as it can.  The basic idea shown here is that there
@@ -57,5 +58,51 @@ when they occur due to excessive server load, can be traced to a basic problem
 where a consumer of queued requests falls behind the producer of them.  When
 that starts to happen the percentage of the total Service's compute and resource
 capacity that is dedicated to maintaining the queue itself grows, further
-slowing down `process_one_connection` which then componds the problem.
+slowing down `process_one_connection`, which then componds the problem.
+
+Linux has an errno code named EAGAIN which it returns when certain operations
+that are requested to be non-blocking are not currently possible for one reason
+or another.  A common use of EAGAIN would be to set `accept_socket` above to
+be non-blocking, and then the call to `accept` would return -1 and set errno
+to EAGAIN if there were not any connections that could be requested when the
+code called `accept`.   That kind of usage would allow that thread of execution
+to go do something else instead of stay stuck in `accept` until someone tries
+to connect to our computer.
+
+But EAGAIN can also be used on the write-side of an operation.  If
+`g_new_connections` were a pipe of some kind instead of the deque that is
+shown, then the `push_back` would be some kind of `write` call.  The `front`
+and `pop_front` would then be replaced by `read` calls.  In that kind of design
+the pipe could be set non-blocking, and since it has a finite internal size
+if `new_connections_loop` gets too far in front of `process_connections_loop`
+the `write` call will fail with errno set to EAGAIN.  And this can serve as
+a very natural way for a consumer of requests to signal to the producer that
+it needs to slow down.
+
+Even without setting the pipe to be non-blocking, using a pipe with small-ish,
+finite capacity will cause `new_connections_loop` to *block* inside of its
+`write` call, which will keep it being able to call `accept` again, which
+then keeps client machines from being able to connect and send new requests.
+This can create a kind of "back pressure" that `process_connections_loop` can
+assert on the entire Service.  But having client machines fail to connect
+without any understanding of why makes it hard to get those client machines
+working correctly.  So a basic principle of Anon is to propogate the EGAIN
+concept through the entire Service.
+
+In the Anon design `new_connections_loop` does use a non-blocking pipe, and
+so sees that it has gotten too far ahead of `process_connections_loop` (because
+it sees errno as EAGAIN) and can now enter a state where further accept calls
+are immediately replied with a kind of EGAIN message and then shut down.  That
+moves the EGAIN processing throughout the entire service -- thus the name Anon
+for this experiment.
+
+Conveniently, EGAIN is errno 11, letting me tie the name to the other goal
+of server design that is as efficient as the machine allows.  A second piece
+of anon is to provide a design that makes good use of Linux's event dispatching
+mechanism "epoll" and then provide a platform where all request processing
+can be done free of any blocking operations -- and in fact allow it to run
+in a model where the number of os threads running is equal to the number of
+CPU cores.  In this model, each request is handled by user-level threads
+(fibers) and fiber scheduling is driven by the epoll event dispatching mechanism.
+
     
