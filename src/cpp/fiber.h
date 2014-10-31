@@ -122,13 +122,13 @@ public:
   // then the code will automatically (attempt to) call 'delete' on
   // this fiber after 'fn' returns.
   template<typename Fn>
-  fiber(Fn fn, size_t stack_size=k_default_stack_size, bool detached=false)
-    : stack_(stack_size),
-      detached_(detached),
+  fiber(Fn fn, size_t stack_size=k_default_stack_size, bool auto_free=false)
+    : auto_free_(auto_free),
       running_(true),
+      stack_(stack_size),
       fiber_id_(++next_fiber_id_)
   {
-    if (!detached_) {
+    if (!auto_free_) {
       std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
@@ -166,15 +166,21 @@ public:
       std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
+    auto oo_fn = [fn, stack_size]{new fiber(fn,stack_size,true/*auto_free*/);};
     if (get_current_fiber_id() == 0)
-      io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
+      io_d_->on_one(oo_fn);
     else {
       char buf[io_dispatch::k_oo_command_buf_size];
-      io_d_->on_one_command([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);}, buf);
+      io_d_->on_one_command(oo_fn, buf);
       write_on_one_command(buf);
     }
   }
   
+  // note that this is an os thread blocking wait, and
+  // should NOT be called from a fiber.  Doing so will
+  // dead-lock the calling fiber since the running fiber
+  // count can't go to zero while the calling fiber is
+  // continuing to run, waiting for it to go to zero.
   static void wait_for_zero_fibers()
   {
     std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
@@ -192,7 +198,7 @@ private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
   // this is the kind that live in io_params.iod_fiber_
   fiber()
-    : detached_(false),
+    : auto_free_(false),
       running_(false)
   {
     getcontext(&ucontext_);
@@ -247,8 +253,8 @@ private:
   friend struct io_params;
   friend class fiber_pipe;
 
+  bool              auto_free_;
   bool              running_;
-  bool              detached_;
   fiber_mutex       stop_mutex_;
   fiber_cond        stop_condition_;
   fiber*            next_wake_;

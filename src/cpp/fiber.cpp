@@ -242,7 +242,7 @@ void io_params::wake_all(fiber* first)
         break;
           
       case oc_exit_fiber: {
-        if (current_fiber_->detached_)
+        if (current_fiber_->auto_free_)
           delete current_fiber_;
         std::unique_lock<std::mutex> lock(fiber::zero_fiber_mutex_);
         if (--fiber::num_running_fibers_ == 0)

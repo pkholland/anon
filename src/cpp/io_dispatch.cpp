@@ -205,6 +205,20 @@ int io_dispatch::new_command_pipe()
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) != 0)
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv)");
     
+  // reduce the size of the pipe buffers to keep callers from
+  // queueing up too many requests in advance of us being able
+  // to dispatch them
+  const int bufSize = 4096;
+  socklen_t optSize = sizeof(bufSize);
+  if (setsockopt(sv[0], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize) != 0)
+    do_error("setsockopt(sv[0], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize)");
+  if (setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF, &bufSize, optSize) != 0)
+    do_error("setsockopt(sv[0], SOL_SOCKET, SO_SNDBUF, &bufSize, optSize)");
+  if (setsockopt(sv[1], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize) != 0)
+    do_error("setsockopt(sv[1], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize)");
+  if (setsockopt(sv[1], SOL_SOCKET, SO_SNDBUF, &bufSize, optSize) != 0)
+    do_error("setsockopt(sv[1], SOL_SOCKET, SO_SNDBUF, &bufSize, optSize)");
+    
   anon_log("using fds " << sv[0] << " (send), and " <<  sv[1] << " (receive) for io threads control pipe");
   
   auto hnd = new io_ctl_handler(sv[1]);
