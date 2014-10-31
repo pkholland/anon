@@ -49,7 +49,7 @@ This code isn't meant to be fully correct.  It's missing mutex's and other stuff
 But it shows a central feature of many Service designs where there exists some
 kind of queue, shown above as the std::deque `g_new_connections`.  Here one thread
 of execution accepts new server connections as fast as it can and puts each
-one on a queue.  Another thread of execution pulls items off the of the queue
+one on a queue.  Another thread pulls items off the of the queue
 and processes them as fast as it can.  The basic problem illustrated here is that
 there isn't a good way for the second thread to keep the first from getting too far
 ahead of it.  If the `process_one_connection` function takes a long time to
@@ -63,12 +63,14 @@ capacity that is dedicated to maintaining the queue itself grows.  This further
 slows down `process_one_connection`, which then componds the original problem.
 
 Linux has an errno code named EAGAIN which it uses when certain operations
-that are requested to be non-blocking and are not currently possible for one reason
-or another.  A common use of EAGAIN would be to set `listening_socket` above to
-be non-blocking.  Then the call to `accept` would return -1 and set errno
-to EAGAIN if there were not any connections that could be returned when it
-was called.   That kind of usage would allow the calling thread to go do something
-else instead of stay stuck in `accept` until someone tries to connect to our computer.
+are set to be non-blocking and are not currently possible for one reason
+or another.  For example, trying to read from a socket that doesn't currently
+have any data to read.  A common use of EAGAIN would be to set `listening_socket`
+above to be non-blocking.  Then the call to `accept` would return -1 and set
+errno to EAGAIN if there were not any connections that could be returned when it
+was called.  That kind of usage would allow the calling thread to go do something
+else instead of stay stuck in `accept` until someone tries to connect to the
+computer.
 
 But EAGAIN can also be used on the write-side of an operation.  If
 `g_new_connections` were a pipe of some kind instead of the deque that is
@@ -86,7 +88,7 @@ Even without setting the pipe to be non-blocking, using a pipe with a small-ish,
 finite capacity will cause `new_connections_loop` to *block* inside of its
 `write` call, which will keep it being able to call `accept` again.  This would
 then keeps client machines from being able to connect and send new requests.
-That creates a kind of speed gate that `process_connections_loop` can
+That creates a kind of speed limit that `process_connections_loop` can
 assert on the entire Service.  But having client machines fail to connect
 without understanding why makes it hard to get those client machines
 working correctly.  So a basic principle of Anon is to propogate the EAGAIN
