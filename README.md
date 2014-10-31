@@ -47,7 +47,7 @@ void process_connections_loop()
 
 This code isn't meant to be fully correct.  It's missing mutex's and other stuff.
 But it shows a central feature of many Service designs where there exists some
-kind of queue, shown as the std::deque `g_new_connections`.  Here one thread
+kind of queue, shown above as the std::deque `g_new_connections`.  Here one thread
 of execution accepts new server connections as fast as it can and puts each
 one on a queue.  Another thread of execution pulls items off the of the queue
 and processes them as fast as it can.  The basic problem illustrated here is that
@@ -58,9 +58,9 @@ new connections to this one, then the `g_new_connections` queue can grow
 arbitrarily large.  The root cause of many Critical Service Outages, particularly
 when they occur due to excessive server load, can be traced to a basic problem
 where a consumer of queued requests falls behind the producer of them.  When
-that starts to happen the percentage of the total Service's compute and resource
-capacity that is dedicated to maintaining the queue itself grows, further
-slowing down `process_one_connection`, which then componds the problem.
+that starts to happen the percentage of the Service's total compute and resource
+capacity that is dedicated to maintaining the queue itself grows.  This further
+slows down `process_one_connection`, which then componds the original problem.
 
 Linux has an errno code named EAGAIN which it uses when certain operations
 that are requested to be non-blocking and are not currently possible for one reason
