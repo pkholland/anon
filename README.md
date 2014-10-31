@@ -3,6 +3,8 @@ Anon
 
 ![It Goes To 11!](http://beerpulse.com/wp-content/uploads/2011/08/BellsGoesTo11Front.png?raw=true)
 
+##The Anon Story
+
 Anon is an experiment in server design for "Services".  It attempts to achieve
 several goals.  These are:
 
@@ -48,8 +50,8 @@ But it shows a central feature of many server designs where there exists some
 kind of queue, here shows as the std::deque `g_new_connections`, where one thread
 of execution accepts new server connections as fast as it can and puts each
 one on a queue.  Another thread of execution pulls items off the of the queue
-and processes them as fast as it can.  The basic idea shown here is that there
-isn't a good way for the second thread to keep the first from getting too far
+and processes them as fast as it can.  The basic problem illustrated here is that
+there isn't a good way for the second thread to keep the first from getting too far
 ahead of it.  If the `process_one_connection` function takes a long time to
 complete relative to the speed at which other machines are trying to establish
 new connections to this one, then the `g_new_connections` queue can grow
