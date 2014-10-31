@@ -63,13 +63,12 @@ capacity that is dedicated to maintaining the queue itself grows, further
 slowing down `process_one_connection`, which then componds the problem.
 
 Linux has an errno code named EAGAIN which it uses when certain operations
-that are requested to be non-blocking are not currently possible for one reason
+that are requested to be non-blocking and are not currently possible for one reason
 or another.  A common use of EAGAIN would be to set `listening_socket` above to
-be non-blocking, and then the call to `accept` would return -1 and set errno
-to EAGAIN if there were not any connections that could be returned when the
-code called `accept`.   That kind of usage would allow that thread of execution
-to go do something else instead of stay stuck in `accept` until someone tries
-to connect to our computer.
+be non-blocking.  Then the call to `accept` would return -1 and set errno
+to EAGAIN if there were not any connections that could be returned when it
+was called.   That kind of usage would allow the calling thread to go do something
+else instead of stay stuck in `accept` until someone tries to connect to our computer.
 
 But EAGAIN can also be used on the write-side of an operation.  If
 `g_new_connections` were a pipe of some kind instead of the deque that is
@@ -78,33 +77,34 @@ and `pop_front` would then be replaced by `read` calls.  In that kind of design
 the pipe could be set non-blocking, and since it has a finite internal size,
 if `new_connections_loop` gets too far in front of `process_connections_loop`
 the `write` call will fail with errno set to EAGAIN.  And this can serve as
-a very natural way for a consumer of requests to signal to the producer that
-it needs to slow down.
+a natural way for a consumer of requests to signal to the producer that
+it needs to slow down.  The consumer doesn't need to do anything at all.
+The fact that it is unable to read fast enough causes the producer to be
+unable to continue writing.
 
-Even without setting the pipe to be non-blocking, using a pipe with small-ish,
+Even without setting the pipe to be non-blocking, using a pipe with a small-ish,
 finite capacity will cause `new_connections_loop` to *block* inside of its
-`write` call, which will keep it being able to call `accept` again, which
+`write` call, which will keep it being able to call `accept` again.  This would
 then keeps client machines from being able to connect and send new requests.
-This can create a kind of "back pressure" that `process_connections_loop` can
+That creates a kind of speed gate that `process_connections_loop` can
 assert on the entire Service.  But having client machines fail to connect
-without any understanding of why makes it hard to get those client machines
+without understanding why makes it hard to get those client machines
 working correctly.  So a basic principle of Anon is to propogate the EAGAIN
 concept through the entire Service.
 
 In the Anon design `new_connections_loop` does use a non-blocking pipe, and
-so sees that it has gotten too far ahead of `process_connections_loop` (because
-it sees errno as EAGAIN) and can then enter a state where further accept calls
-are immediately replied with a kind of EAGAIN message and then shut down.  That
-distributes the EAGAIN processing throughout the entire service -- thus the name
-Anon for this project.
+so sees that it has gotten too far ahead of `process_connections_loop`.  It
+can then enter a state where further `accept` calls are immediately replied with
+a kind of EAGAIN message and then shut down.  That distributes the EAGAIN
+processing throughout the entire service -- thus the name Anon for the project.
 
-Conveniently, EAGAIN is errno 11, letting me tie the name to the other goal
-of a server design that is as efficient as the machine allows.  A second piece
-of Anon is to provide a design that makes good use of Linux's event dispatching
-mechanism "epoll" and then provide a platform where all request processing
-can be done free of any blocking operations.  In fact, the goal is to allow Anon
-servers to run in a model where the number of os threads running is equal to the
-number of CPU cores.  In this model, each request is handled by user-level threads
-(fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.
+Conveniently, EAGAIN is errno 11, letting me also tie the name to the other goal
+of maximum efficiency.  A second piece of Anon is to provide a design that makes
+good use of Linux's event dispatching mechanism "epoll".  It provides a platform
+where all request processing can be done free of any blocking operations.  In fact,
+the goal is to allow Anon servers to run in a model where the number of os threads
+running is equal to the number of CPU cores.  In this model, each request is handled
+by user-level threads (fibers) and fiber scheduling is driven by Linux's epoll
+event dispatching mechanism.
 
 
