@@ -114,11 +114,15 @@ public:
   
   static void terminate();
   
+  enum {
+    k_default_stack_size = 64*1024
+  };
+  
   // run the given 'fn' in this fiber.  If you pass 'detached' true
   // then the code will automatically (attempt to) call 'delete' on
   // this fiber after 'fn' returns.
   template<typename Fn>
-  fiber(Fn fn, size_t stack_size=1024*1024, bool detached=false)
+  fiber(Fn fn, size_t stack_size=k_default_stack_size, bool detached=false)
     : stack_(stack_size),
       detached_(detached),
       running_(true),
@@ -153,7 +157,7 @@ public:
   // on one of the io threads of the io_dispatch passed to attach.
   // The fiber will automatically be deleted when 'fn' returns.
   template<typename Fn>
-  static void run_in_fiber(Fn fn, size_t stack_size=1024*1024)
+  static void run_in_fiber(Fn fn, size_t stack_size=k_default_stack_size)
   {
     if (!io_d_)
       do_error("must call fiber::attach prior to fiber::run_in_fiber");
