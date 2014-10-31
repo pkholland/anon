@@ -16,7 +16,7 @@ from the first two goals, and is the word "anon", meaning something like "again"
 not an abreviation for "anonymous".
 
 A common problem in some server designs is one that I'll call the "infinite queue"
-problem.  It can be seen when the server design has components that look something
+problem.  It can be seen when the Service design has components that look something
 like the following -- shown in C++, but it can exist in any language:
 
 ```C++
@@ -24,11 +24,11 @@ like the following -- shown in C++, but it can exist in any language:
 std::deque<int> g_new_connections;
 
 // runs in one thread
-void new_connections_loop(int accept_socket)
+void new_connections_loop(int listening_socket)
 {
   while (true) {
-    int new_connection = accept(accept_socket, 0, 0);
-    g_new_connections.push_back(new_connections);
+    int new_connection = accept(listening_socket, 0, 0);
+    g_new_connections.push_back(new_connection);
   }
 }
 
@@ -62,7 +62,7 @@ slowing down `process_one_connection`, which then componds the problem.
 
 Linux has an errno code named EAGAIN which it returns when certain operations
 that are requested to be non-blocking are not currently possible for one reason
-or another.  A common use of EAGAIN would be to set `accept_socket` above to
+or another.  A common use of EAGAIN would be to set `listening_socket` above to
 be non-blocking, and then the call to `accept` would return -1 and set errno
 to EAGAIN if there were not any connections that could be requested when the
 code called `accept`.   That kind of usage would allow that thread of execution
