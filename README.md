@@ -47,7 +47,7 @@ void process_connections_loop()
 
 This code isn't meant to be fully correct.  It's missing mutex's and other stuff.
 But it shows a central feature of many Service designs where there exists some
-kind of queue, here shows as the std::deque `g_new_connections`.  Here one thread
+kind of queue, shown as the std::deque `g_new_connections`.  Here one thread
 of execution accepts new server connections as fast as it can and puts each
 one on a queue.  Another thread of execution pulls items off the of the queue
 and processes them as fast as it can.  The basic problem illustrated here is that
