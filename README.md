@@ -65,13 +65,13 @@ designs his slows down `process_one_connection` more than it does
 
 Linux has an errno code named EAGAIN which it uses when certain operations
 are set to be non-blocking and are not currently possible for one reason
-or another.  For example, trying to read from a socket that doesn't currently
-have any data to read.  A common use of EAGAIN would be to set `listening_socket`
-above to be non-blocking.  Then the call to `accept` would return -1 and set
-errno to EAGAIN if there were not any connections that could be returned when it
-was called.  That kind of usage would allow the calling thread to go do something
-else instead of stay stuck in `accept` until someone tries to connect to the
-computer.
+or another.  For example, trying to read from a non-blocking socket that
+doesn't currently have any data to read generates EAGAIN.  A common use of
+EAGAIN would be to set `listening_socket` above to be non-blocking.  Then
+the call to `accept` would return -1 and set errno to EAGAIN if there were
+not any connections that could be returned when it was called.  That kind
+of usage would allow the calling thread to go do something else instead of
+stay stuck in `accept` until someone tries to connect to the computer.
 
 But EAGAIN can also be used on the write-side of an operation.  If
 `g_new_connections` were a pipe of some kind instead of the deque that is
