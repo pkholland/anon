@@ -3,5 +3,5 @@ anon
 
 Experiments in distributed queueing
 
-![Goes To 11](https://github.com/pkholland/anon/docs/images/GoesTo11.png)
+![Goes To 11](http://beerpulse.com/wp-content/uploads/2011/08/BellsGoesTo11Front.png?raw=true)
 
