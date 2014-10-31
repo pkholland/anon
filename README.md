@@ -1,4 +1,4 @@
-anon
+Anon
 ====
 
 ![It Goes To 11!](http://beerpulse.com/wp-content/uploads/2011/08/BellsGoesTo11Front.png?raw=true)
@@ -12,8 +12,8 @@ several goals.  These are:
 
 Anon is currenty HIGHLY experimental and is unlike other service designs in many
 ways.  For example, it is currently all written in C++.  The name "anon" comes
-from the first two goals, and is the word "anon", meaning something like "again",
-not an abreviation for "anonymous".
+from the first two goals, and is the word *anon*, meaning something like "again".
+It's not an abreviation for "anonymous".
 
 A common problem in some server designs is one that I'll call the "infinite queue"
 problem.  It can be seen when the Service design has components that look something
@@ -60,11 +60,11 @@ that starts to happen the percentage of the total Service's compute and resource
 capacity that is dedicated to maintaining the queue itself grows, further
 slowing down `process_one_connection`, which then componds the problem.
 
-Linux has an errno code named EAGAIN which it returns when certain operations
+Linux has an errno code named EAGAIN which it uses when certain operations
 that are requested to be non-blocking are not currently possible for one reason
 or another.  A common use of EAGAIN would be to set `listening_socket` above to
 be non-blocking, and then the call to `accept` would return -1 and set errno
-to EAGAIN if there were not any connections that could be requested when the
+to EAGAIN if there were not any connections that could be returned when the
 code called `accept`.   That kind of usage would allow that thread of execution
 to go do something else instead of stay stuck in `accept` until someone tries
 to connect to our computer.
@@ -73,7 +73,7 @@ But EAGAIN can also be used on the write-side of an operation.  If
 `g_new_connections` were a pipe of some kind instead of the deque that is
 shown, then the `push_back` would be some kind of `write` call.  The `front`
 and `pop_front` would then be replaced by `read` calls.  In that kind of design
-the pipe could be set non-blocking, and since it has a finite internal size
+the pipe could be set non-blocking, and since it has a finite internal size,
 if `new_connections_loop` gets too far in front of `process_connections_loop`
 the `write` call will fail with errno set to EAGAIN.  And this can serve as
 a very natural way for a consumer of requests to signal to the producer that
@@ -91,18 +91,18 @@ concept through the entire Service.
 
 In the Anon design `new_connections_loop` does use a non-blocking pipe, and
 so sees that it has gotten too far ahead of `process_connections_loop` (because
-it sees errno as EAGAIN) and can now enter a state where further accept calls
+it sees errno as EAGAIN) and can then enter a state where further accept calls
 are immediately replied with a kind of EAGAIN message and then shut down.  That
-moves the EAGAIN processing throughout the entire service -- thus the name Anon
-for this experiment.
+distributes the EAGAIN processing throughout the entire service -- thus the name
+Anon for this project.
 
 Conveniently, EAGAIN is errno 11, letting me tie the name to the other goal
-of server design that is as efficient as the machine allows.  A second piece
-of anon is to provide a design that makes good use of Linux's event dispatching
+of a server design that is as efficient as the machine allows.  A second piece
+of Anon is to provide a design that makes good use of Linux's event dispatching
 mechanism "epoll" and then provide a platform where all request processing
-can be done free of any blocking operations -- and in fact allow it to run
-in a model where the number of os threads running is equal to the number of
-CPU cores.  In this model, each request is handled by user-level threads
-(fibers) and fiber scheduling is driven by the epoll event dispatching mechanism.
+can be done free of any blocking operations.  In fact, the goal is to allow Anon
+servers to run in a model where the number of os threads running is equal to the
+number of CPU cores.  In this model, each request is handled by user-level threads
+(fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.
 
-    
+
