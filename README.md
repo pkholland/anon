@@ -59,8 +59,9 @@ arbitrarily large.  The root cause of many Critical Service Outages, particularl
 when they occur due to excessive server load, can be traced to a basic problem
 where a consumer of queued requests falls behind the producer of them.  When
 that starts to happen the percentage of the Service's total compute and resource
-capacity that is dedicated to maintaining the queue itself grows.  This further
-slows down `process_one_connection`, which then componds the original problem.
+capacity that is dedicated to maintaining the queue itself grows.  In many
+designs his slows down `process_one_connection` more than it does
+`process_connections_loop`, which then componds the original problem.
 
 Linux has an errno code named EAGAIN which it uses when certain operations
 are set to be non-blocking and are not currently possible for one reason
