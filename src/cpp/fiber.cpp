@@ -1,5 +1,6 @@
 
 #include "fiber.h"
+#include <fcntl.h>
 
 thread_local io_params  tls_io_params;
 
@@ -95,12 +96,26 @@ int fiber::num_running_fibers_;
 std::mutex fiber::zero_fiber_mutex_;
 std::condition_variable fiber::zero_fiber_cond_;
 std::atomic<int> fiber::next_fiber_id_;
+fiber_mutex fiber::on_one_mutex_;
+fiber_pipe* fiber::on_one_pipe_;
 
 void fiber::attach(io_dispatch& io_d)
 {
   if (io_d_)
     do_error("illegal second call to fiber::attach");
   io_d_ = &io_d;
+  int pipe = io_d.new_command_pipe();
+  if (fcntl(pipe, F_SETFL, O_NONBLOCK) != 0)
+    do_error("fcntl(pipe, F_SETFL, O_NONBLOCK)");
+  on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::network);
+}
+
+void fiber::terminate()
+{
+  if (on_one_pipe_ != 0)  {
+    delete on_one_pipe_;
+    on_one_pipe_ = 0;
+  }
 }
 
 void fiber::in_fiber_start()

@@ -112,6 +112,8 @@ public:
   // what io_dispatch you are using.
   static void attach(io_dispatch& io_d);
   
+  static void terminate();
+  
   // run the given 'fn' in this fiber.  If you pass 'detached' true
   // then the code will automatically (attempt to) call 'delete' on
   // this fiber after 'fn' returns.
@@ -160,7 +162,13 @@ public:
       std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
-    io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
+    if (get_current_fiber_id() == 0)
+      io_d_->on_one([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);});
+    else {
+      char buf[io_dispatch::k_oo_command_buf_size];
+      io_d_->on_one_command([fn, stack_size]{new fiber(fn,stack_size,true/*detached*/);}, buf);
+      write_on_one_command(buf);
+    }
   }
   
   static void wait_for_zero_fibers()
@@ -225,6 +233,8 @@ private:
     swapcontext(&ucontext_, &target->ucontext_);
   }
   
+  static void write_on_one_command(char (&buf)[io_dispatch::k_oo_command_buf_size]);
+  
   void in_fiber_start();
   static void stop_fiber();
 
@@ -247,6 +257,8 @@ private:
   static std::mutex zero_fiber_mutex_;
   static std::condition_variable zero_fiber_cond_;
   static std::atomic<int> next_fiber_id_;
+  static fiber_mutex on_one_mutex_;
+  static fiber_pipe* on_one_pipe_;
 };
 
 extern int get_current_fiber_id();
@@ -318,6 +330,14 @@ private:
   pipe_sock_t socket_type_;
   fiber*      io_fiber_;
 };
+
+////////////////////////////////////////////////////////////////
+
+inline void fiber::write_on_one_command(char (&buf)[io_dispatch::k_oo_command_buf_size])
+{
+  fiber_lock lock(on_one_mutex_);
+  on_one_pipe_->write(&buf,sizeof(buf));
+}
 
 ////////////////////////////////////////////////////////////////
 

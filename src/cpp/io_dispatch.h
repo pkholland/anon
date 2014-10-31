@@ -56,6 +56,7 @@ inline bool operator!=(const struct timespec& spec1, const struct timespec& spec
   return !operator==(spec1, spec2);
 }
 
+class io_ctl_handler;
 
 class io_dispatch
 {
@@ -169,7 +170,7 @@ public:
     num_paused_threads_ = 0;
     resume_cond_.notify_all();
   }
-  
+    
   // execute the given function on (exactly) one
   // of the io threads
   template<typename Fn>
@@ -179,13 +180,23 @@ public:
     if (on_io_thread())
       f();
     else {
-      auto tc = new thread_caller<Fn>(f);
-      char buf[1+sizeof(tc)];
-      buf[0] = k_on_one;
-      memcpy(&buf[1],&tc,sizeof(tc));
+      char buf[k_oo_command_buf_size];
+      on_one_command(f,buf);
       if (write(send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
         do_error("write(send_ctl_fd_,&buf[0],sizeof(buf))");
     }
+  }
+  
+  enum {
+    k_oo_command_buf_size = 1+sizeof(void*)
+  };
+  
+  template<typename Fn>
+  void on_one_command(Fn f, char (&buf)[1+sizeof(void*)])
+  {
+    auto tc = new thread_caller<Fn>(f);
+    buf[0] = k_on_one;
+    memcpy(&buf[1],&tc,sizeof(tc));
   }
   
   class scheduled_task
@@ -198,6 +209,8 @@ public:
   
   void schedule_task(scheduled_task* task, const struct timespec& rel_when);
   bool remove_task(scheduled_task* task);
+  
+  int new_command_pipe();
 
 private:
   std::string op_string(int op)
@@ -269,7 +282,7 @@ private:
   bool                      running_;
   int                       ep_fd_;
   int                       send_ctl_fd_;
-  int                       recv_ctl_fd_;
+  std::vector<io_ctl_handler*> io_ctl_handlers_;
   int                       timer_fd_;
   std::vector<std::thread>  io_threads_;
   std::vector<int>          io_thread_ids_;

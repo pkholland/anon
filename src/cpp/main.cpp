@@ -104,6 +104,8 @@ extern "C" int main(int argc, char** argv)
           anon_log("  ft - test how long it takes to fiber/context switch " << num_pipe_pairs * num_read_writes << " times");
           anon_log("  ot - similar test to 'ft', except run in os threads to test thread dispatch speed");
           anon_log("  fi - run a fiber that creates additional fibers using \"in-fiber\" start mechanism");
+          anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
+          anon_log("  or - similar to 'fr', except using threads instead of fibers");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -241,8 +243,8 @@ extern "C" int main(int argc, char** argv)
           
           for (auto thread = threads.begin(); thread != threads.end(); ++thread)
             thread->join();
+            
           struct timespec end_time;
-          
           if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
           anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
@@ -284,12 +286,90 @@ extern "C" int main(int argc, char** argv)
           fiber::wait_for_zero_fibers();
           anon_log("all fibers done");
           
+        } else if (!strcmp(&msgBuff[0], "fr")) {
+
+          anon_log("starting fiber which starts 10000 sub fibers using \"run\" mechanism");
+          struct timespec start_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+
+          fiber::run_in_fiber([]{
+          
+            fiber_mutex mutex;
+            fiber_cond cond;
+            int num_fibers = 10000;
+            int started = 0;
+            
+            // "run" start
+            for (int fc=0; fc<num_fibers; fc++) {
+            
+              fiber::run_in_fiber([&mutex,&cond,&started,num_fibers]{
+                fiber_lock lock(mutex);
+                if (++started == num_fibers)  {
+                  anon_log("last sub fiber, now notifying");
+                  cond.notify_all();
+                }
+              });
+              
+            }
+            
+            fiber_lock lock(mutex);
+            while (started != num_fibers)
+              cond.wait(lock);
+            
+          });
+          
+          fiber::wait_for_zero_fibers();
+          
+          struct timespec end_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
+          anon_log("fiber test done, total time: " << to_string(end_time - start_time) << " seconds");
+          
+        } else if (!strcmp(&msgBuff[0], "or")) {
+        
+          anon_log("starting thread which starts 10000 sub threads");
+          struct timespec start_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          
+          std::thread([]{
+          
+            std::mutex  mutex;
+            std::condition_variable cond;
+            int num_threads = 10000;
+            int started = 0;
+            
+            for (int tc=0; tc<num_threads; tc++) {
+            
+              std::thread([&mutex,&cond,&started,num_threads]{
+                std::unique_lock<std::mutex>  lock(mutex);
+                if (++started == num_threads)  {
+                  anon_log("last sub thread, now notifying");
+                  cond.notify_all();
+                }
+              }).detach();
+            
+            }
+            
+            std::unique_lock<std::mutex>  lock(mutex);
+            while (started != num_threads)
+              cond.wait(lock);
+          
+          }).join();
+          
+          struct timespec end_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
+          anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
+
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
       }
     }
   }
   
+  fiber::terminate();
   term_big_id_crypto();
   
   anon_log("application exit");

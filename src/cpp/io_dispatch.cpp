@@ -11,22 +11,31 @@
 class io_ctl_handler : public io_dispatch::handler
 {
 public:
+  io_ctl_handler(int fd)
+    : fd_(fd)
+  {}
+  
+  ~io_ctl_handler()
+  {
+    close(fd_);
+  }
+  
   virtual void io_avail(io_dispatch& io_d, const struct epoll_event& evt)
   {
     if (evt.events & EPOLLIN) {
       char cmd;
-      if (read(io_d.recv_ctl_fd_, &cmd, 1) != 1)
-        do_error("read(io_d.recv_ctl_fd_, &cmd, 1)");
+      if (read(fd_, &cmd, 1) != 1)
+        do_error("read(fd_, &cmd, 1)");
         
       if (cmd == io_dispatch::k_wake) {
       
-        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
+        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         io_d.wake_next_thread();
         
       } else if (cmd == io_dispatch::k_pause) {
       
         std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
-        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
+        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         
         // if this is the last io thread to have paused
         // then signal whatever thread is waiting in
@@ -50,9 +59,9 @@ public:
         std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         
         io_dispatch::thread_caller_ *tc;
-        if (read(io_d.recv_ctl_fd_, &tc, sizeof(tc)) != sizeof(tc))
-          do_error("read(io_d.recv_ctl_fd_, &tc, sizeof(tc))");
-        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
+        if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
+          do_error("read(fd_, &tc, sizeof(tc))");
+        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         
         tc->exec();
         
@@ -76,9 +85,9 @@ public:
       } else if (cmd == io_dispatch::k_on_one) {
       
         io_dispatch::thread_caller_ *tc;
-        if (read(io_d.recv_ctl_fd_, &tc, sizeof(tc)) != sizeof(tc))
-          do_error("read(io_d.recv_ctl_fd_, &tc, sizeof(tc))");
-        io_d.epoll_ctl(EPOLL_CTL_MOD, io_d.recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, this);
+        if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
+          do_error("read(ctl_fd_, &tc, sizeof(tc))");
+        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         tc->exec();
         delete tc;
         
@@ -88,9 +97,12 @@ public:
     } else
       anon_log_error("io_ctl_handler::io_avail called with event that does not have EPOLLIN set - control pipe now broken!");
   }
+  
+private:
+  int fd_;
 };
 
-static io_ctl_handler ctl_handler;
+//static io_ctl_handler ctl_handler;
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -149,23 +161,8 @@ io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
     do_error("epoll_create1(EPOLL_CLOEXEC)");
     
   anon_log("using fd " << ep_fd_ << " for epoll");
-    
-  int sv[2];
-  if (socketpair(AF_UNIX, SOCK_STREAM | /*SOCK_NONBLOCK |*/ SOCK_CLOEXEC, 0, sv) != 0)
-    do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv)");
-  send_ctl_fd_ = sv[0];
-  recv_ctl_fd_ = sv[1];
-      
-  // now hook up the handler for the control pipe
-  // we use (level triggered) one-shot to give ourselves
-  // control in getting the control pipe reads to happen
-  // serially, and not just have all threads simultaneously
-  // processing control commands (EPOLLIN on its own), or
-  // force us to conintue to call read until we get EAGAIN
-  // in order to re-arm the event (EPOLLET)
-  epoll_ctl(EPOLL_CTL_ADD, recv_ctl_fd_, EPOLLIN | EPOLLONESHOT, &ctl_handler);
   
-  anon_log("using fds " << sv[0] << " (send), and " <<  sv[1] << " (receive) for io threads control pipe");
+  send_ctl_fd_ = new_command_pipe();
   
   // the file descriptor we use for the timer
   timer_fd_ = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
@@ -187,9 +184,11 @@ io_dispatch::~io_dispatch()
   stop();
   for (auto thread = io_threads_.begin(); thread != io_threads_.end(); ++thread)
     thread->join();
-  close(recv_ctl_fd_);
+  for (auto rcvh = io_ctl_handlers_.begin(); rcvh != io_ctl_handlers_.end(); ++rcvh)
+    delete *rcvh;
   close(send_ctl_fd_);
   close(ep_fd_);
+  close(timer_fd_);
 }
 
 void io_dispatch::stop()
@@ -198,6 +197,29 @@ void io_dispatch::stop()
     running_ = false;
     wake_next_thread();
   }
+}
+
+int io_dispatch::new_command_pipe()
+{
+  int sv[2];
+  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) != 0)
+    do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv)");
+    
+  anon_log("using fds " << sv[0] << " (send), and " <<  sv[1] << " (receive) for io threads control pipe");
+  
+  auto hnd = new io_ctl_handler(sv[1]);
+  io_ctl_handlers_.push_back(hnd);
+  
+  // hook up the handler for the control pipe
+  // we use (level triggered) one-shot to give ourselves
+  // control in getting the control pipe reads to happen
+  // serially, and not just have all threads simultaneously
+  // processing control commands (EPOLLIN on its own), or
+  // force us to conintue to call read until we get EAGAIN
+  // in order to re-arm the event (EPOLLET)
+  epoll_ctl(EPOLL_CTL_ADD, sv[1], EPOLLIN | EPOLLONESHOT, hnd);
+
+  return sv[0];
 }
 
 void io_dispatch::wake_next_thread()
