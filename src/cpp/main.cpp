@@ -149,7 +149,7 @@ extern "C" int main(int argc, char** argv)
           io_d.on_one([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
         } else if (!strcmp(&msgBuff[0], "f")) {
           anon_log("executing print statement from a fiber");
-          fiber::run_in_fiber([]{anon_log("hello from fiber");});
+          fiber::run_in_fiber([]{anon_log("hello from fiber " << get_current_fiber_id());});
         } else if (!strcmp(&msgBuff[0], "ft")) {
         
           anon_log("executing fiber dispatch timing test");
@@ -249,7 +249,7 @@ extern "C" int main(int argc, char** argv)
 
         } else if (!strcmp(&msgBuff[0], "fi")) {
         
-          anon_log("starting fiber which \"in-fiber\" starts other fibers");
+          anon_log("starting fiber which starts other fibers using \"in-fiber\" mechanism");
           
           fiber::run_in_fiber([]{
             fiber_mutex mutex;
@@ -270,14 +270,14 @@ extern "C" int main(int argc, char** argv)
               anon_log("locked mutex, now unlocking and exiting");
             });
             
-            anon_log("sub fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " both running, now unlocking mutex " << &mutex);
+            anon_log("fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " both running, now unlocking mutex " << &mutex);
             mutex.unlock();
             
             // wait for sf1 and sf2 to exit
             sf1.join();
             sf2.join();
             
-            anon_log("sub fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " have exited");
+            anon_log("fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " have exited");
             
           });
 
