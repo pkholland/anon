@@ -83,6 +83,7 @@ extern "C" int main(int argc, char** argv)
     io_dispatch         io_d(std::thread::hardware_concurrency(),false);
     m_udp.attach(io_d);
     fiber::attach(io_d);
+    my_tcp.attach(io_d);
     
     int num_pipe_pairs = 100;
     int num_read_writes = 10000;

@@ -24,7 +24,7 @@ release: all
 
 anon.INTERMEDIATE_DIR=obj
 anon.OUT_DIR=deploy
-LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto
+LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl
 
 include src/cpp/test.mk
 include scripts/build/anonrules.mk

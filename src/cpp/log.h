@@ -68,9 +68,9 @@ namespace Log
   }
 };
 
-inline std::string errno_string()
+inline std::string error_string(int err)
 {
-  switch (errno)
+  switch (err)
   {
     case EPERM:
       return "EPERM";
@@ -91,6 +91,11 @@ inline std::string errno_string()
     default:
       return std::to_string(errno);
     }
+}
+
+inline std::string errno_string()
+{
+  return error_string(errno);
 }
 
 #define do_error(fn) do {anon_log_error(fn << " failed with errno: " << errno_string()); throw std::system_error(errno, std::system_category());} while(0)

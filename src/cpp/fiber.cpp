@@ -277,4 +277,10 @@ void io_params::sleep_until_write_possible(fiber_pipe* pipe)
 	pipe->io_fiber_ = 0;
 }
 
+void io_params::sleep_cur_until_write_possible(fiber_pipe* pipe)
+{
+  tls_io_params.sleep_until_write_possible(pipe);
+}
+
+
 

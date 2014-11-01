@@ -372,6 +372,8 @@ struct io_params
   void sleep_until_data_available(fiber_pipe* pipe);
   void sleep_until_write_possible(fiber_pipe* pipe);
   void exit_fiber();
+  
+  static void sleep_cur_until_write_possible(fiber_pipe* pipe);
 
   fiber*            current_fiber_;
   fiber*            parent_fiber_;
