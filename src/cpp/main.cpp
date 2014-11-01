@@ -119,6 +119,9 @@ extern "C" int main(int argc, char** argv)
           anon_log("  fi - run a fiber that creates additional fibers using \"in-fiber\" start mechanism");
           anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
           anon_log("  or - similar to 'fr', except using threads instead of fibers");
+          anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
+          anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message");
+          anon_log("  ca - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -382,13 +385,42 @@ extern "C" int main(int argc, char** argv)
           int port = 80;
         
           anon_log("tcp connecting to \"" << host << "\", port " << port);
-          tcp_client::connect_and_run(host, port, [host, port](int errno_code, std::unique_ptr<fiber_pipe>&& pipe){
-            if (errno_code == 0)
-              anon_log("connected to \"" << host << "\", port " << port);
-            else if (errno_code > 0)
-              anon_log("connection failed with error: " << error_string(errno_code));
+          tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (err_code == 0)
+              anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
+            else if (err_code > 0)
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
             else
-              anon_log("connection failed with error: " << gai_strerror(errno_code));
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
+          });
+
+        } else if (!strcmp(&msgBuff[0], "cp")) {
+        
+          const char* host = "www.google.com";
+          int port = 79;
+        
+          anon_log("tcp connecting to \"" << host << "\", port " << port);
+          tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (err_code == 0)
+              anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
+            else if (err_code > 0)
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
+            else
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
+          });
+        } else if (!strcmp(&msgBuff[0], "ca")) {
+        
+          const char* host = "nota.yyrealhostzz.com";
+          int port = 80;
+        
+          anon_log("tcp connecting to \"" << host << "\", port " << port);
+          tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (err_code == 0)
+              anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
+            else if (err_code > 0)
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
+            else
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
           });
 
         } else

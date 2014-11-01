@@ -3,7 +3,6 @@
 #include "tcp_server.h"
 #include <netdb.h>
 
-
 namespace tcp_client
 {
 
@@ -82,7 +81,12 @@ struct resolve_info
         ++num_returns;
         rslt = rslt->ai_next;
       }
-      anon_log("dns lookup for \"" << ths->host_.c_str() << "\" returned " << num_returns << " result" << (num_returns > 1 ? "s" : "") << ", the first: " << *(struct sockaddr_storage*)ths->cb_.ar_result->ai_addr);
+      anon_log("dns lookup for \"" << ths->host_.c_str() << "\" returned " << num_returns << " result" << (num_returns > 1 ? "s:" : ":"));
+      rslt = ths->cb_.ar_result;
+      while (rslt) {
+        anon_log("  " << *(struct sockaddr_storage*)rslt->ai_addr);
+        rslt = rslt->ai_next;
+      }
       #endif
 
       auto result = ths->cb_.ar_result;

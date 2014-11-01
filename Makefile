@@ -14,7 +14,7 @@ ifeq (run_debug_server,$(MAKECMDGOALS))
  CONFIG=debug
 endif
 
-CFLAGS=-DANON_LOG_FIBER_IDS
+CFLAGS=$(cflags) -DANON_LOG_FIBER_IDS
 
 #
 # these two phony targets depend on (and so build) 'all'

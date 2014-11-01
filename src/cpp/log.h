@@ -88,6 +88,46 @@ inline std::string error_string(int err)
       return "EEXIST";
     case EAGAIN:
       return "EAGAIN";
+    case EMSGSIZE:
+      return "EMSGSIZE";
+    case EPROTOTYPE:
+      return "EPROTOTYPE";
+    case ENOPROTOOPT:
+      return "ENOPROTOOPT";
+    case EPROTONOSUPPORT:
+      return "EPROTONOSUPPORT";
+    case ESOCKTNOSUPPORT:
+      return "ESOCKTNOSUPPORT";
+    case EOPNOTSUPP:
+      return "EOPNOTSUPP";
+    case EPFNOSUPPORT:
+      return "EPFNOSUPPORT";
+    case EAFNOSUPPORT:
+      return "EAFNOSUPPORT";
+    case EADDRINUSE:
+      return "EADDRINUSE";
+    case EADDRNOTAVAIL:
+      return "EADDRNOTAVAIL";
+    case ENETDOWN:
+      return "ENETDOWN";
+    case ENETUNREACH:
+      return "ENETUNREACH";
+    case ENETRESET:
+      return "ENETRESET";
+    case ECONNABORTED:
+      return "ECONNABORTED";
+    case ECONNRESET:
+      return "ECONNRESET";
+    case ENOBUFS:
+      return "ENOBUFS";
+    case EISCONN:
+      return "EISCONN";
+    case ENOTCONN:
+      return "ENOTCONN";
+    case ESHUTDOWN:
+      return "ESHUTDOWN";
+    case ETOOMANYREFS:
+      return "ETOOMANYREFS";
     case ETIMEDOUT:
       return "ETIMEDOUT";
     case ECONNREFUSED:
