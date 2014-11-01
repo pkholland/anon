@@ -12,7 +12,7 @@ namespace tcp_client
   struct tcp_caller
   {
     virtual ~tcp_caller() {}
-    virtual void exec(bool success, int failure_errno, std::unique_ptr<fiber_pipe>&& pipe) = 0;
+    virtual void exec(int errno_code, std::unique_ptr<fiber_pipe>&& pipe) = 0;
   };
   
   template<typename Fn>
@@ -22,9 +22,9 @@ namespace tcp_client
       : f_(f)
     {}
   
-    virtual void exec(bool success, int failure_errno, std::unique_ptr<fiber_pipe>&& pipe)
+    virtual void exec(int errno_code, std::unique_ptr<fiber_pipe>&& pipe)
     {
-      f_(success, failure_errno, std::move(pipe));
+      f_(errno_code, std::move(pipe));
     }
     
     Fn f_;
@@ -38,13 +38,12 @@ namespace tcp_client
   //
   // The signature of 'f' must be:
   //
-  //    void f(bool success, int failure_errno, std::unique_ptr<fiber_pipe>&& pipe)
+  //    void f(int errno_code, std::unique_ptr<fiber_pipe>&& pipe)
   //
   // if host/port can be connected to then f will be
-  // be called with 'success' true and a valid 'pipe'.
-  // in this case failure_errno will be 0.  If host/port
-  // cannot be connected to then 'f' will be called with
-  // 'success' false and 'failure_errno' set to the error
+  // be called with 'errno_code' 0 and a valid 'pipe'.
+  // If host/port cannot be connected to then 'f' will be
+  // called with non-zero 'errno_code' set to the error
   // code for the failure.  In this case pipe is an
   // empty fiber_pipe. 
   template<typename Fn>

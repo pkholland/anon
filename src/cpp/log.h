@@ -88,8 +88,16 @@ inline std::string error_string(int err)
       return "EEXIST";
     case EAGAIN:
       return "EAGAIN";
+    case ETIMEDOUT:
+      return "ETIMEDOUT";
+    case ECONNREFUSED:
+      return "ECONNREFUSED";
+    case EHOSTDOWN:
+      return "EHOSTDOWN";
+    case EHOSTUNREACH:
+      return "EHOSTUNREACH";
     default:
-      return std::to_string(errno);
+      return std::to_string(err);
     }
 }
 

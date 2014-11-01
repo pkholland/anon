@@ -2,12 +2,14 @@
 #include <stdio.h>
 #include <thread>
 #include <arpa/inet.h>
+#include <netdb.h>
 #include "log.h"
 #include "udp_dispatch.h"
 #include "big_id_serial.h"
 #include "big_id_crypto.h"
 #include "fiber.h"
 #include "tcp_server.h"
+#include "tcp_client.h"
 
 class my_udp : public udp_dispatch
 {
@@ -373,6 +375,21 @@ extern "C" int main(int argc, char** argv)
           if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
             do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
           anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
+
+        } else if (!strcmp(&msgBuff[0], "c")) {
+        
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("tcp connecting to \"" << host << "\", port " << port);
+          tcp_client::connect_and_run(host, port, [host, port](int errno_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (errno_code == 0)
+              anon_log("connected to \"" << host << "\", port " << port);
+            else if (errno_code > 0)
+              anon_log("connection failed with error: " << error_string(errno_code));
+            else
+              anon_log("connection failed with error: " << gai_strerror(errno_code));
+          });
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");

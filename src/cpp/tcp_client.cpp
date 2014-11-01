@@ -1,5 +1,6 @@
 
 #include "tcp_client.h"
+#include "tcp_server.h"
 #include <netdb.h>
 
 
@@ -24,7 +25,6 @@ struct resolve_info
     cb_.ar_name = host_.c_str();
     cb_.ar_service = &portString_[0];
     cb_.ar_request = &hints_;
-    cb_.ar_result = &result_;
     
     cba_ = &cb_;
 
@@ -35,9 +35,18 @@ struct resolve_info
     se_.sigev_notify_function = &resolve_info::resolve_complete;
 
     // start the async getaddrinfo lookup
-    if (getaddrinfo_a(GAI_NOWAIT, &cba_, 1, &se_) != 0) {
-      delete tcpc;
-      do_error("getaddrinfo_a(GAI_NOWAIT, &cba_, 1, &se_)");
+    int ret = getaddrinfo_a(GAI_NOWAIT, &cba_, 1, &se_);
+    if (ret != 0) {
+      anon_log_error("getaddrinfo_a(GAI_NOWAIT, &cba_, 1, &se_) failed with error: " << gai_strerror(ret));
+      fiber::run_in_fiber([tcpc,ret]{
+        try {
+          tcpc->exec(ret, std::unique_ptr<fiber_pipe>());
+        }
+        catch(...)
+        {}
+        delete tcpc;
+      });
+      delete this;
     }
   }
   
@@ -53,13 +62,30 @@ struct resolve_info
       anon_log("strange call to resolve_info::resolve_complete with gai_info returning EAI_INPROGRESS");
     else if (ret != 0) {
     
-      anon_log("dns lookup for \"" << ths->host_.c_str() << "\" failed with error: " << error_string(ret));
-      delete ths->tcpc_;
+      auto tcpc = ths->tcpc_;
+      fiber::run_in_fiber([tcpc,ret]{
+        try {
+          tcpc->exec(ret,std::unique_ptr<fiber_pipe>());
+        }
+        catch(...)
+        {}
+        delete tcpc;
+      });
       delete ths;
       
     } else {
     
-      auto result = ths->result_;
+      #if defined(ANON_LOG_DNS_LOOKUP)
+      int num_returns = 0;
+      auto rslt = ths->cb_.ar_result;
+      while (rslt) {
+        ++num_returns;
+        rslt = rslt->ai_next;
+      }
+      anon_log("dns lookup for \"" << ths->host_.c_str() << "\" returned " << num_returns << " result" << (num_returns > 1 ? "s" : "") << ", the first: " << *(struct sockaddr_storage*)ths->cb_.ar_result->ai_addr);
+      #endif
+
+      auto result = ths->cb_.ar_result;
       auto tcpc = ths->tcpc_;
       
       // note that since we are not on a fiber at this point
@@ -70,24 +96,35 @@ struct resolve_info
       // io threads.
       fiber::run_in_fiber([result,tcpc]{
       
-        int fd = socket(result.ai_family, result.ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC, result.ai_protocol);
+        int fd = socket(result->ai_family, result->ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC, result->ai_protocol);
         if (fd == -1) {
-          tcpc->exec(false, errno, std::unique_ptr<fiber_pipe>());
+          try {
+            tcpc->exec(errno, std::unique_ptr<fiber_pipe>());
+          }
+          catch(...)
+          {}
           delete tcpc;
-          do_error("socket(result.ai_family, result.ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC, result.ai_protocol)");
+          freeaddrinfo(result);
+          do_error("socket(result->ai_family, result->ai_socktype | SOCK_NONBLOCK | SOCK_CLOEXEC, result->ai_protocol)");
         }
         
         std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
+        auto cr = connect(fd, result->ai_addr, result->ai_addrlen);
+        freeaddrinfo(result);
         
-        if (connect(fd, result.ai_addr, result.ai_addrlen) == 0) {
+        if (cr == 0) {
         
           anon_log("a little weird, but ok.  non-blocking connect succeeded immediately");
           
         } else if (errno != EINPROGRESS) {
         
-          tcpc->exec(false, errno, std::unique_ptr<fiber_pipe>());
+          try {
+            tcpc->exec(errno, std::unique_ptr<fiber_pipe>());
+          }
+          catch(...)
+          {}
           delete tcpc;
-          do_error("connect(fd, result.ai_addr, result.ai_addrlen)");
+          do_error("connect(fd, result->ai_addr, result->ai_addrlen)");
           
         } else {
         
@@ -98,22 +135,33 @@ struct resolve_info
           int result;
           socklen_t optlen = sizeof(result);
           if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen) != 0) {
-            tcpc->exec(false,errno,std::unique_ptr<fiber_pipe>());
+            try {
+              tcpc->exec(errno,std::unique_ptr<fiber_pipe>());
+            }
+            catch(...)
+            {}
             delete tcpc;
             do_error("getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen)");
           }
           
           if (result != 0) {
-            tcpc->exec(false,result,std::unique_ptr<fiber_pipe>());
+            try {
+              tcpc->exec(result,std::unique_ptr<fiber_pipe>());
+            }
+            catch(...)
+            {}
             delete tcpc;
-            anon_log("async connect() failed with error: " << error_string(result));
             return;
           }
           
         }
         
         // connect succeeded, call the functor
-        tcpc->exec(true, 0, std::move(pipe));
+        try {
+          tcpc->exec(0, std::move(pipe));
+        }
+        catch(...)
+        {}
         delete tcpc;
         
       }, ths->stack_size_);
@@ -124,7 +172,6 @@ struct resolve_info
   
   std::string     host_;
   struct addrinfo hints_;
-  struct addrinfo result_;
   struct gaicb    cb_;
   struct gaicb*   cba_;
   struct sigevent se_;
@@ -135,6 +182,9 @@ struct resolve_info
 
 void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, int stack_size)
 {
+#if defined(ANON_LOG_DNS_LOOKUP)
+  anon_log("starting dns lookup for \"" << host << "\", port " << port);
+#endif
   new resolve_info(host, port, tcpc, stack_size);
 }
 

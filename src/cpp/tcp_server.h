@@ -85,7 +85,7 @@ private:
 };
 
 template<typename T>
-T& operator<<(T& str, const struct ::sockaddr_storage& addr)
+T& operator<<(T& str, const struct sockaddr_storage& addr)
 {
   char  ipaddr[64] = { 0 };
   int   port = 0;
