@@ -216,7 +216,7 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, int stack_
     anon_log_error("getaddrinfo_a(GAI_NOWAIT, &cba, 1, &se) failed with error: " << gai_strerror(ret));
     inform_in_fiber(tcpc,ret);
     delete nc;
-    throw std::system_error(ret, std::system_category());
+    throw std::runtime_error(gai_strerror(ret));
   }
 }
 
