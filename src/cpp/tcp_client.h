@@ -10,7 +10,7 @@ namespace tcp_client
   struct tcp_caller
   {
     virtual ~tcp_caller() {}
-    virtual void exec(int err_code, std::unique_ptr<fiber_pipe>&& pipe) = 0;
+    virtual void exec(int err_code, std::unique_ptr<fiber_pipe>&& pipe = std::unique_ptr<fiber_pipe>()) = 0;
   };
   
   template<typename Fn>

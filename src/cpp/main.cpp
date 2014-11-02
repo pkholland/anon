@@ -120,8 +120,8 @@ extern "C" int main(int argc, char** argv)
           anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
           anon_log("  or - similar to 'fr', except using threads instead of fibers");
           anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
-          anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message");
-          anon_log("  ca - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message");
+          anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
+          anon_log("  ca - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -399,7 +399,7 @@ extern "C" int main(int argc, char** argv)
           const char* host = "www.google.com";
           int port = 79;
         
-          anon_log("tcp connecting to \"" << host << "\", port " << port);
+          anon_log("trying to tcp connect to \"" << host << "\", port " << port);
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
@@ -413,7 +413,7 @@ extern "C" int main(int argc, char** argv)
           const char* host = "nota.yyrealhostzz.com";
           int port = 80;
         
-          anon_log("tcp connecting to \"" << host << "\", port " << port);
+          anon_log("trying to tcp connect to \"" << host << "\", port " << port);
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
@@ -424,7 +424,7 @@ extern "C" int main(int argc, char** argv)
           });
 
         } else
-          anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h<return>\" for help");
+          anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
       }
     }
   }

@@ -88,6 +88,8 @@ inline std::string error_string(int err)
       return "EEXIST";
     case EAGAIN:
       return "EAGAIN";
+    case EINVAL:
+      return "EINVAL";
     case EMSGSIZE:
       return "EMSGSIZE";
     case EPROTOTYPE:
