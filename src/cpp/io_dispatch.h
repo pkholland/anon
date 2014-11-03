@@ -207,8 +207,14 @@ public:
     virtual void exec() = 0;
   };
   
-  void schedule_task(scheduled_task* task, const struct timespec& rel_when);
+  void schedule_task(scheduled_task* task, const struct timespec& when);
   bool remove_task(scheduled_task* task);
+  
+  template<typename Fn>
+  void schedule_task_(Fn f, const struct timespec& when)
+  {
+    schedule_task(new scheduled_tsk<Fn>(f), when);
+  }
   
   int new_command_pipe();
 
@@ -238,6 +244,18 @@ private:
       }
     return is_io_thread;
   }
+  
+  template<typename Fn>
+  struct scheduled_tsk : public scheduled_task
+  {
+  public:
+    scheduled_tsk(Fn f)
+      : f_(f)
+    {}
+    virtual void exec() { f_(); }
+    
+    Fn f_;
+  };
   
   struct thread_caller_
   {

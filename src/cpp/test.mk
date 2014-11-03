@@ -11,7 +11,8 @@ $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\
 $(ANON_ROOT)/src/cpp/tcp_server.cpp\
-$(ANON_ROOT)/src/cpp/tcp_client.cpp
+$(ANON_ROOT)/src/cpp/tcp_client.cpp\
+$(ANON_ROOT)/src/cpp/dns_cache.cpp
 
 INC_DIRS+=\
 $(ANON_ROOT)

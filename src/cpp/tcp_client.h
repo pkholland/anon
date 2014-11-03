@@ -28,7 +28,7 @@ namespace tcp_client
     Fn f_;
   };
   
-  void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, int stack_size);
+  void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t stack_size);
 
   // attempt to tcp-connect to 'host' / 'port'
   // and when this succeeds or fails call the given
@@ -51,7 +51,7 @@ namespace tcp_client
   // which can be displayed in human-readable form by
   // calling the system call gai_strerror.
   template<typename Fn>
-  void connect_and_run(const char* host, int port, Fn f, int stack_size=fiber::k_default_stack_size)
+  void connect_and_run(const char* host, int port, Fn f, size_t stack_size=fiber::k_default_stack_size)
   {
     do_connect_and_run(host, port, new tcp_call<Fn>(f), stack_size);
   }  

@@ -10,6 +10,7 @@
 #include "fiber.h"
 #include "tcp_server.h"
 #include "tcp_client.h"
+#include "dns_cache.h"
 
 class my_udp : public udp_dispatch
 {
@@ -86,6 +87,7 @@ extern "C" int main(int argc, char** argv)
     m_udp.attach(io_d);
     fiber::attach(io_d);
     my_tcp.attach(io_d);
+    dns_cache::attach(io_d);
     
     int num_pipe_pairs = 100;
     int num_read_writes = 10000;
@@ -119,9 +121,10 @@ extern "C" int main(int argc, char** argv)
           anon_log("  fi - run a fiber that creates additional fibers using \"in-fiber\" start mechanism");
           anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
           anon_log("  or - similar to 'fr', except using threads instead of fibers");
+          anon_log("  d  - dns cache lookup of \"www.google.com\", port 80");
           anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
-          anon_log("  ca - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
+          anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_d.while_paused([]{anon_log("all io threads now paused");});
@@ -146,14 +149,20 @@ extern "C" int main(int argc, char** argv)
           struct timespec t_spec;
           t_spec.tv_sec = 1;
           t_spec.tv_nsec = 0;
-          io_d.schedule_task(new my_task(), t_spec);
+          struct timespec cur_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
+          io_d.schedule_task(new my_task(), t_spec + cur_time);
         } else if (!strcmp(&msgBuff[0], "tt")) {
           anon_log("queueing one second delayed task and deleting it before it expires");
           struct timespec t_spec;
           t_spec.tv_sec = 1;
           t_spec.tv_nsec = 0;
           auto t = new my_task;
-          io_d.schedule_task(t, t_spec);
+          struct timespec cur_time;
+          if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
+            do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
+          io_d.schedule_task(t, t_spec + cur_time);
           if (io_d.remove_task(t)) {
             anon_log("removed the task");
             delete t;
@@ -403,12 +412,11 @@ extern "C" int main(int argc, char** argv)
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
-            else if (err_code > 0)
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
             else
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
-        } else if (!strcmp(&msgBuff[0], "ca")) {
+          
+        } else if (!strcmp(&msgBuff[0], "ch")) {
         
           const char* host = "nota.yyrealhostzz.com";
           int port = 80;
@@ -417,11 +425,23 @@ extern "C" int main(int argc, char** argv)
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
-            else if (err_code > 0)
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
             else
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
+          
+        } else if (!strcmp(&msgBuff[0], "d")) {
+        
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("looking up \"" << host << "\", port " << port);
+          for (int i = 0; i < 2; i++)
+            dns_cache::lookup_and_run(host, port, [host, port](int err_code, const struct sockaddr *addr, socklen_t addrlen){
+              if (err_code == 0)
+                anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *(struct sockaddr_storage*)addr );
+              else
+                anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+            });
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");

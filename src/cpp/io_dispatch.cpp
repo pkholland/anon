@@ -277,13 +277,9 @@ void io_dispatch::epoll_loop()
   anon_log("exiting io_dispatch::epoll_loop");
 }
 
-void io_dispatch::schedule_task(scheduled_task* task, const timespec& rel_when)
+void io_dispatch::schedule_task(scheduled_task* task, const timespec& when)
 {
-  struct timespec cur_time;
-  if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
-    do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
-  task->when_ = cur_time + rel_when;
-  
+  task->when_ = when;
   std::unique_lock<std::mutex>  lock(task_mutex_);
   task_map_.insert(std::make_pair(task->when_,task));
   if (task_map_.begin()->first == task->when_) {
