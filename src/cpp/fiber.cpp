@@ -10,6 +10,8 @@ thread_local io_params  tls_io_params;
 // one of the notify functions), attempt to lock the mutex.
 void fiber_cond::wait(fiber_lock& lock)
 {
+  anon::assert_no_locks();
+  
   auto params = &tls_io_params;
   auto f = params->current_fiber_;
   
@@ -173,6 +175,7 @@ void fiber_pipe::io_avail(io_dispatch& io_d, const struct epoll_event& event)
 
 size_t fiber_pipe::read(void *buf, size_t count)
 {
+  anon::assert_no_locks();
   ssize_t num_bytes_read;
   while (true) {
     num_bytes_read = ::read(fd_, buf, count);
@@ -191,6 +194,7 @@ size_t fiber_pipe::read(void *buf, size_t count)
 
 void fiber_pipe::write(const void *buf, size_t count)
 {
+  anon::assert_no_locks();
   size_t total_bytes_written = 0;
   const char* p = (const char*)buf;
 	
@@ -244,7 +248,7 @@ void io_params::wake_all(fiber* first)
       case oc_exit_fiber: {
         if (current_fiber_->auto_free_)
           delete current_fiber_;
-        std::unique_lock<std::mutex> lock(fiber::zero_fiber_mutex_);
+        anon::unique_lock<std::mutex> lock(fiber::zero_fiber_mutex_);
         if (--fiber::num_running_fibers_ == 0)
             fiber::zero_fiber_cond_.notify_all();
       } break;

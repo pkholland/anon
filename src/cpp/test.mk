@@ -12,7 +12,8 @@ $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\
 $(ANON_ROOT)/src/cpp/tcp_server.cpp\
 $(ANON_ROOT)/src/cpp/tcp_client.cpp\
-$(ANON_ROOT)/src/cpp/dns_cache.cpp
+$(ANON_ROOT)/src/cpp/dns_cache.cpp\
+$(ANON_ROOT)/src/cpp/lock_checker.cpp
 
 INC_DIRS+=\
 $(ANON_ROOT)

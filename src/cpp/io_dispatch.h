@@ -1,6 +1,7 @@
 #pragma once
 
 #include "log.h"
+#include "lock_checker.h"
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -116,7 +117,7 @@ public:
     // is one less io thread we have to pause
     bool is_io_thread = on_io_thread();
     
-    std::unique_lock<std::mutex> lock(pause_mutex_);
+    anon::unique_lock<std::mutex> lock(pause_mutex_);
     num_paused_threads_ = is_io_thread ? 1 : 0;
     
     // if there is only one io thread, and
@@ -146,7 +147,7 @@ public:
     // is one less io thread we have to cause to execute f
     bool is_io_thread = on_io_thread();
       
-    std::unique_lock<std::mutex> lock(pause_mutex_);
+    anon::unique_lock<std::mutex> lock(pause_mutex_);
     num_paused_threads_ = is_io_thread ? 1 : 0;
     
     // if there is only one io thread, and

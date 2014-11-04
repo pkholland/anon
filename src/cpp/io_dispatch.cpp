@@ -34,7 +34,7 @@ public:
         
       } else if (cmd == io_dispatch::k_pause) {
       
-        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         
         // if this is the last io thread to have paused
@@ -56,7 +56,7 @@ public:
           
       } else if (cmd == io_dispatch::k_on_each) {
       
-        std::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         
         io_dispatch::thread_caller_ *tc;
         if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
@@ -128,7 +128,7 @@ class io_timer_handler : public io_dispatch::handler
         
       std::vector<io_dispatch::scheduled_task*> ready_tasks;
       {
-        std::unique_lock<std::mutex> lock(io_d.task_mutex_);
+        anon::unique_lock<std::mutex> lock(io_d.task_mutex_);
         std::multimap<struct timespec,io_dispatch::scheduled_task*>::iterator beg;
         while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= cur_time)) {
           ready_tasks.push_back(beg->second);
@@ -280,7 +280,7 @@ void io_dispatch::epoll_loop()
 void io_dispatch::schedule_task(scheduled_task* task, const timespec& when)
 {
   task->when_ = when;
-  std::unique_lock<std::mutex>  lock(task_mutex_);
+  anon::unique_lock<std::mutex>  lock(task_mutex_);
   task_map_.insert(std::make_pair(task->when_,task));
   if (task_map_.begin()->first == task->when_) {
     struct itimerspec t_spec = { 0 };
@@ -292,7 +292,7 @@ void io_dispatch::schedule_task(scheduled_task* task, const timespec& when)
 
 bool io_dispatch::remove_task(scheduled_task* task)
 {
-  std::unique_lock<std::mutex>  lock(task_mutex_);
+  anon::unique_lock<std::mutex>  lock(task_mutex_);
   auto it = task_map_.find(task->when_);
   while (it != task_map_.end() && it->second != task && it->first == task->when_)
     ++it;

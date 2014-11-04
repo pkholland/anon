@@ -1,6 +1,7 @@
 
 #include "dns_cache.h"
 #include "tcp_utils.h"
+#include "lock_checker.h"
 #include <limits>
 #include <netdb.h>
 #include <pthread.h>
@@ -172,7 +173,7 @@ static void sweep_old_cache_entries()
   struct timespec last_valid_time = cur_time - time_inc;
 
   {
-    std::lock_guard<std::mutex> lock(dns_map_mutex);
+    anon::lock_guard<std::mutex> lock(dns_map_mutex);
     for (auto it = dns_map.begin(); it != dns_map.end(); ) {
       if (it->second.state_ == dns_entry::k_resolved && it->second.when_resolved_ < last_valid_time)
         dns_map.erase(it++);
@@ -195,7 +196,7 @@ static void sweep_old_cache_entries()
 // async dns resolution completes
 void dns_entry::resolve_complete(union sigval sv)
 {
-  std::lock_guard<std::mutex> lock(dns_map_mutex);
+  anon::lock_guard<std::mutex> lock(dns_map_mutex);
 
   // we set this when we called getaddrinfo_a
   // so read it back here
@@ -409,7 +410,7 @@ void dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, si
 
 void do_lookup_and_run(const char* host, int port, dns_caller* dnsc, size_t stack_size)
 {
-  std::lock_guard<std::mutex> lock(dns_map_mutex);
+  anon::lock_guard<std::mutex> lock(dns_map_mutex);
   dns_map[host].call(host, port, dnsc, stack_size);
 }
 

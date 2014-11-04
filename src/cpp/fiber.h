@@ -3,6 +3,7 @@
 
 #include "io_dispatch.h"
 #include "log.h"
+#include "lock_checker.h"
 #include <ucontext.h>
 #include <vector>
 #include <atomic>
@@ -129,7 +130,7 @@ public:
       fiber_id_(++next_fiber_id_)
   {
     if (!auto_free_) {
-      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+      anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
     getcontext(&ucontext_);
@@ -163,7 +164,7 @@ public:
       do_error("must call fiber::attach prior to fiber::run_in_fiber");
       
     {
-      std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+      anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
     auto oo_fn = [fn, stack_size]{new fiber(fn,stack_size,true/*auto_free*/);};
@@ -183,7 +184,7 @@ public:
   // continuing to run, waiting for it to go to zero.
   static void wait_for_zero_fibers()
   {
-    std::unique_lock<std::mutex> lock(zero_fiber_mutex_);
+    anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
     while (num_running_fibers_ != 0)
       zero_fiber_cond_.wait(lock);
   }
@@ -388,6 +389,8 @@ struct io_params
 
 inline void fiber_mutex::lock()
 {
+  anon::assert_no_locks();
+  
   while (true) {
     switch(state_.fetch_add(1)) {
     

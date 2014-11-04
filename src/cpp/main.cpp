@@ -11,6 +11,7 @@
 #include "tcp_server.h"
 #include "tcp_client.h"
 #include "dns_cache.h"
+#include "lock_checker.h"
 
 class my_udp : public udp_dispatch
 {
@@ -368,7 +369,7 @@ extern "C" int main(int argc, char** argv)
             for (int tc=0; tc<num_threads; tc++) {
             
               std::thread([&mutex,&cond,&started,num_threads]{
-                std::unique_lock<std::mutex>  lock(mutex);
+                anon::unique_lock<std::mutex>  lock(mutex);
                 if (++started == num_threads)  {
                   anon_log("last sub thread, now notifying");
                   cond.notify_all();
@@ -377,7 +378,7 @@ extern "C" int main(int argc, char** argv)
             
             }
             
-            std::unique_lock<std::mutex>  lock(mutex);
+            anon::unique_lock<std::mutex>  lock(mutex);
             while (started != num_threads)
               cond.wait(lock);
           
