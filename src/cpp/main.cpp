@@ -12,6 +12,7 @@
 #include "tcp_client.h"
 #include "dns_cache.h"
 #include "lock_checker.h"
+#include "time_utils.h"
 
 class my_udp : public udp_dispatch
 {
@@ -39,18 +40,6 @@ public:
       delete this;
     }
 };
-
-std::string to_string(const struct timespec& spec)
-{
-  std::ostringstream str;
-  str << spec.tv_sec << ".";
-  
-  std::ostringstream dec;
-  dec << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3) << (spec.tv_nsec / 1000000);
-  
-  str << dec.str();
-  return str.str();
-}
 
 extern "C" int main(int argc, char** argv)
 {
@@ -93,8 +82,7 @@ extern "C" int main(int argc, char** argv)
     int num_pipe_pairs = 100;
     int num_read_writes = 10000;
     
-    while (true)
-    {
+    while (true) {
       // read a command from stdin
       char msgBuff[256];
       auto bytes_read = read(0/*stdin*/,&msgBuff[0],sizeof(msgBuff));
@@ -148,23 +136,11 @@ extern "C" int main(int argc, char** argv)
           }
         } else if (!strcmp(&msgBuff[0], "t")) {
           anon_log("queueing one second delayed task");
-          struct timespec t_spec;
-          t_spec.tv_sec = 1;
-          t_spec.tv_nsec = 0;
-          struct timespec cur_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
-          io_d.schedule_task(new my_task(), t_spec + cur_time);
+          io_d.schedule_task(new my_task(), cur_time()+1);
         } else if (!strcmp(&msgBuff[0], "tt")) {
           anon_log("queueing one second delayed task and deleting it before it expires");
-          struct timespec t_spec;
-          t_spec.tv_sec = 1;
-          t_spec.tv_nsec = 0;
-          auto t = new my_task;
-          struct timespec cur_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
-          io_d.schedule_task(t, t_spec + cur_time);
+          auto t = new my_task();
+          io_d.schedule_task(t, cur_time()+1);
           if (io_d.remove_task(t)) {
             anon_log("removed the task");
             delete t;
@@ -182,9 +158,7 @@ extern "C" int main(int argc, char** argv)
         } else if (!strcmp(&msgBuff[0], "ft")) {
         
           anon_log("executing fiber dispatch timing test");
-          struct timespec start_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          auto start_time = cur_time();
           
           std::vector<int> fds(num_pipe_pairs*2);
           for (int i=0; i<num_pipe_pairs; i++) {
@@ -214,17 +188,12 @@ extern "C" int main(int argc, char** argv)
           
           fiber::wait_for_zero_fibers();
           
-          struct timespec end_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("fiber test done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("fiber test done, total time: " << cur_time() - start_time << " seconds");
             
         } else if (!strcmp(&msgBuff[0], "ot")) {
         
           anon_log("executing thread dispatch timing test");
-          struct timespec start_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          auto start_time = cur_time();
           
           std::vector<int>          fds(num_pipe_pairs*2);
           std::vector<std::thread>  threads;
@@ -271,10 +240,7 @@ extern "C" int main(int argc, char** argv)
           for (auto thread = threads.begin(); thread != threads.end(); ++thread)
             thread->join();
             
-          struct timespec end_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("thread test done, total time: " << cur_time() - start_time << " seconds");
 
         } else if (!strcmp(&msgBuff[0], "fi")) {
         
@@ -316,9 +282,7 @@ extern "C" int main(int argc, char** argv)
         } else if (!strcmp(&msgBuff[0], "fr")) {
 
           anon_log("starting fiber which starts 10000 sub fibers using \"run\" mechanism");
-          struct timespec start_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          auto start_time = cur_time();
 
           fiber::run_in_fiber([]{
           
@@ -348,17 +312,12 @@ extern "C" int main(int argc, char** argv)
           
           fiber::wait_for_zero_fibers();
           
-          struct timespec end_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("fiber test done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("fiber test done, total time: " << cur_time() - start_time << " seconds");
           
         } else if (!strcmp(&msgBuff[0], "or")) {
         
           anon_log("starting thread which starts 10000 sub threads");
-          struct timespec start_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &start_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &start_time)");
+          auto start_time = cur_time();
           
           std::thread([]{
           
@@ -385,10 +344,7 @@ extern "C" int main(int argc, char** argv)
           
           }).join();
           
-          struct timespec end_time;
-          if (clock_gettime(CLOCK_MONOTONIC, &end_time) != 0)
-            do_error("clock_gettime(CLOCK_MONOTONIC, &end_time)");
-          anon_log("thread test done, total time: " << to_string(end_time - start_time) << " seconds");
+          anon_log("thread test done, total time: " << cur_time() - start_time << " seconds");
 
         } else if (!strcmp(&msgBuff[0], "c")) {
         

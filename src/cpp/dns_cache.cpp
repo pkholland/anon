@@ -2,6 +2,7 @@
 #include "dns_cache.h"
 #include "tcp_utils.h"
 #include "lock_checker.h"
+#include "time_utils.h"
 #include <limits>
 #include <netdb.h>
 #include <pthread.h>
@@ -166,13 +167,7 @@ static std::map<std::string,dns_entry> dns_map;
 
 static void sweep_old_cache_entries()
 {
-  struct timespec cur_time;
-  if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
-    do_error("clock_gettime(CLOCK_MONOTONIC, &now)");
-  struct timespec time_inc;
-  time_inc.tv_sec = cache_life_seconds;
-  time_inc.tv_nsec = 0;
-  struct timespec last_valid_time = cur_time - time_inc;
+  auto last_valid_time = cur_time() - cache_life_seconds;
 
   {
     anon::lock_guard<std::mutex> lock(dns_map_mutex);
@@ -184,10 +179,7 @@ static void sweep_old_cache_entries()
     }
   }
   
-  struct timespec next_time;
-  next_time.tv_sec = cache_life_seconds / 2;
-  next_time.tv_nsec = 0;
-  g_io_d->schedule_task_(sweep_old_cache_entries, cur_time + next_time);
+  g_io_d->schedule_task_(sweep_old_cache_entries, cur_time() + cache_life_seconds / 2);
 }
 
 
@@ -252,8 +244,7 @@ void dns_entry::resolve_complete(union sigval sv)
       addinf = addinf->ai_next;
     }
     freeaddrinfo(nc->cb_.ar_result);
-    if (clock_gettime(CLOCK_MONOTONIC, &ths->when_resolved_) != 0)
-      do_error("clock_gettime(CLOCK_MONOTONIC, &now)");
+    ths->when_resolved_ = cur_time();
     ths->state_ = k_resolved;
     
     // run all of the pending functions, rotating through
@@ -368,11 +359,8 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
 
 bool dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, size_t stack_size, struct sockaddr_in6& addr)
 {
-  struct timespec now;
-  if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
-    do_error("clock_gettime(CLOCK_MONOTONIC, &now)");
-    
-  struct timespec earliest = forever;
+  auto now = cur_time();
+  auto earliest = forever;
 
   // loop through looking for the next addr
   // that is valid and available.  If we can

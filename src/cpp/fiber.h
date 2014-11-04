@@ -126,7 +126,7 @@ public:
   fiber(Fn fn, size_t stack_size=k_default_stack_size, bool auto_free=false)
     : auto_free_(auto_free),
       running_(true),
-      stack_(stack_size),
+      stack_(::operator new(stack_size)),
       fiber_id_(++next_fiber_id_)
   {
     if (!auto_free_) {
@@ -134,7 +134,7 @@ public:
       ++num_running_fibers_;
     }
     getcontext(&ucontext_);
-    ucontext_.uc_stack.ss_sp = &stack_[0];
+    ucontext_.uc_stack.ss_sp = stack_;
     ucontext_.uc_stack.ss_size = stack_size;
     ucontext_.uc_link = NULL;
     auto sm = new start_mediator<Fn>(fn);
@@ -142,6 +142,11 @@ public:
     int p2 = (int)(((uint64_t)sm) >> 32);
     makecontext(&ucontext_, (void (*)())&fiber::start_fiber, 2, p1, p2);
     in_fiber_start();
+  }
+  
+  ~fiber()
+  {
+    ::operator delete(stack_);
   }
   
   // note! calling join can switch threads -- that is, you can
@@ -160,8 +165,10 @@ public:
   template<typename Fn>
   static void run_in_fiber(Fn fn, size_t stack_size=k_default_stack_size)
   {
+    #if defined(ANON_RUNTIME_CHECKS)
     if (!io_d_)
       do_error("must call fiber::attach prior to fiber::run_in_fiber");
+    #endif
       
     {
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
@@ -200,7 +207,8 @@ private:
   // this is the kind that live in io_params.iod_fiber_
   fiber()
     : auto_free_(false),
-      running_(false)
+      running_(false),
+      stack_(0)
   {
     getcontext(&ucontext_);
   }
@@ -254,14 +262,14 @@ private:
   friend struct io_params;
   friend class fiber_pipe;
 
-  bool              auto_free_;
-  bool              running_;
-  fiber_mutex       stop_mutex_;
-  fiber_cond        stop_condition_;
-  fiber*            next_wake_;
-  std::vector<char> stack_;
-  ucontext_t        ucontext_;
-  int               fiber_id_;
+  bool        auto_free_;
+  bool        running_;
+  fiber_mutex stop_mutex_;
+  fiber_cond  stop_condition_;
+  fiber*      next_wake_;
+  void*       stack_;
+  ucontext_t  ucontext_;
+  int         fiber_id_;
   
   static io_dispatch* io_d_;
   static int num_running_fibers_;

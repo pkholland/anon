@@ -1,6 +1,7 @@
 
 #include "io_dispatch.h"
 #include "log.h"
+#include "time_utils.h"
 #include <sys/epoll.h>
 #include <system_error>
 #include <fcntl.h>
@@ -122,15 +123,13 @@ class io_timer_handler : public io_dispatch::handler
         do_error("read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations))");
       }
       
-      struct timespec cur_time;
-      if (clock_gettime(CLOCK_MONOTONIC, &cur_time) != 0)
-        do_error("clock_gettime(CLOCK_MONOTONIC, &cur_time)");
+      struct timespec now = cur_time();
         
       std::vector<io_dispatch::scheduled_task*> ready_tasks;
       {
         anon::unique_lock<std::mutex> lock(io_d.task_mutex_);
         std::multimap<struct timespec,io_dispatch::scheduled_task*>::iterator beg;
-        while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= cur_time)) {
+        while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= now)) {
           ready_tasks.push_back(beg->second);
           io_d.task_map_.erase(beg);
         }
