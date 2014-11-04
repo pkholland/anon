@@ -12,7 +12,7 @@ several goals.  These are:
 * Effeciently deal with "over-maximum" requests
 * Provide a reasonable dev environment
 
-Anon is currenty HIGHLY experimental and is unlike other service designs in many
+Anon is currenty HIGHLY experimental and is unlike other service designs in some
 ways.  For example, it is currently all written in C++.  The name "anon" comes
 from the first two goals, and is the word *anon*, meaning something like "again".
 It's not an abreviation for "anonymous".
@@ -60,7 +60,7 @@ when they occur due to excessive server load, can be traced to a basic problem
 where a consumer of queued requests falls behind the producer of them.  When
 that starts to happen the percentage of the Service's total compute and resource
 capacity that is dedicated to maintaining the queue itself grows.  In many
-designs his slows down `process_one_connection` more than it does
+designs this slows down `process_one_connection` more than it does
 `process_connections_loop`, which then componds the original problem.
 
 Linux has an errno code named EAGAIN which it uses when certain operations
