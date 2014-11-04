@@ -179,7 +179,7 @@ static void sweep_old_cache_entries()
     }
   }
   
-  g_io_d->schedule_task_(sweep_old_cache_entries, cur_time() + cache_life_seconds / 2);
+  g_io_d->schedule_task(sweep_old_cache_entries, cur_time() + cache_life_seconds / 2);
 }
 
 
@@ -383,7 +383,7 @@ bool dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, si
   // none currently available, schedule a task
   // to try again at 'earliest'
   std::string host_copy = host;
-  g_io_d->schedule_task_([host_copy, port, dnsc, stack_size]{
+  g_io_d->schedule_task([host_copy, port, dnsc, stack_size]{
     do_lookup_and_run(host_copy.c_str(), port, dnsc, stack_size);
   }, earliest);
   

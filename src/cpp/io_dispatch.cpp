@@ -59,7 +59,7 @@ public:
       
         anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         
-        io_dispatch::thread_caller_ *tc;
+        io_dispatch::virt_caller_ *tc;
         if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
           do_error("read(fd_, &tc, sizeof(tc))");
         io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
@@ -85,7 +85,7 @@ public:
           
       } else if (cmd == io_dispatch::k_on_one) {
       
-        io_dispatch::thread_caller_ *tc;
+        io_dispatch::virt_caller_ *tc;
         if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
           do_error("read(ctl_fd_, &tc, sizeof(tc))");
         io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
@@ -125,12 +125,12 @@ class io_timer_handler : public io_dispatch::handler
       
       struct timespec now = cur_time();
         
-      std::vector<io_dispatch::scheduled_task*> ready_tasks;
+      std::vector<std::unique_ptr<io_dispatch::virt_caller_> > ready_tasks;
       {
         anon::unique_lock<std::mutex> lock(io_d.task_mutex_);
-        std::multimap<struct timespec,io_dispatch::scheduled_task*>::iterator beg;
+        std::multimap<struct timespec,std::unique_ptr<io_dispatch::virt_caller_> >::iterator beg;
         while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= now)) {
-          ready_tasks.push_back(beg->second);
+          ready_tasks.push_back(std::move(beg->second));
           io_d.task_map_.erase(beg);
         }
         if ((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) {
@@ -141,8 +141,8 @@ class io_timer_handler : public io_dispatch::handler
         }
       }
 
-      for (auto task : ready_tasks)
-        task->exec();
+      for (auto it = ready_tasks.begin(); it != ready_tasks.end(); it++)
+        (*it)->exec();
     }
   }
 };
@@ -150,6 +150,8 @@ class io_timer_handler : public io_dispatch::handler
 static io_timer_handler timer_handler;
 
 ///////////////////////////////////////////////////////////////////////////
+
+std::atomic<int> io_dispatch::virt_caller_::next_id_;
 
 io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
   : running_(true),
@@ -276,26 +278,26 @@ void io_dispatch::epoll_loop()
   anon_log("exiting io_dispatch::epoll_loop");
 }
 
-void io_dispatch::schedule_task(scheduled_task* task, const timespec& when)
+io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_* task, const timespec& when)
 {
-  task->when_ = when;
   anon::unique_lock<std::mutex>  lock(task_mutex_);
-  task_map_.insert(std::make_pair(task->when_,task));
-  if (task_map_.begin()->first == task->when_) {
+  task_map_.insert(std::make_pair(when,std::unique_ptr<virt_caller_>(task)));
+  if (task_map_.begin()->first == when) {
     struct itimerspec t_spec = { 0 };
-    t_spec.it_value = task->when_;
+    t_spec.it_value = when;
     if (timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
       do_error("timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0)");
   }
+  return scheduled_task(when, task->id_);
 }
 
-bool io_dispatch::remove_task(scheduled_task* task)
+bool io_dispatch::remove_task(const scheduled_task& task)
 {
   anon::unique_lock<std::mutex>  lock(task_mutex_);
-  auto it = task_map_.find(task->when_);
-  while (it != task_map_.end() && it->second != task && it->first == task->when_)
+  auto it = task_map_.find(task.when_);
+  while (it != task_map_.end() && it->second->id_ != task.id_ && it->first == task.when_)
     ++it;
-  if (it != task_map_.end() && it->second == task) {
+  if (it != task_map_.end() && it->second->id_ == task.id_) {
     task_map_.erase(it);
     return true;
   }

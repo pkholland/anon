@@ -31,16 +31,6 @@ public:
 
 };
 
-class my_task : public io_dispatch::scheduled_task
-{
-public:
-    virtual void exec()
-    {
-      anon_log("task completed");
-      delete this;
-    }
-};
-
 extern "C" int main(int argc, char** argv)
 {
   anon_log("application start");
@@ -136,16 +126,14 @@ extern "C" int main(int argc, char** argv)
           }
         } else if (!strcmp(&msgBuff[0], "t")) {
           anon_log("queueing one second delayed task");
-          io_d.schedule_task(new my_task(), cur_time()+1);
+          io_d.schedule_task([]{anon_log("task completed");}, cur_time()+1);
         } else if (!strcmp(&msgBuff[0], "tt")) {
           anon_log("queueing one second delayed task and deleting it before it expires");
-          auto t = new my_task();
-          io_d.schedule_task(t, cur_time()+1);
+          auto t = io_d.schedule_task([]{anon_log("oops, task completed!");}, cur_time()+1);
           if (io_d.remove_task(t)) {
-            anon_log("removed the task");
-            delete t;
+            anon_log("removed the task " << t);
           } else
-            anon_log("failed to remove the task");
+            anon_log("failed to remove the task " << t);
         } else if (!strcmp(&msgBuff[0], "e")) {
           anon_log("executing print statement on each io thread");
           io_d.on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});

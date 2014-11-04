@@ -108,7 +108,7 @@ public:
     // we are called from that thread, then
     // we don't want to write a k_on_each command
     if (num_paused_threads_ < num_threads_) {
-      auto tc = new thread_caller<Fn>(f);
+      auto tc = new virt_caller<Fn>(f);
       char buf[1+sizeof(tc)];
       buf[0] = k_on_each;
       memcpy(&buf[1],&tc,sizeof(tc));
@@ -149,27 +149,28 @@ public:
   template<typename Fn>
   void on_one_command(Fn f, char (&buf)[1+sizeof(void*)])
   {
-    auto tc = new thread_caller<Fn>(f);
+    auto tc = new virt_caller<Fn>(f);
     buf[0] = k_on_one;
     memcpy(&buf[1],&tc,sizeof(tc));
   }
   
-  class scheduled_task
+  struct scheduled_task
   {
-    friend class io_dispatch;
-    struct timespec when_;    // set by io_dispatch::schedule_task
-  public:
-    virtual void exec() = 0;
+    struct timespec when_;
+    int             id_;
+    scheduled_task(const struct timespec& when, int id)
+      : when_(when),
+        id_(id)
+    {} 
   };
   
-  void schedule_task(scheduled_task* task, const struct timespec& when);
-  bool remove_task(scheduled_task* task);
-  
   template<typename Fn>
-  void schedule_task_(Fn f, const struct timespec& when)
+  scheduled_task schedule_task(Fn f, const struct timespec& when)
   {
-    schedule_task(new scheduled_tsk<Fn>(f), when);
+    return schedule_task_(new virt_caller<Fn>(f), when);
   }
+  
+  bool remove_task(const scheduled_task& task);
   
   int new_command_pipe();
 
@@ -187,7 +188,7 @@ private:
         return std::string("unknown (") + std::to_string(op) + ")";
     }
   }
-  
+    
   bool on_io_thread()
   {
     bool is_io_thread = false;
@@ -200,41 +201,35 @@ private:
     return is_io_thread;
   }
   
-  template<typename Fn>
-  struct scheduled_tsk : public scheduled_task
+  struct virt_caller_
   {
   public:
-    scheduled_tsk(Fn f)
-      : f_(f)
-    {}
-    virtual void exec() { f_(); }
-    
-    Fn f_;
-  };
-  
-  struct thread_caller_
-  {
-  public:
-    virtual ~thread_caller_() {}
+    virt_caller_() : id_(next_id_++) {}
+    virtual ~virt_caller_() {}
     virtual void exec() = 0;
+    int id_;
+  private:
+    static std::atomic<int> next_id_;
   };
   
   template<typename Fn>
-  struct thread_caller : public thread_caller_
+  struct virt_caller : public virt_caller_
   {
   public:
-    thread_caller(Fn fn)
-      : fn_(fn)
+    virt_caller(Fn f)
+      : f_(f)
     {}
     
     virtual void exec()
     {
-      fn_();
+      f_();
     }
     
   private:
-    Fn fn_;
+    Fn f_;
   };
+  
+  scheduled_task schedule_task_(virt_caller_* task, const struct timespec& when);
 
   enum {
     k_wake = 0,
@@ -267,8 +262,8 @@ private:
   std::condition_variable   resume_cond_;
   int                       num_paused_threads_;
   
-  std::mutex                                      task_mutex_;
-  std::multimap<struct timespec,scheduled_task*>  task_map_;
+  std::mutex                                    task_mutex_;
+  std::multimap<struct timespec,std::unique_ptr<virt_caller_> >  task_map_;
 };
 
 inline std::string event_bits_to_string(uint32_t event_bits)
@@ -302,5 +297,13 @@ inline std::string event_bits_to_string(uint32_t event_bits)
     eventstr += "EPOLLET ";
   return eventstr;
 }
+
+template<typename T>
+T& operator<<(T& str, const io_dispatch::scheduled_task& task)
+{
+  return str << "{" << task.when_ << ", " << task.id_ << "}";
+}
+
+
 
 
