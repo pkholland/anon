@@ -123,6 +123,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
           anon_log("  or - similar to 'fr', except using threads instead of fibers");
           anon_log("  d  - dns cache lookup of \"www.google.com\", port 80");
+          anon_log("  df - same as 'd', except initiation of lookup is done from a fiber");
           anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
@@ -435,7 +436,7 @@ extern "C" int main(int argc, char** argv)
           const char* host = "www.google.com";
           int port = 80;
         
-          anon_log("looking up \"" << host << "\", port " << port);
+          anon_log("looking up \"" << host << "\", port " << port << " (twice)");
           for (int i = 0; i < 2; i++)
             dns_cache::lookup_and_run(host, port, [host, port](int err_code, const struct sockaddr *addr, socklen_t addrlen){
               if (err_code == 0)
@@ -443,6 +444,22 @@ extern "C" int main(int argc, char** argv)
               else
                 anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
             });
+            
+        } else if (!strcmp(&msgBuff[0], "df")) {
+        
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("running a fiber which looks up \"" << host << "\", port " << port << " (twice)");
+          fiber::run_in_fiber([host, port]{
+            for (int i = 0; i < 2; i++ )
+              dns_cache::lookup_and_run(host, port, [host, port](int err_code, const struct sockaddr *addr, socklen_t addrlen){
+                if (err_code == 0)
+                  anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *(struct sockaddr_storage*)addr );
+                else
+                  anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+              });
+          });
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");

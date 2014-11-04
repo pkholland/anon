@@ -45,21 +45,23 @@ public:
       state_(k_init)
   {}
   
-  void call(const char* host, int port, dns_caller* dnsc, size_t stack_size)
+  bool call(const char* host, int port, dns_caller* dnsc, size_t stack_size, struct sockaddr_in6& addr)
   {
     switch (state_) {
       case k_init:
         initiate_lookup(host, port, dnsc, stack_size);
-        break;
+        return false;
       case k_in_progress:
         pending_callers_.push_back(pending_call(host, port, dnsc, stack_size));
-        break;
+        return false;
       case k_resolved:
-        call_from_cache(host, port, dnsc, stack_size);
-        break;
+        return call_from_cache(host, port, dnsc, stack_size, addr);
       case k_failed_resolve:
         do_error("invalid call to dns::lookup_and_run while dns cache entry for \"" << host << "\" is in a failed state");
+      default:
+        do_error("unknown dns_entry::state_ " << state_);
     }
+    return false;
   }
   
 private:
@@ -87,7 +89,7 @@ private:
   
   static void resolve_complete(union sigval sv);
   void initiate_lookup(const char* host, int port, dns_caller* dnsc, size_t stack_size);
-  void call_from_cache(const char* host, int port, dns_caller* dnsc, size_t stack_size);
+  bool call_from_cache(const char* host, int port, dns_caller* dnsc, size_t stack_size, struct sockaddr_in6& addr);
   
   // structure used to hold state data
   // during the getaddrinfo_a lookup
@@ -364,7 +366,7 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
   }
 }
 
-void dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, size_t stack_size)
+bool dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, size_t stack_size, struct sockaddr_in6& addr)
 {
   struct timespec now;
   if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
@@ -374,26 +376,18 @@ void dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, si
 
   // loop through looking for the next addr
   // that is valid and available.  If we can
-  // find one we call with that one.  If none
-  // are currently available, record the earliest
-  // one that will become available, and set a
-  // timer to wake up and try again then.
+  // find one we tell the caller to use that one.
+  // If none are currently available, record the
+  // earliest one that will become available, and
+  // set a timer to wake up and try again then.
   int start_index = last_++;
   for (int i = 0; i < addrs_.size(); i++) {
     int index = (start_index + i) % addrs_.size();
     if (!addrs_[index].valid_)
       continue;
     if (addrs_[index].next_avail_time_ <= now) {
-      auto addr = addrs_[index].addr_;
-      fiber::run_in_fiber([port,dnsc,addr]{
-        call_deleter cd(dnsc);
-        if (addr.sin6_family == AF_INET6)
-          ((struct sockaddr_in6*)&addr)->sin6_port = htons(port);
-        else
-          ((struct sockaddr_in*)&addr)->sin_port = htons(port);
-        dnsc->exec(0, (struct sockaddr*)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
-      });
-      return;
+      addr = addrs_[index].addr_;
+      return true;
     } else if (addrs_[index].next_avail_time_ < earliest)
       earliest = addrs_[index].next_avail_time_;
   }
@@ -404,14 +398,38 @@ void dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, si
   g_io_d->schedule_task_([host_copy, port, dnsc, stack_size]{
     do_lookup_and_run(host_copy.c_str(), port, dnsc, stack_size);
   }, earliest);
+  
+  return false;
 }
 
 ////////////////////////////////////////////////////////
 
 void do_lookup_and_run(const char* host, int port, dns_caller* dnsc, size_t stack_size)
 {
-  anon::lock_guard<std::mutex> lock(dns_map_mutex);
-  dns_map[host].call(host, port, dnsc, stack_size);
+  // we don't want to start a new fiber from this thread/fiber
+  // while dns_map_mutex is locked (starting new fibers when
+  // called from another fiber involves writing in to a fiber
+  // pipe, and that can block, causing us to come back from
+  // run_in_fiber on a different os thread).  So, if 'call'
+  // wants to initiate an immediate call to dnsc, it does so
+  // by filling out the 'addr' we supply and returning true.
+  // We then unlock the mutex and call after it is unlocked.
+  struct sockaddr_in6 addr;
+  bool                do_call;
+  {
+    anon::lock_guard<std::mutex> lock(dns_map_mutex);
+    do_call = dns_map[host].call(host, port, dnsc, stack_size, addr);
+  }
+  if (do_call) {
+    fiber::run_in_fiber([port,dnsc,addr]{
+      call_deleter cd(dnsc);
+      if (addr.sin6_family == AF_INET6)
+        ((struct sockaddr_in6*)&addr)->sin6_port = htons(port);
+      else
+        ((struct sockaddr_in*)&addr)->sin_port = htons(port);
+      dnsc->exec(0, (struct sockaddr*)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+    });
+  }
 }
 
 }
