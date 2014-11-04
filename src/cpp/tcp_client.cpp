@@ -3,6 +3,10 @@
 #include "tcp_server.h"
 #include "dns_cache.h"
 
+#if defined(ANON_LOG_DNS_LOOKUP)
+#include <netdb.h>
+#endif
+
 namespace tcp_client
 {
 

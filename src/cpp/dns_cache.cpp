@@ -291,18 +291,25 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
   #endif
   
   // the info we will need when resolve_complete is called
+  // also, while the man pages for getaddrinfo_a aren't
+  // particularly clear on this, the pointers given to it
+  // in the various data structures need to _stay valid_
+  // until the callback function is called.  So we can't
+  // put these data structures on the stack.  They are members
+  // of the notify_complete object, which is kept around until
+  // we are called back.
   auto nc = new notify_complete(host, dnsc, stack_size, this);
   
   // we don't need a very big stack for the
   // thread that libanl will use to call us
   // back on, so set the pthread stack size
   // small here
-  //pthread_attr_t  ptattr;
   int rslt = pthread_attr_init(&nc->ptattr_);
   if (rslt != 0) {
     anon_log_error("pthread_attr_init(&nc->ptattr_) failed with result: " << error_string(rslt));
     inform_in_fiber(dnsc,rslt);
     delete nc;
+    dns_map.erase(dns_map.find(host));
     throw std::system_error(rslt, std::system_category());
   }
   rslt = pthread_attr_setstacksize(&nc->ptattr_, 64*1024);
@@ -311,15 +318,14 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
     pthread_attr_destroy(&nc->ptattr_);
     inform_in_fiber(dnsc,rslt);
     delete nc;
+    dns_map.erase(dns_map.find(host));
     throw std::system_error(rslt, std::system_category());
   }
 
   // gai takes the port parameter as a string
-  //char  portString[8];
   sprintf(&nc->portString_[0], "%d", port);
   
   // the sorts of endpoints we are looking for
-  //struct addrinfo hints;
   memset(&nc->hints_, 0, sizeof(nc->hints_));
   nc->hints_.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
   nc->hints_.ai_socktype = SOCK_STREAM;
@@ -329,10 +335,11 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
   nc->cb_.ar_name = host;
   nc->cb_.ar_service = &nc->portString_[0];
   nc->cb_.ar_request = &nc->hints_;
+  
+  // this one is ok to put on the stack
   struct gaicb* cba = &nc->cb_;
   
   // how to notify us when the lookup completes
-  //struct sigevent se;
   memset(&nc->se_,0,sizeof(nc->se_));
   nc->se_.sigev_notify = SIGEV_THREAD;
   nc->se_.sigev_value.sival_ptr = nc;
@@ -348,8 +355,10 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
     
   if (ret != 0) {
     anon_log_error("getaddrinfo_a(GAI_NOWAIT, &cba, 1, &se) failed with error: " << gai_strerror(ret));
+    pthread_attr_destroy(&nc->ptattr_);
     inform_in_fiber(dnsc,ret);
     delete nc;
+    dns_map.erase(dns_map.find(host));
     throw std::runtime_error(gai_strerror(ret));
   }
 }
