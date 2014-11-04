@@ -87,8 +87,8 @@ unable to continue writing.
 
 Even without setting the pipe to be non-blocking, using a pipe with a small-ish,
 finite capacity will cause `new_connections_loop` to *block* inside of its
-`write` call, which will keep it being able to call `accept` again.  This would
-then keep client machines from being able to connect and send new requests.
+`write` call, which will keep it from being able to call `accept` again.  This
+would then keep client machines from being able to connect and send new requests.
 That creates a kind of speed limit that `process_connections_loop` can
 assert on the entire Service.  But having client machines fail to connect
 without understanding why makes it hard to get those client machines
