@@ -13,6 +13,7 @@
 #include "dns_cache.h"
 #include "lock_checker.h"
 #include "time_utils.h"
+#include "http_server.h"
 
 class my_udp : public udp_dispatch
 {
@@ -53,6 +54,7 @@ extern "C" int main(int argc, char** argv)
   {
     int                 udp_port = 8617;
     int                 tcp_port = 8618;
+    int                 http_port = 8619;
     
     src_addr_validator  validator;
     my_udp              m_udp(udp_port,validator);
@@ -68,6 +70,23 @@ extern "C" int main(int argc, char** argv)
     fiber::attach(io_d);
     my_tcp.attach(io_d);
     dns_cache::attach(io_d);
+    
+    http_server my_http(http_port, validator,
+                      [](const http_server::http_request& request, http_server::http_reply& reply){
+                        reply.add_header("Content-Type", "text/plain");
+                        reply << "hello browser!\n\n";
+                        reply << "src addr: " << *(const struct sockaddr_storage*)request.src_addr << "\n";
+                        reply << "http version major: " << request.http_major << "\n";
+                        reply << "http version minor: " << request.http_minor << "\n";
+                        reply << "method: " << request.method_str() << "\n\n";
+                        reply << "-- headers --\n";
+                        for (auto it = request.headers.begin(); it != request.headers.end(); it++)
+                          reply << " " << it->first << ": " << it->second << "\n";
+                        reply << "\n";
+                        reply << "url path: " << request.get_url_field(UF_PATH) << "\n";
+                        reply << "url query: " << request.get_url_field(UF_QUERY) << "\n";
+                      });
+    my_http.attach(io_d);
     
     int num_pipe_pairs = 100;
     int num_read_writes = 10000;
@@ -351,7 +370,7 @@ extern "C" int main(int argc, char** argv)
 
         } else if (!strcmp(&msgBuff[0], "cp")) {
         
-          const char* host = "www.google.com";
+          const char* host = "127.0.0.1";
           int port = 79;
         
           anon_log("trying to tcp connect to \"" << host << "\", port " << port);
