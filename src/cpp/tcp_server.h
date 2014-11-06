@@ -84,7 +84,16 @@ private:
     
     virtual void exec(int sock, const sockaddr* src_addr, socklen_t src_addr_len)
     {
-      f_(std::unique_ptr<fiber_pipe>(new fiber_pipe(sock,fiber_pipe::network)), src_addr, src_addr_len);
+      try {
+        f_(std::unique_ptr<fiber_pipe>(new fiber_pipe(sock,fiber_pipe::network)), src_addr, src_addr_len);
+      } catch (const std::runtime_error& ex) {
+        // "runtime" errors are common when a client closes
+        // their side of a socket without telling us first.
+        // So we log that only at pretty high levels of logging
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log_error("uncaught exception in tcp, what() = " << ex.what());
+        #endif
+      }
     }
     
     Fn f_;

@@ -40,8 +40,8 @@ extern "C" int main(int argc, char** argv)
   const char* port = argv[2];
   printf("running big_client against \"%s\", port %s\n", ip, port);
   
-  const int num_sockets = 100;
-  const int num_sends = 1000;
+  const int num_sockets = 200;
+  const int num_sends = 5000;
   
   // look ip the addr for ip/port
   struct addrinfo hints;
@@ -128,7 +128,7 @@ extern "C" int main(int argc, char** argv)
   auto tot_time = cur_time() - start_time;
   std::ostringstream msg;
   msg << "tested " << num_sockets * num_sends << " http api calls in " << tot_time << " seconds\n";
-  msg << "using " << num_sockets << " \"simutaneous\" sockets/clients\n";
+  msg << "using " << num_sockets << " \"simutaneous\" sockets/clients, each making " << num_sends << " api calls\n";
   msg << num_sockets * num_sends / to_seconds(tot_time) << " api calls per second\n";
   printf("%s", msg.str().c_str());
   

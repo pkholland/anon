@@ -43,7 +43,16 @@ namespace tcp_client
   
     virtual void exec(int err_code, std::unique_ptr<fiber_pipe>&& pipe)
     {
-      f_(err_code, std::move(pipe));
+      try {
+        f_(err_code, std::move(pipe));
+      } catch(const std::runtime_error& ex) {
+        // "runtime" errors are common when a client closes
+        // their side of a socket without telling us first.
+        // So we log that only at pretty high levels of logging
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log_error("uncaught exception in tcp, what() = " << ex.what());
+        #endif
+      }
     }
     
     Fn f_;

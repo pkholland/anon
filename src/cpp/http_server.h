@@ -37,12 +37,21 @@ public:
                     struct pc
                     {
                       pc(const sockaddr* src_addr, socklen_t src_addr_len)
-                        : request(src_addr, src_addr_len),
-                          message_complete(false),
-                          header_state(k_field),
-                          last_field_len(0),
-                          last_value_len(0)
-                      {}
+                        : request(src_addr, src_addr_len)
+                      {
+                        init();
+                      }
+                      
+                      void init()
+                      {
+                        message_complete = false;
+                        header_state = k_field;
+                        last_field_len = 0;
+                        last_value_len = 0;
+                        last_field_start = 0;
+                        last_value_start = 0;
+                        request.init();
+                      }
                       
                       http_request    request;
                       bool            message_complete;
@@ -175,6 +184,7 @@ public:
                           memmove(&buf[0], &buf[bsp], bep-bsp);
                           bep -= bsp;
                           bsp = 0;
+                          pcallback.init();
                         }
                       
                       } else {
@@ -258,6 +268,12 @@ public:
       if (it != headers.end())
         return it->second;
       return string_len("");
+    }
+    
+    void init()
+    {
+      headers.empty();
+      memset(&p_url,0,sizeof(p_url));
     }
     
     std::map<string_len, string_len>  headers;
