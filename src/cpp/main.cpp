@@ -46,7 +46,8 @@ extern "C" int main(int argc, char** argv)
                         16, 17, 18, 19, 20, 21, 22, 23,
                         24, 25, 26, 27, 28, 29, 30, 31};
   big_id id(id_data);
-  anon_log("id: (short) " << id << " (long) " << ldisp(id));
+  anon_log("id: (short) " << id);
+  anon_log("id: (long) " << ldisp(id));
   anon_log("random id: " << ldisp(rand_id()));
   anon_log("sha256 id: " << ldisp(sha256_id("hello world\n", strlen("hello world\n"))));
   
@@ -59,23 +60,16 @@ extern "C" int main(int argc, char** argv)
     src_addr_validator  validator;
     my_udp              m_udp(udp_port,validator);
     
-    tcp_server          my_tcp(tcp_port, validator, [](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
-                          char buf[12];
-                          pipe->read(&buf[0],sizeof(buf));
-                          anon_log("read \"" << buf << "\" from src addr: " << src_addr);
-                        });
-    
     io_dispatch         io_d(std::thread::hardware_concurrency(),false);
     m_udp.attach(io_d);
     fiber::attach(io_d);
-    my_tcp.attach(io_d);
     dns_cache::attach(io_d);
     
     http_server my_http(http_port, validator,
                       [](const http_server::http_request& request, http_server::http_reply& reply){
                         reply.add_header("Content-Type", "text/plain");
                         reply << "hello browser!\n\n";
-                        reply << "src addr: " << *(const struct sockaddr_storage*)request.src_addr << "\n";
+                        reply << "src addr: " << *request.src_addr << "\n";
                         reply << "http version major: " << request.http_major << "\n";
                         reply << "http version minor: " << request.http_minor << "\n";
                         reply << "method: " << request.method_str() << "\n\n";
@@ -403,7 +397,7 @@ extern "C" int main(int argc, char** argv)
           for (int i = 0; i < 2; i++)
             dns_cache::lookup_and_run(host, port, [host, port](int err_code, const struct sockaddr *addr, socklen_t addrlen){
               if (err_code == 0)
-                anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *(struct sockaddr_storage*)addr );
+                anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *addr );
               else
                 anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
             });
@@ -418,7 +412,7 @@ extern "C" int main(int argc, char** argv)
             for (int i = 0; i < 2; i++ )
               dns_cache::lookup_and_run(host, port, [host, port](int err_code, const struct sockaddr *addr, socklen_t addrlen){
                 if (err_code == 0)
-                  anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *(struct sockaddr_storage*)addr );
+                  anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << *addr );
                 else
                   anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
               });

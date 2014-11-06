@@ -46,7 +46,7 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
       }
       
       #if defined(ANON_LOG_DNS_LOOKUP)
-      anon_log("initiating async connect() to " << *(struct sockaddr_storage*)addr);
+      anon_log("initiating async connect() to " << *addr);
       #endif
       
       std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));

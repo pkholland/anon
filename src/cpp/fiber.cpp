@@ -183,9 +183,13 @@ size_t fiber_pipe::read(void *buf, size_t count)
 			if (errno == EAGAIN)
 				tls_io_params.sleep_until_data_available(this);
       else
-        do_error("read(" << fd_ << ", ptr, " << count << ")");
-    } else if (num_bytes_read == 0 && count != 0)
-       do_error("read(" << fd_ << ", ptr, " << count << ")");
+        do_error("read(" << fd_ << ", <ptr>, " << count << ")");
+    } else if (num_bytes_read == 0 && count != 0) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0");
+      #endif
+      throw std::runtime_error("read returned 0, other end probably closed");
+    }
 		else
 			break;
 	}
@@ -204,9 +208,13 @@ void fiber_pipe::write(const void *buf, size_t count)
       if (errno == EAGAIN)
         tls_io_params.sleep_until_write_possible(this);
       else
-        do_error("send(" << fd_ << ", ptr, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
-    } else if (bytes_written == 0 && count != 0)
-       do_error("send(" << fd_ << ", ptr, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
+        do_error("send(" << fd_ << ", <ptr>, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
+    } else if (bytes_written == 0 && count != 0) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("send(" << fd_ << ", <ptr>, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
+      #endif
+      throw std::runtime_error("send returned 0, other end probably closed");
+    }
     else
       total_bytes_written += bytes_written;
 	}

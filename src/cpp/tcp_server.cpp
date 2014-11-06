@@ -44,10 +44,14 @@ void tcp_server::io_avail(io_dispatch& io_d, const struct epoll_event& event)
         anon_log_error("accept4(sock_,(struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC)");
     } else {
       if (validator_.is_valid(&addr, addr_len)) {
+        #if ANON_LOG_NET_TRAFFIC > 2
         anon_log("new tcp connection from addr: " << addr);
+        #endif
         fiber::run_in_fiber([conn,addr,addr_len,this]{new_conn_->exec(conn,(struct sockaddr*)&addr,addr_len);});
       } else {
+        #if ANON_LOG_NET_TRAFFIC > 2
         anon_log("blocked connection attempt from addr: " << addr);
+        #endif
         close(conn);
       }
     }

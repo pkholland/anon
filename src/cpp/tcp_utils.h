@@ -22,3 +22,9 @@ T& operator<<(T& str, const struct sockaddr_storage& addr)
   return str << ipaddr << "/" << port;
 }
 
+template<typename T>
+T& operator<<(T& str, const struct sockaddr& addr)
+{
+  return str << *(const struct sockaddr_storage*)&addr;
+}
+

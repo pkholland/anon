@@ -229,7 +229,7 @@ void dns_entry::resolve_complete(union sigval sv)
     anon_log("dns lookup for \"" << nc->host_.c_str() << "\" returned " << num_returns << " result" << (num_returns > 1 ? "s:" : ":"));
     rslt = nc->cb_.ar_result;
     while (rslt) {
-      anon_log("  " << *(struct sockaddr_storage*)rslt->ai_addr);
+      anon_log("  " << *rslt->ai_addr);
       rslt = rslt->ai_next;
     }
     #endif
