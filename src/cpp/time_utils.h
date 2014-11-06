@@ -23,6 +23,8 @@
 #pragma once
 
 #include <time.h>
+#include "log.h"
+#include <sstream>
 
 inline struct timespec cur_time()
 {
@@ -101,5 +103,11 @@ T& operator<<(T& str, const struct timespec& spec)
   dec << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3) << (spec.tv_nsec / 1000000);
   return str << dec.str();
 }
+
+inline double to_seconds(const struct timespec& spec)
+{
+  return spec.tv_sec + (spec.tv_nsec / 1000000000.);
+}
+
 
 

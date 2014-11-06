@@ -37,35 +37,36 @@ class io_ctl_handler;
 
 class io_dispatch
 {
-public:
+  io_dispatch();
+  ~io_dispatch();
 
+public:
+  
   // 'num_threads' is the total number of threads that will be used
   // to dispatch io events on.  If 'use_this_thread' is true, then
-  // this calling thread will be one of those threads and the expectation
-  // is that the caller will call 'start', exactly once, some time
-  // shortly after this constructor has returned.  This form is to
-  // permit further initialzation after the caller has constructed
-  // an io_dispatch
-  io_dispatch(int num_threads, bool use_this_thread);
+  // this calling thread will be one of those threads and will not
+  // return until stop is called
+  static void start(int num_threads, bool use_this_thread);
+
+  // starts the sequence of stopping all io threads.  To wait
+  // until they have all stopped call join -- but, of course
+  // join can't be called from an io thread.  stop _can_ be
+  // called from an io thread
+  static void stop();
   
-  // only valid to call if 'use_this_thread' was passed true to the ctor
-  // this function will not return until some thread calls 'stop'
-  void start()
-  {
-    epoll_loop();
-  }
-  
-  // will stall until all background threads have stopped
-  ~io_dispatch();
-  
-  void stop();
+  // block until all io threads have terminated.  If stop
+  // has not already been called, it will be called by join.
+  // note that join will _hang_ if called from an io thread
+  // (other than the implicit io thread that called start
+  // if it passed use_this_thread as true).
+  static void join();
   
   // base class associated with the action taken when there
   // is io available on a watched file descriptor
   class handler
   {
   public:
-    virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event) = 0;
+    virtual void io_avail(const struct epoll_event& event) = 0;
   };
   
   // This function will call the system epoll_ctl, using the given
@@ -74,12 +75,12 @@ public:
   // hnd->io_avail will be called.  For that call the 'io_d' parameter
   // will be this io_dispatch, and the 'event' parameter will be the
   // one filled out by epoll_wait
-  void epoll_ctl(int op, int fd, uint32_t events, handler* hnd) const
+  static void epoll_ctl(int op, int fd, uint32_t events, handler* hnd)
   {
     struct epoll_event evt;
     evt.events = events;
     evt.data.ptr = hnd;
-    if (::epoll_ctl(ep_fd_, op, fd, &evt) < 0)
+    if (::epoll_ctl(io_d.ep_fd_, op, fd, &evt) < 0)
       do_error("epoll_ctl(ep_fd_, " << op_string(op) << ", " << fd << ", &evt)");
   }
   
@@ -87,80 +88,83 @@ public:
   // if it happens to be called from an io thread) and execute 'f'
   // while they are paused. Once 'f' returns resume all io threads.
   template<typename Fn>
-  void while_paused(Fn f)
+  static void while_paused(Fn f)
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to pause
-    bool is_io_thread = on_io_thread();
+    bool is_io_thread = io_d.on_io_thread();
     
-    anon::unique_lock<std::mutex> lock(pause_mutex_);
-    num_paused_threads_ = is_io_thread ? 1 : 0;
+    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    io_d.num_paused_threads_ = is_io_thread ? 1 : 0;
     
     // if there is only one io thread, and
     // we are called from that thread, then
     // we don't want to write a k_pause command
-    if (num_paused_threads_ < num_threads_) {
+    if (io_d.num_paused_threads_ < io_d.num_threads_) {
       char cmd = k_pause;
-      if (write(send_ctl_fd_,&cmd,1) != 1)
-        do_error("write");
+      if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
+        do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
     }
     
-    while (num_paused_threads_ != num_threads_)
-      pause_cond_.wait(lock);
+    while (io_d.num_paused_threads_ != io_d.num_threads_)
+      io_d.pause_cond_.wait(lock);
       
     f();
     
-    num_paused_threads_ = 0;
-    resume_cond_.notify_all();
+    io_d.num_paused_threads_ = 0;
+    io_d.resume_cond_.notify_all();
   }
   
   // execute the given function once on each
   // of the io threads
   template<typename Fn>
-  void on_each(Fn f)
+  static void on_each(Fn f)
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to cause to execute f
-    bool is_io_thread = on_io_thread();
+    bool is_io_thread = io_d.on_io_thread();
       
-    anon::unique_lock<std::mutex> lock(pause_mutex_);
-    num_paused_threads_ = is_io_thread ? 1 : 0;
+    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    io_d.num_paused_threads_ = is_io_thread ? 1 : 0;
     
     // if there is only one io thread, and
     // we are called from that thread, then
     // we don't want to write a k_on_each command
-    if (num_paused_threads_ < num_threads_) {
+    if (io_d.num_paused_threads_ < io_d.num_threads_) {
       auto tc = new virt_caller<Fn>(f);
       char buf[1+sizeof(tc)];
       buf[0] = k_on_each;
-      memcpy(&buf[1],&tc,sizeof(tc));
-      if (write(send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
-        do_error("write(send_ctl_fd_,&buf[0],sizeof(buf))");
+      memcpy(&buf[1], &tc, sizeof(tc));
+      if (write(io_d.send_ctl_fd_, &buf[0], sizeof(buf)) != sizeof(buf))
+        do_error("write(io_d.send_ctl_fd_, &buf[0], sizeof(buf))");
     }
     
-    while (num_paused_threads_ != num_threads_)
-      pause_cond_.wait(lock);
+    while (io_d.num_paused_threads_ != io_d.num_threads_)
+      io_d.pause_cond_.wait(lock);
       
     if (is_io_thread)
       f();
 
-    num_paused_threads_ = 0;
-    resume_cond_.notify_all();
+    io_d.num_paused_threads_ = 0;
+    io_d.resume_cond_.notify_all();
   }
     
   // execute the given function on (exactly) one
   // of the io threads
   template<typename Fn>
-  void on_one(Fn f)
+  static void on_one(Fn f)
   {
     // if this is an io thread we can just call it here
-    if (on_io_thread())
+    // note that this means that if you happen to be calling
+    // from a fiber context then f will run in that fiber
+    // context.
+    if (io_d.on_io_thread())
       f();
     else {
       char buf[k_oo_command_buf_size];
       on_one_command(f,buf);
-      if (write(send_ctl_fd_,&buf[0],sizeof(buf)) != sizeof(buf))
-        do_error("write(send_ctl_fd_,&buf[0],sizeof(buf))");
+      if (write(io_d.send_ctl_fd_, &buf[0], sizeof(buf)) != sizeof(buf))
+        do_error("write(io_d.send_ctl_fd_, &buf[0], sizeof(buf))");
     }
   }
   
@@ -169,17 +173,24 @@ public:
   };
   
   template<typename Fn>
-  void on_one_command(Fn f, char (&buf)[1+sizeof(void*)])
+  static void on_one_command(Fn f, char (&buf)[1+sizeof(void*)])
   {
     auto tc = new virt_caller<Fn>(f);
     buf[0] = k_on_one;
-    memcpy(&buf[1],&tc,sizeof(tc));
+    memcpy(&buf[1], &tc, sizeof(tc));
   }
   
   struct scheduled_task
   {
     struct timespec when_;
     int             id_;
+    
+    scheduled_task()
+    {
+      memset(&when_, 0, sizeof(when_));
+      id_ = 0;
+    }
+    
     scheduled_task(const struct timespec& when, int id)
       : when_(when),
         id_(id)
@@ -187,17 +198,17 @@ public:
   };
   
   template<typename Fn>
-  scheduled_task schedule_task(Fn f, const struct timespec& when)
+  static scheduled_task schedule_task(Fn f, const struct timespec& when)
   {
-    return schedule_task_(new virt_caller<Fn>(f), when);
+    return io_d.schedule_task_(new virt_caller<Fn>(f), when);
   }
   
-  bool remove_task(const scheduled_task& task);
+  static bool remove_task(const scheduled_task& task);
   
-  int new_command_pipe();
+  static int new_command_pipe();
 
 private:
-  std::string op_string(int op)
+  static std::string op_string(int op)
   {
     switch(op) {
       case EPOLL_CTL_ADD:
@@ -286,6 +297,8 @@ private:
   
   std::mutex                                    task_mutex_;
   std::multimap<struct timespec,std::unique_ptr<virt_caller_> >  task_map_;
+  
+  static io_dispatch        io_d;
 };
 
 inline std::string event_bits_to_string(uint32_t event_bits)

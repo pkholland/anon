@@ -37,10 +37,28 @@ anon.INTERMEDIATE_DIR=obj
 anon.OUT_DIR=deploy
 LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl
 
-include src/cpp/test.mk
+include examples/test/test.mk
+
+test_SOURCES:=$(SOURCES)
+SOURCES:=
+
+include examples/echo/echo.mk
+
+echo_SOURCES:=$(SOURCES)
+SOURCES:=
+
+include examples/big_client/big_client.mk
+
+big_client_SOURCES:=$(SOURCES)
+SOURCES:=
+
 include scripts/build/anonrules.mk
 
-$(eval $(call anon.BUILD_RULES,test,$(sort $(SOURCES)),$(INC_DIRS),$(LIBS)))
+$(eval $(call anon.BUILD_RULES,test,$(test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
+$(eval $(call anon.BUILD_RULES,echo,$(echo_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
+$(eval $(call anon.BUILD_RULES,big_client,$(big_client_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 .PHONY: clean
 clean:

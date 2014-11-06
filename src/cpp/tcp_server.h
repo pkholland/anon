@@ -23,7 +23,6 @@
 #pragma once
 
 #include "io_dispatch.h"
-#include "src_addr_validator.h"
 #include "fiber.h"
 #include "tcp_utils.h"
 
@@ -39,10 +38,8 @@ public:
   };
 
   // whenever a new tcp connection is established
-  // on this machine at port 'tcp_port', from a
-  // source addr that is considered valid by
-  // 'validator', the given 'f' will be executed in
-  // a newly constructed fiber.
+  // on this machine at port 'tcp_port', the given
+  // 'f' will be executed in a newly constructed fiber.
   //
   // the signature of 'f' needs to be:
   //
@@ -55,9 +52,8 @@ public:
   // in an ipv6 format, so if the client was, in fact, using an ipv4
   // address it will lock like a 'tunneled' address
   template<typename Fn>
-  tcp_server(int tcp_port, const src_addr_validator& validator, Fn f, int listen_backlog = k_default_backlog)
-    : new_conn_(new new_con<Fn>(f)),
-      validator_(validator)
+  tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog)
+    : new_conn_(new new_con<Fn>(f))
   {
     init_socket(tcp_port, listen_backlog);
   }
@@ -67,13 +63,8 @@ public:
     close(listen_sock_);
   }
 
-  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event);
-                        
-  void attach(io_dispatch& io_d)
-  {
-    io_d.epoll_ctl(EPOLL_CTL_ADD, listen_sock_, EPOLLIN, this);
-  }
-                        
+  virtual void io_avail(const struct epoll_event& event);
+
 private:
 
   void init_socket(int tcp_port, int backlog);
@@ -101,7 +92,6 @@ private:
   
   std::unique_ptr<new_connection> new_conn_;
   int listen_sock_;
-  const src_addr_validator& validator_;
 };
 
 

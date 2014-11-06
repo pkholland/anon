@@ -30,8 +30,8 @@ class http_server
 {
 public:
   template<typename Fn>
-  http_server(int tcp_port, const src_addr_validator& validator, Fn f, int listen_backlog = tcp_server::k_default_backlog)
-    : tcp_server_(tcp_port, validator,
+  http_server(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog)
+    : tcp_server_(tcp_port,
                   [f](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
                   
                     struct pc
@@ -165,6 +165,7 @@ public:
                           rp << it->first << ": " << it->second << "\r\n";
                         rp << "Content-Length: " << reply.get_body().length() << "\r\n\r\n";
                         rp << reply.get_body();
+                        rp << "\r\n\r\n\r\n";
                          
                         pipe->write(rp.str().c_str(), rp.tellp());
                         
@@ -297,11 +298,6 @@ public:
     std::map<std::string, std::string> headers_;
     std::ostringstream ostr_;
   };
-  
-  void attach(io_dispatch& io_d)
-  {
-    tcp_server_.attach(io_d);
-  }
   
 private:
   tcp_server                            tcp_server_;

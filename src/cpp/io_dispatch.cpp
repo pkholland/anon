@@ -42,8 +42,10 @@ public:
     close(fd_);
   }
   
-  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& evt)
+  virtual void io_avail(const struct epoll_event& evt)
   {
+    io_dispatch& io_d = io_dispatch::io_d;
+    
     if (evt.events & EPOLLIN) {
       char cmd;
       if (read(fd_, &cmd, 1) != 1)
@@ -51,13 +53,13 @@ public:
         
       if (cmd == io_dispatch::k_wake) {
       
-        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
+        io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         io_d.wake_next_thread();
         
       } else if (cmd == io_dispatch::k_pause) {
       
         anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
-        io_d.epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
+        io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         
         // if this is the last io thread to have paused
         // then signal whatever thread is waiting in
@@ -66,8 +68,8 @@ public:
         if (++io_d.num_paused_threads_ == io_d.num_threads_)
           io_d.pause_cond_.notify_one();
         else {
-          if (write(io_d.send_ctl_fd_,&cmd,1) != 1)
-            do_error("write(io_d.send_ctl_fd_,&cmd,1)");
+          if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
+            do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
         }
         
         // wait until the thread that called io_dispatch::while_paused
@@ -130,8 +132,10 @@ private:
 
 class io_timer_handler : public io_dispatch::handler
 {
-  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& evt)
+  virtual void io_avail(const struct epoll_event& evt)
   {
+    io_dispatch& io_d = io_dispatch::io_d;
+
     if (evt.events & EPOLLIN) {
       uint64_t num_expirations;
       if (read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations)) != sizeof(num_expirations)) {
@@ -172,53 +176,72 @@ static io_timer_handler timer_handler;
 
 ///////////////////////////////////////////////////////////////////////////
 
+// the singleton
+io_dispatch io_dispatch::io_d;
+
 std::atomic<int> io_dispatch::virt_caller_::next_id_;
 
-io_dispatch::io_dispatch(int num_threads, bool use_this_thread)
-  : running_(true),
-    num_threads_(num_threads)
+io_dispatch::io_dispatch()
+  : running_(false)
+{}
+
+io_dispatch::~io_dispatch()
+{}
+
+void io_dispatch::start(int num_threads, bool use_this_thread)
 {
-  ep_fd_ = epoll_create1(EPOLL_CLOEXEC);
-  if (ep_fd_ < 0)
+  #if defined(ANON_RUNTIME_CHECKS)
+  if (io_d.running_)
+    throw std::runtime_error("io_dispatch::start already called");
+  #endif
+  
+  io_d.running_ = true;
+  io_d.num_threads_ = num_threads;
+  
+  io_d.ep_fd_ = epoll_create1(EPOLL_CLOEXEC);
+  if (io_d.ep_fd_ < 0)
     do_error("epoll_create1(EPOLL_CLOEXEC)");
     
-  anon_log("using fd " << ep_fd_ << " for epoll");
+  anon_log("using fd " << io_d.ep_fd_ << " for epoll");
   
-  send_ctl_fd_ = new_command_pipe();
+  io_d.send_ctl_fd_ = new_command_pipe();
   
   // the file descriptor we use for the timer
-  timer_fd_ = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
-  if (timer_fd_ == -1)
+  io_d.timer_fd_ = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
+  if (io_d.timer_fd_ == -1)
     do_error("timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC)");
-  epoll_ctl(EPOLL_CTL_ADD, timer_fd_, EPOLLIN, &timer_handler);
-  anon_log("using fd " << timer_fd_ << " for timer");
+  epoll_ctl(EPOLL_CTL_ADD, io_d.timer_fd_, EPOLLIN, &timer_handler);
+  anon_log("using fd " << io_d.timer_fd_ << " for timer");
   
-  io_thread_ids_.resize(num_threads,0);
-  thread_init_index_.store(0);
+  io_d.io_thread_ids_.resize(num_threads,0);
+  io_d.thread_init_index_.store(0);
   if (use_this_thread)
     --num_threads;
   for (int i = 0; i < num_threads; i++)
-    io_threads_.push_back(std::thread(std::bind(&io_dispatch::epoll_loop,this)));
-}
-
-io_dispatch::~io_dispatch()
-{
-  stop();
-  for (auto thread = io_threads_.begin(); thread != io_threads_.end(); ++thread)
-    thread->join();
-  for (auto rcvh = io_ctl_handlers_.begin(); rcvh != io_ctl_handlers_.end(); ++rcvh)
-    delete *rcvh;
-  close(send_ctl_fd_);
-  close(ep_fd_);
-  close(timer_fd_);
+    io_d.io_threads_.push_back(std::thread(std::bind(&io_dispatch::epoll_loop,&io_d)));
+    
+  if (use_this_thread)
+    io_d.epoll_loop();
 }
 
 void io_dispatch::stop()
 {
-  if (running_) {
-    running_ = false;
-    wake_next_thread();
+  if (io_d.running_) {
+    io_d.running_ = false;
+    io_d.wake_next_thread();
   }
+}
+
+void io_dispatch::join()
+{
+  stop();
+  for (auto thread = io_d.io_threads_.begin(); thread != io_d.io_threads_.end(); ++thread)
+    thread->join();
+  for (auto rcvh = io_d.io_ctl_handlers_.begin(); rcvh != io_d.io_ctl_handlers_.end(); ++rcvh)
+    delete *rcvh;
+  close(io_d.send_ctl_fd_);
+  close(io_d.ep_fd_);
+  close(io_d.timer_fd_);
 }
 
 int io_dispatch::new_command_pipe()
@@ -244,7 +267,7 @@ int io_dispatch::new_command_pipe()
   anon_log("using fds " << sv[0] << " (send), and " <<  sv[1] << " (receive) for io threads control pipe");
   
   auto hnd = new io_ctl_handler(sv[1]);
-  io_ctl_handlers_.push_back(hnd);
+  io_d.io_ctl_handlers_.push_back(hnd);
   
   // hook up the handler for the control pipe
   // we use (level triggered) one-shot to give ourselves
@@ -270,7 +293,7 @@ void io_dispatch::epoll_loop()
   anon_log("starting io_dispatch::epoll_loop");
   
   // record this thread id
-  auto index = thread_init_index_.fetch_add(1,std::memory_order_relaxed);
+  auto index = thread_init_index_.fetch_add(1, std::memory_order_relaxed);
   if (index >= num_threads_) {
     anon_log_error("too many calls to io_dispatch::epoll_loop");
     throw std::runtime_error("io_dispatch::epoll_loop");
@@ -283,7 +306,7 @@ void io_dispatch::epoll_loop()
     int ret;
     if ((ret = epoll_wait(ep_fd_, &event, 1, -1)) > 0) {
     
-      ((handler*)event.data.ptr)->io_avail(*this, event);
+      ((handler*)event.data.ptr)->io_avail(event);
     
     } else if ((ret != 0) && (errno != EINTR)) {
     
@@ -301,25 +324,25 @@ void io_dispatch::epoll_loop()
 
 io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_* task, const timespec& when)
 {
-  anon::unique_lock<std::mutex>  lock(task_mutex_);
-  task_map_.insert(std::make_pair(when,std::unique_ptr<virt_caller_>(task)));
-  if (task_map_.begin()->first == when) {
+  anon::unique_lock<std::mutex>  lock(io_d.task_mutex_);
+  io_d.task_map_.insert(std::make_pair(when,std::unique_ptr<virt_caller_>(task)));
+  if (io_d.task_map_.begin()->first == when) {
     struct itimerspec t_spec = { 0 };
     t_spec.it_value = when;
-    if (timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
-      do_error("timerfd_settime(timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0)");
+    if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
+      do_error("timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0)");
   }
   return scheduled_task(when, task->id_);
 }
 
 bool io_dispatch::remove_task(const scheduled_task& task)
 {
-  anon::unique_lock<std::mutex>  lock(task_mutex_);
-  auto it = task_map_.find(task.when_);
-  while (it != task_map_.end() && it->second->id_ != task.id_ && it->first == task.when_)
+  anon::unique_lock<std::mutex>  lock(io_d.task_mutex_);
+  auto it = io_d.task_map_.find(task.when_);
+  while (it != io_d.task_map_.end() && it->second->id_ != task.id_ && it->first == task.when_)
     ++it;
-  if (it != task_map_.end() && it->second->id_ == task.id_) {
-    task_map_.erase(it);
+  if (it != io_d.task_map_.end() && it->second->id_ == task.id_) {
+    io_d.task_map_.erase(it);
     return true;
   }
   return false;

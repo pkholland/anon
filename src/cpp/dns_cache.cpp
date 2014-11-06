@@ -31,14 +31,17 @@
 namespace dns_cache
 {
 
-static io_dispatch* g_io_d;
-
+static io_dispatch::scheduled_task next_sweep;
 static void sweep_old_cache_entries();
 
-void attach(io_dispatch& io_d)
+void initialize()
 {
-  g_io_d = &io_d;
   sweep_old_cache_entries();
+}
+
+void terminate()
+{
+  io_dispatch::remove_task(next_sweep);
 }
 
 class call_deleter
@@ -57,7 +60,7 @@ public:
 };
 
 // a time much later than now...
-static struct timespec forever = { std::numeric_limits<time_t>::max(), 1000000 - 1};
+static struct timespec forever = { std::numeric_limits<time_t>::max(), 1000000000 - 1};
 
 class dns_entry
 {
@@ -200,7 +203,7 @@ static void sweep_old_cache_entries()
     }
   }
   
-  g_io_d->schedule_task(sweep_old_cache_entries, cur_time() + cache_life_seconds / 2);
+  next_sweep = io_dispatch::schedule_task(sweep_old_cache_entries, cur_time() + cache_life_seconds / 2);
 }
 
 
@@ -404,7 +407,7 @@ bool dns_entry::call_from_cache(const char* host, int port, dns_caller* dnsc, si
   // none currently available, schedule a task
   // to try again at 'earliest'
   std::string host_copy = host;
-  g_io_d->schedule_task([host_copy, port, dnsc, stack_size]{
+  io_dispatch::schedule_task([host_copy, port, dnsc, stack_size]{
     do_lookup_and_run(host_copy.c_str(), port, dnsc, stack_size);
   }, earliest);
   

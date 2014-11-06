@@ -20,15 +20,43 @@
  THE SOFTWARE.
 */
 
-#pragma once
+#include "io_dispatch.h"
+#include "fiber.h"
+#include "http_server.h"
 
-class src_addr_validator
+extern "C" int main(int argc, char** argv)
 {
-public:
-  bool is_valid(const struct sockaddr_storage *sockaddr, socklen_t sockaddr_len) const
+  if (argc != 2)
   {
-    return true;
+    printf("usage: echo <port>\n");
+    return 1;
   }
-};
+  
+  int http_port = atoi(argv[1]);
+  anon_log("starting http server on port " << http_port);
 
+  io_dispatch::start(std::thread::hardware_concurrency(), false);
+  fiber::initialize();
+  
+  http_server my_http(http_port,
+                    [](const http_server::http_request& request, http_server::http_reply& reply){
+                      reply.add_header("Content-Type", "text/plain");
+                      reply << "echo server!\n";
+                      reply << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+                    });
+
+  while (true) {
+    // read a command from stdin
+    char msgBuff[256];
+    auto bytes_read = read(0/*stdin*/,&msgBuff[0],sizeof(msgBuff));
+    
+    break;
+  }
+
+  io_dispatch::join();
+  fiber::terminate();
+
+  anon_log("stopping server and exiting");
+  return 0;
+}
 

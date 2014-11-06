@@ -23,8 +23,7 @@
 #include "udp_dispatch.h"
 #include <arpa/inet.h>
 
-udp_dispatch::udp_dispatch(int udp_port, const src_addr_validator& validator)
-  : validator_(validator)
+udp_dispatch::udp_dispatch(int udp_port)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   // when we do a child swap
@@ -44,9 +43,11 @@ udp_dispatch::udp_dispatch(int udp_port, const src_addr_validator& validator)
   }
 
   anon_log("listening for udp on port " << udp_port << ", socket " << sock_);
+  
+  io_dispatch::epoll_ctl(EPOLL_CTL_ADD, sock_, EPOLLIN, this);
 }
 
-void udp_dispatch::io_avail(io_dispatch& io_d, const struct epoll_event& event)
+void udp_dispatch::io_avail(const struct epoll_event& event)
 {
   if (event.events & EPOLLIN) {
   
@@ -62,7 +63,7 @@ void udp_dispatch::io_avail(io_dispatch& io_d, const struct epoll_event& event)
       }
       else if (dlen == sizeof(msgBuff))
         anon_log_error("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
-      else if (validator_.is_valid(&host, host_addr_size))
+      else
         recv_msg(&msgBuff[0], dlen, &host, host_addr_size);
     }
     

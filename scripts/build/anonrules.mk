@@ -203,6 +203,12 @@ $(anon.OUT_DIR)/$(CONFIG)/$(1): $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $
 
 endef
 
+anon.all_sources:=
+
+#$(info $(filter-out $(anon.all_sources),$(2)))
+#anon.new_sources:=$(filter-out $(anon.all_sources),$(2))
+#anon.all_sources+=$(filter-out $(anon.all_sources),$(2))
+
 #
 # $1 build name
 # $2 source files to compile
@@ -211,11 +217,13 @@ endef
 #
 define anon.BUILD_RULES
 
-$(foreach cpp_src,$(filter %.cc %.cpp,$(2)),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$(3),-I$(inc))))
-$(foreach c_src,$(filter %.c,$(2)),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$(3),-I$(inc))))
+$(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$(2))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$(3),-I$(inc))))
+$(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$(2))),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$(3),-I$(inc))))
 $(call anon.linker_rule,$(1),$(2),$(4))
 
 all: $(anon.OUT_DIR)/$(CONFIG)/$(1)
+
+anon.all_sources+=$(filter-out $(anon.all_sources),$(2))
 
 endef
 

@@ -48,33 +48,28 @@ void tcp_server::init_socket(int tcp_port, int listen_backlog)
   }
 
   anon_log("listening for tcp connections on port " << tcp_port << ", socket " << listen_sock_);
+  
+  io_dispatch::epoll_ctl(EPOLL_CTL_ADD, listen_sock_, EPOLLIN, this);
 }
 
-void tcp_server::io_avail(io_dispatch& io_d, const struct epoll_event& event)
+void tcp_server::io_avail(const struct epoll_event& event)
 {
   if (event.events & EPOLLIN) {
   
     struct sockaddr_storage addr;
     socklen_t addr_len = sizeof(addr);
-    int conn = accept4(listen_sock_,(struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
+    int conn = accept4(listen_sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
     if (conn == -1) {
       // we can get EAGAIN because multiple id_d threads
       // can wake up from a single EPOLLIN event.
       // don't bother reporting those.
       if (errno != EAGAIN)
-        anon_log_error("accept4(sock_,(struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC)");
+        anon_log_error("accept4(sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC)");
     } else {
-      if (validator_.is_valid(&addr, addr_len)) {
-        #if ANON_LOG_NET_TRAFFIC > 2
-        anon_log("new tcp connection from addr: " << addr);
-        #endif
-        fiber::run_in_fiber([conn,addr,addr_len,this]{new_conn_->exec(conn,(struct sockaddr*)&addr,addr_len);});
-      } else {
-        #if ANON_LOG_NET_TRAFFIC > 2
-        anon_log("blocked connection attempt from addr: " << addr);
-        #endif
-        close(conn);
-      }
+      #if ANON_LOG_NET_TRAFFIC > 2
+      anon_log("new tcp connection from addr: " << addr);
+      #endif
+      fiber::run_in_fiber([conn,addr,addr_len,this]{new_conn_->exec(conn,(struct sockaddr*)&addr,addr_len);});
     }
     
   } else

@@ -114,7 +114,6 @@ void fiber_mutex::wake_sleepers()
 
 /////////////////////////////////////////////////
 
-io_dispatch* fiber::io_d_;
 int fiber::num_running_fibers_;
 std::mutex fiber::zero_fiber_mutex_;
 std::condition_variable fiber::zero_fiber_cond_;
@@ -122,15 +121,17 @@ std::atomic<int> fiber::next_fiber_id_;
 fiber_mutex fiber::on_one_mutex_;
 fiber_pipe* fiber::on_one_pipe_;
 
-void fiber::attach(io_dispatch& io_d)
+void fiber::initialize()
 {
-  if (io_d_)
-    do_error("illegal second call to fiber::attach");
-  io_d_ = &io_d;
-  int pipe = io_d.new_command_pipe();
+  #if defined(ANON_RUNTIME_CHECKS)
+  if (on_one_pipe_)
+    throw std::runtime_error("fiber::initialize already called");
+  #endif
+  
+  int pipe = io_dispatch::new_command_pipe();
   if (fcntl(pipe, F_SETFL, O_NONBLOCK) != 0)
     do_error("fcntl(pipe, F_SETFL, O_NONBLOCK)");
-  on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::network);
+  on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::unix_domain);
 }
 
 void fiber::terminate()
@@ -188,7 +189,7 @@ int get_current_fiber_id()
 
 /////////////////////////////////////////////////
 
-void fiber_pipe::io_avail(io_dispatch& io_d, const struct epoll_event& event)
+void fiber_pipe::io_avail(const struct epoll_event& event)
 {
   if (event.events & (EPOLLIN | EPOLLOUT))
     tls_io_params.wake_all(io_fiber_);
@@ -261,7 +262,7 @@ void io_params::wake_all(fiber* first)
 
       case oc_read:
       case oc_write:
-        fiber::io_d_->epoll_ctl(EPOLL_CTL_MOD, io_pipe_->fd_,
+        io_dispatch::epoll_ctl(EPOLL_CTL_MOD, io_pipe_->fd_,
                                 (opcode_ == oc_read ? EPOLLIN : EPOLLOUT) | EPOLLONESHOT | EPOLLET,
                                 io_pipe_);
         break;

@@ -130,11 +130,10 @@ private:
 class fiber
 {
 public:
-  // singleton call to tell the fiber code
-  // what io_dispatch you are using.
-  static void attach(io_dispatch& io_d);
+  // singleton call to initialize/terminate the fiber code
   
-  static void terminate();
+  static void initialize(); // must be called _after_ io_dispatch::start()
+  static void terminate();  // must be called _after_ io_dispatch::join()
   
   enum {
     k_default_stack_size = 64*1024
@@ -187,8 +186,8 @@ public:
   static void run_in_fiber(Fn fn, size_t stack_size=k_default_stack_size)
   {
     #if defined(ANON_RUNTIME_CHECKS)
-    if (!io_d_)
-      do_error("must call fiber::attach prior to fiber::run_in_fiber");
+    if (!on_one_pipe_)
+      do_error("must call fiber::initialize prior to fiber::run_in_fiber");
     #endif
       
     {
@@ -197,10 +196,10 @@ public:
     }
     auto oo_fn = [fn, stack_size]{new fiber(fn,stack_size,true/*auto_free*/);};
     if (get_current_fiber_id() == 0)
-      io_d_->on_one(oo_fn);
+      io_dispatch::on_one(oo_fn);
     else {
       char buf[io_dispatch::k_oo_command_buf_size];
-      io_d_->on_one_command(oo_fn, buf);
+      io_dispatch::on_one_command(oo_fn, buf);
       write_on_one_command(buf);
     }
   }
@@ -292,7 +291,6 @@ private:
   ucontext_t  ucontext_;
   int         fiber_id_;
   
-  static io_dispatch* io_d_;
   static int num_running_fibers_;
   static std::mutex zero_fiber_mutex_;
   static std::condition_variable zero_fiber_cond_;
@@ -318,7 +316,7 @@ public:
       socket_type_(socket_type),
       io_fiber_(0)
   {
-    fiber::io_d_->epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
+    io_dispatch::epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
   }
   
   ~fiber_pipe()
@@ -330,7 +328,7 @@ public:
     }
   }
   
-  virtual void io_avail(io_dispatch& io_d, const struct epoll_event& event);
+  virtual void io_avail(const struct epoll_event& event);
 
   //int read_and_receive_fd(char* buff, int len, int& fd);
   //void write_and_send_fd(const char* buff, int len, int fd);
@@ -349,7 +347,7 @@ public:
   {
     int ret = fd_;
     if (fd_ != -1) {
-      fiber::io_d_->epoll_ctl(EPOLL_CTL_DEL,fd_,0,this);
+      io_dispatch::epoll_ctl(EPOLL_CTL_DEL,fd_,0,this);
       fd_ = -1;
     }
     return ret;

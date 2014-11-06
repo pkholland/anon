@@ -5,7 +5,7 @@ THIS_MAKE := $(lastword $(MAKEFILE_LIST))
 ANON_ROOT := $(call parent_dir,$(call parent_dir,$(call parent_dir,$(THIS_MAKE))))
 
 SOURCES+=\
-$(ANON_ROOT)/src/cpp/main.cpp\
+$(ANON_ROOT)/examples/test/main.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
@@ -17,6 +17,6 @@ $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_ROOT)/../http-parser/http_parser.c
 
 INC_DIRS+=\
-$(ANON_ROOT)\
+$(ANON_ROOT)/src/cpp\
 $(ANON_ROOT)/../http-parser
 

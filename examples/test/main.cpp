@@ -39,8 +39,8 @@
 class my_udp : public udp_dispatch
 {
 public:
-  my_udp(int port, const src_addr_validator& validator)
-    : udp_dispatch(port, validator)
+  my_udp(int port)
+    : udp_dispatch(port)
   {}
 
   virtual void recv_msg(const unsigned char* msg, ssize_t len,
@@ -78,15 +78,14 @@ extern "C" int main(int argc, char** argv)
     int                 tcp_port = 8618;
     int                 http_port = 8619;
     
-    src_addr_validator  validator;
-    my_udp              m_udp(udp_port,validator);
+    io_dispatch::start(std::thread::hardware_concurrency(),false);
     
-    io_dispatch         io_d(std::thread::hardware_concurrency(),false);
-    m_udp.attach(io_d);
-    fiber::attach(io_d);
-    dns_cache::attach(io_d);
+    dns_cache::initialize();
+    fiber::initialize();
+
+    my_udp              m_udp(udp_port);
     
-    http_server my_http(http_port, validator,
+    http_server my_http(http_port,
                       [](const http_server::http_request& request, http_server::http_reply& reply){
                         reply.add_header("Content-Type", "text/plain");
                         reply << "hello browser!\n\n";
@@ -101,7 +100,7 @@ extern "C" int main(int argc, char** argv)
                         reply << "url path: " << request.get_url_field(UF_PATH) << "\n";
                         reply << "url query: " << request.get_url_field(UF_QUERY) << "\n";
                       });
-    my_http.attach(io_d);
+    
     
     int num_pipe_pairs = 100;
     int num_read_writes = 10000;
@@ -141,7 +140,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
-          io_d.while_paused([]{anon_log("all io threads now paused");});
+          io_dispatch::while_paused([]{anon_log("all io threads now paused");});
           anon_log("resuming io threads");
         } else if (!strcmp(&msgBuff[0], "s")) {
           int num_messages = 20;
@@ -160,20 +159,20 @@ extern "C" int main(int argc, char** argv)
           }
         } else if (!strcmp(&msgBuff[0], "t")) {
           anon_log("queueing one second delayed task");
-          io_d.schedule_task([]{anon_log("task completed");}, cur_time()+1);
+          io_dispatch::schedule_task([]{anon_log("task completed");}, cur_time()+1);
         } else if (!strcmp(&msgBuff[0], "tt")) {
           anon_log("queueing one second delayed task and deleting it before it expires");
-          auto t = io_d.schedule_task([]{anon_log("oops, task completed!");}, cur_time()+1);
-          if (io_d.remove_task(t)) {
+          auto t = io_dispatch::schedule_task([]{anon_log("oops, task completed!");}, cur_time()+1);
+          if (io_dispatch::remove_task(t)) {
             anon_log("removed the task " << t);
           } else
             anon_log("failed to remove the task " << t);
         } else if (!strcmp(&msgBuff[0], "e")) {
           anon_log("executing print statement on each io thread");
-          io_d.on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
+          io_dispatch::on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
         } else if (!strcmp(&msgBuff[0], "o")) {
           anon_log("executing print statement on one io thread");
-          io_d.on_one([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
+          io_dispatch::on_one([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
         } else if (!strcmp(&msgBuff[0], "f")) {
           anon_log("executing print statement from a fiber");
           fiber::run_in_fiber([]{anon_log("hello from fiber " << get_current_fiber_id());});
@@ -385,7 +384,7 @@ extern "C" int main(int argc, char** argv)
 
         } else if (!strcmp(&msgBuff[0], "cp")) {
         
-          const char* host = "127.0.0.1";
+          const char* host = "www.google.com";
           int port = 79;
         
           anon_log("trying to tcp connect to \"" << host << "\", port " << port);
@@ -445,6 +444,8 @@ extern "C" int main(int argc, char** argv)
     }
   }
   
+  dns_cache::terminate();
+  io_dispatch::join();
   fiber::terminate();
   term_big_id_crypto();
   

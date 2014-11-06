@@ -33,7 +33,8 @@ namespace dns_cache
   // cache_life_seconds will be re-looked up
   const int cache_life_seconds = 120;
   
-  void attach(io_dispatch& io_d);
+  void initialize();
+  void terminate();
 
   struct dns_caller
   {
