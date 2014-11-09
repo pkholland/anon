@@ -1,7 +1,7 @@
 Anon
 ====
 
-![It Goes To 11!](http://beerpulse.com/wp-content/uploads/2011/08/BellsGoesTo11Front.png?raw=true)
+![It Goes To 11!](https://cloud.githubusercontent.com/assets/8400193/4968088/496424a8-6832-11e4-8506-df449bf82b5c.png?raw=true)
 
 ##The Anon Story
 
