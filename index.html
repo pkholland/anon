@@ -1,34 +1,37 @@
 <!DOCTYPE html>
 <html>
+
   <head>
     <meta charset='utf-8'>
     <meta http-equiv="X-UA-Compatible" content="chrome=1">
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
-    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
-    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen">
-    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+    <meta name="description" content="Anon : Experiments in Web Services Design">
 
-    <!--[if lt IE 9]>
-    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
-    <![endif]-->
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
 
-    <title>Anon by pkholland</title>
+    <title>Anon</title>
   </head>
 
   <body>
-    <header>
-      <div class="inner">
-        <h1>Anon</h1>
-        <h2>Experiments in Web Services Design</h2>
-        <a href="https://github.com/pkholland/anon" class="button"><small>View project on</small> GitHub</a>
-      </div>
-    </header>
 
-    <div id="content-wrapper">
-      <div class="inner clearfix">
-        <section id="main-content">
-          <h1>
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/pkholland/anon">View on GitHub</a>
+
+          <h1 id="project_title">Anon</h1>
+          <h2 id="project_tagline">Experiments in Web Services Design</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/pkholland/anon/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/pkholland/anon/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
 <a id="anon" class="anchor" href="#anon" aria-hidden="true"><span class="octicon octicon-link"></span></a>Anon</h1>
 
 <p><img src="https://cloud.githubusercontent.com/assets/8400193/4968088/496424a8-6832-11e4-8506-df449bf82b5c.png?raw=true" alt="It Goes To 11!"></p>
@@ -36,7 +39,8 @@
 <h2>
 <a id="the-anon-story" class="anchor" href="#the-anon-story" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Anon Story</h2>
 
-<p>Anon is an experiment in server design for <em>Services</em>.  It attempts to achieve several goals.  These are:</p>
+<p>Anon is an experiment in server design for <em>Services</em>.  It attempts to achieve
+several goals.  These are:</p>
 
 <ul>
 <li>Maximize efficiency on a single CPU instance</li>
@@ -72,34 +76,33 @@ std::deque&lt;<span class="kt">int</span>&gt; g_new_connections;
 
 <p>This code isn't meant to be fully correct.  It's missing mutex's and other stuff. But it shows a central feature of many Service designs where there exists some kind of queue, shown above as the std::deque <code>g_new_connections</code>.  Here one thread of execution accepts new network connections as fast as it can and puts each one on a queue.  Another thread pulls the recently established connections off the of the queue and processes them as fast as it can.  The basic problem illustrated here is that there isn't a good way for the second thread to keep the first from getting too far ahead of it.  If the <code>process_one_connection</code> function takes a long time to complete relative to how fast other machines are trying to establish new connections to this one, then the <code>g_new_connections</code> queue can grow arbitrarily large.  The root cause of many Critical Service Outages, particularly when they occur due to excessive server load, can be traced to a basic problem where a consumer of queued requests falls behind the producer of them.  When that starts to happen the percentage of the Service's total capacity that is dedicated to maintaining the queue itself grows.  In many designs this slows down <code>process_one_connection</code> more than it does <code>process_connections_loop</code>, which then componds the original problem.</p>
 
-<p>Linux has an errno code named EAGAIN which it uses when certain operations are set to be non-blocking and are not currently possible for one reason or another.  For example, trying to read from a non-blocking socket that doesn't currently have any data to be read generates EAGAIN.  A common use of EAGAIN would be to set <code>listening_socket</code> above to be non-blocking.  Then the call to <code>accept</code> would return -1 and set errno to EAGAIN if there were not any connections that could be returned when it was called.  That kind of usage would allow the calling thread to go do something else instead of stay stuck in <code>accept</code> until someone tries to connect to the computer.</p>
+<p>Linux has an errno code named EAGAIN which it uses when certain operations are set to be non-blocking and are not currently possible for one reason or another.  For example, trying to read from a non-blocking socket that
+doesn't currently have any data to be read generates EAGAIN.  A common use of EAGAIN would be to set <code>listening_socket</code> above to be non-blocking.  Then the call to <code>accept</code> would return -1 and set errno to EAGAIN if there were not any connections that could be returned when it was called.  That kind of usage would allow the calling thread to go do something else instead of stay stuck in <code>accept</code> until someone tries to connect to the computer.</p>
 
-<p>But EAGAIN can also be used on the write-side of an operation.  If <code>g_new_connections</code> were a pipe of some kind instead of the deque that is shown, then the <code>push_back</code> would be some kind of <code>write</code> call.  The <code>front</code> and <code>pop_front</code> would then be replaced by <code>read</code> calls.  In that kind of design the pipe could be set non-blocking, and since it has a fixed internal buffer size, if <code>new_connections_loop</code> gets too far in front of <code>process_connections_loop</code> the <code>write</code> call will fail with errno set to EAGAIN.  And this can serve as a natural way for a consumer of requests to signal to the producer that it needs to slow down.  The consumer doesn't need to do anything at all. The fact that it is unable to read fast enough causes the producer to be unable to continue writing.</p>
+<p>But EAGAIN can also be used on the write-side of an operation.  If <code>g_new_connections</code> were a pipe of some kind instead of the deque that is shown, then the <code>push_back</code> would be some kind of <code>write</code> call.  The <code>front</code>
+and <code>pop_front</code> would then be replaced by <code>read</code> calls.  In that kind of design the pipe could be set non-blocking, and since it has a fixed internal buffer size, if <code>new_connections_loop</code> gets too far in front of <code>process_connections_loop</code> the <code>write</code> call will fail with errno set to EAGAIN.  And this can serve as a natural way for a consumer of requests to signal to the producer that it needs to slow down.  The consumer doesn't need to do anything at all. The fact that it is unable to read fast enough causes the producer to be unable to continue writing.</p>
 
-<p>Even without setting the pipe to be non-blocking, using a pipe with a small-ish, finite capacity will cause <code>new_connections_loop</code> to <em>block</em> inside of its <code>write</code> call, which will keep it from being able to call <code>accept</code> again.  This would then keep client machines from being able to connect and send new requests. That creates a kind of speed limit that <code>process_connections_loop</code> can assert on the entire Service.  But having client machines fail to connect without understanding why makes it hard to get those client machines working correctly.  So a basic principle of Anon is to propogate the EAGAIN concept through the entire Service.</p>
+<p>Even without setting the pipe to be non-blocking, using a pipe with a small-ish, finite capacity will cause <code>new_connections_loop</code> to <em>block</em> inside of its <code>write</code> call, which will keep it from being able to call <code>accept</code> again.  This would then keep client machines from being able to connect and send new requests.
+That creates a kind of speed limit that <code>process_connections_loop</code> can assert on the entire Service.  But having client machines fail to connect without understanding why makes it hard to get those client machines
+working correctly.  So a basic principle of Anon is to propogate the EAGAIN concept through the entire Service.</p>
 
 <p>In the Anon design <code>new_connections_loop</code> does use a non-blocking pipe, and so sees that it has gotten too far ahead of <code>process_connections_loop</code>.  It can then enter a state where further <code>accept</code> calls are immediately replied with a kind of EAGAIN message and then shut down.  That distributes the EAGAIN processing throughout the entire service -- thus the name Anon for the project.</p>
 
 <p>Conveniently, EAGAIN is errno 11, nicely tying the name to the other goal of maximum efficiency.  A second piece of Anon is to provide a design that makes good use of Linux's event dispatching mechanism "epoll".  It provides a platform where all request processing can be done free of any thread blocking operations.  In fact, the goal is to allow Anon servers to run in a model where the number of running os threads is equal to the number of CPU cores.  In this model, each request is handled by user-level threads (fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.</p>
-        </section>
 
-        <aside id="sidebar">
-          <a href="https://github.com/pkholland/anon/zipball/master" class="button">
-            <small>Download</small>
-            .zip file
-          </a>
-          <a href="https://github.com/pkholland/anon/tarball/master" class="button">
-            <small>Download</small>
-            .tar.gz file
-          </a>
-
-          <p class="repo-owner"><a href="https://github.com/pkholland/anon"></a> is maintained by <a href="https://github.com/pkholland">pkholland</a>.</p>
-
-          <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
-        </aside>
-      </div>
+<p><a href="getting_started.html">Getting Started</a></p>
+      </section>
     </div>
 
-  
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Anon maintained by <a href="https://github.com/pkholland">pkholland</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
   </body>
 </html>
