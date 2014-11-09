@@ -47,7 +47,7 @@ several goals.  These are:</p>
 
 <p>Anon is highly experimental and is unlike other service designs in several ways.  For example, it is currently all written in C++.  The name "anon" comes from the first two goals, and is the word <em>anon</em>, meaning something like "again". It's not an abreviation for "anonymous".</p>
 
-<p>A common problem in some server designs is one that I'll call the "infinite queue" problem.  It can be seen when the Service design has components that look something like the following -- shown in C++, but it can exist in any language:</p>
+<p>A common problem in some server designs is one that can be called the "infinite queue" problem.  It can be seen when the Service design has components that look something like the following -- shown in C++, but can exist in any language:</p>
 
 <div class="highlight highlight-C++"><pre><span class="c1">// some global</span>
 std::deque&lt;<span class="kt">int</span>&gt; g_new_connections;
@@ -86,7 +86,7 @@ working correctly.  So a basic principle of Anon is to propogate the EAGAIN conc
 
 <p>In the Anon design <code>new_connections_loop</code> does use a non-blocking pipe, and so sees that it has gotten too far ahead of <code>process_connections_loop</code>.  It can then enter a state where further <code>accept</code> calls are immediately replied with a kind of EAGAIN message and then shut down.  That distributes the EAGAIN processing throughout the entire service -- thus the name Anon for the project.</p>
 
-<p>Conveniently, EAGAIN is errno 11, letting me also tie the name to the other goal of maximum efficiency.  A second piece of Anon is to provide a design that makes good use of Linux's event dispatching mechanism "epoll".  It provides a platform where all request processing can be done free of any blocking operations.  In fact, the goal is to allow Anon servers to run in a model where the number of os threads running is equal to the number of CPU cores.  In this model, each request is handled by user-level threads (fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.</p>
+<p>Conveniently, EAGAIN is errno 11, letting us also tie the name to the other goal of maximum efficiency.  A second piece of Anon is to provide a design that makes good use of Linux's event dispatching mechanism "epoll".  It provides a platform where all request processing can be done free of any blocking operations.  In fact, the goal is to allow Anon servers to run in a model where the number of os threads running is equal to the number of CPU cores.  In this model, each request is handled by user-level threads (fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.</p>
         </section>
 
         <aside id="sidebar">
