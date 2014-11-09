@@ -36,8 +36,7 @@
 <h2>
 <a id="the-anon-story" class="anchor" href="#the-anon-story" aria-hidden="true"><span class="octicon octicon-link"></span></a>The Anon Story</h2>
 
-<p>Anon is an experiment in server design for <em>Services</em>.  It attempts to achieve
-several goals.  These are:</p>
+<p>Anon is an experiment in server design for <em>Services</em>.  It attempts to achieve several goals.  These are:</p>
 
 <ul>
 <li>Maximize efficiency on a single CPU instance</li>
@@ -87,7 +86,7 @@ working correctly.  So a basic principle of Anon is to propogate the EAGAIN conc
 
 <p>Conveniently, EAGAIN is errno 11, nicely tying the name to the other goal of maximum efficiency.  A second piece of Anon is to provide a design that makes good use of Linux's event dispatching mechanism "epoll".  It provides a platform where all request processing can be done free of any thread blocking operations.  In fact, the goal is to allow Anon servers to run in a model where the number of running os threads is equal to the number of CPU cores.  In this model, each request is handled by user-level threads (fibers) and fiber scheduling is driven by Linux's epoll event dispatching mechanism.</p>
 
-<p><a href="getting_started.html">Getting Started</a></p>
+<p><a href="tech_overview.html">Technical Overview</a></p>
         </section>
 
         <aside id="sidebar">
