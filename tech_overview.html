@@ -88,21 +88,21 @@ or write to, a file <em>without blocking</em>.
 
 <p>
 <b>epoll_wait</b> is the linux api to the epoll system that waits until there is i/o possible on at
-least one of the registered file descriptors, and when there is returns information about that file descriptor.
+least one of the registered file descriptors. When there is it returns information about one such file descriptor.
 It isn't being shown correctly in this code example (the parameters are wrong), but in spirit it operates like
 this example shows.  In this sort of model, if <b>epoll_wait</b> comes back with a 'result' that
 represents file descriptor 48 in the picture above, then a simple virtual function call to <b>handle_io</b>
 can get us to the code that knows what to do when <b>another.server.com</b> has sent information to us that we can
-read without blocking.
+read now without blocking.
 </p>
 
 </p>
 In a number of ways linux's <b>epoll_wait</b> acts like both <b>poll</b> and <b>select</b>
 except for a few important differences.  First, and most importantly, with epoll you don't have to send the
-set of file descriptors you are interested in each time you call the function as you do with both poll
-and select.  This means that the kernel doesn't have to read the set you are telling it on each call and
+set of file descriptors you are interested in each time you call the function as you do with both <b>poll</b>
+and <b>select</b>.  This means that the kernel doesn't have to read the set you are telling it on each call and
 figure out what to do with each of them.  This can make a significant difference when you have a lot of file
-descriptors that you are interested in - as is frequently the case for a web service that is under load.
+descriptors that you are interested in - as is frequently the case for a web service that is under heavy load.
 It's also more convenient to let the kernel associate the file descriptors and pointers for you, than you
 having to do it by hand.
 </p>
@@ -114,7 +114,7 @@ epoll i/o notification on the same file set.  This can further reduce the proces
 event notification to your handling code in any case where you have multi-threaded event handling code.
 In anon's epoll model, it calls <b>epoll_wait</b> on the same file set concurrently from multiple threads.
 It then dispatches to the handling code directly using function calls as is shown in the code snippet
-above.  These handlers simply execute in the thread that recieved the notification from <b>epoll_wait</b>.
+above.  These handlers simply execute in the OS thread that recieved the notification from <b>epoll_wait</b>.
 </p>
 
 <h3>
@@ -133,11 +133,11 @@ whether it has sent you a complete reply or not.
 Consider the case where epoll tells you that you can read some data from the <b>another.server.com</b> socket and
 you begin running your code to parse the http headers you expect to be at the start of this message.  It could
 be that part way through parsing them you get to the end of the data that is currently available to read on that
-socket. If this happens your parser can either use a <em>blocking</em> socket, in which case your next
-<b>read</b> call on that socket will block the calling thread until the next network packet shows up from that
-server, or you can use a <em>non-blocking</em> socket, and then detect the EAGAIN state.  But then you need to
-write your http parser in such a way that it can be suspended and later resumed when the packet does show up
-and you get the next epoll notification for it.
+socket. If this happens your parser has only two realistic choices. It can be designed to use a <em>blocking</em>
+socket, in which case the next <b>read</b> call on that socket will block the calling thread until the next network
+packet shows up from that server. Or, it can use a <em>non-blocking</em> socket, and then be written to detect the
+EAGAIN state. But in that case you need to write your http parser in such a way that it can be suspended and later
+resumed when the packet does show up and you get the next epoll notification for it.
 </p>
 
 <p>
@@ -147,8 +147,8 @@ Callback Oriented Design because of its heavy use of callbacks.  The overall des
 i/o processing can take a long time, so you start by initiating it.  When you do this you provide a
 callback function that will get called when the i/o operation completes.  But this sort of design
 tends to interrupt the linear flow of source code because the idea of <em>what happens next</em> can't 
-be easily specified as the next line in the source code.  In a Callback Oriented Design, the thing
-that happens <em>next</em> is frequently specified in some other function.
+easily be specified as the next line in the source code.  In a Callback Oriented Design, the thing
+that happens next is frequently specified in some other function.
 </p>
 
 <h3>
@@ -156,28 +156,28 @@ that happens <em>next</em> is frequently specified in some other function.
 </h3>
 
 <p>
-"Fibers" or "user level threads" is a concept that is supported by many different operation systems, including
-linux.  The typical idea behind this is that they are similar to os threads.  They each have a stack and
-register state.  You can make function calls, return from them and all the other "normal" things.  But they
-requrire an explicit call to switch from one fiber to another.  This is unlike normal operating system threads which
-the operating system switches for you on its own schedule.  For a whole host of reasons switching fiber contexts
-by calling an API is almost always faster than the OS switching thread contexts.  But even though they are faster,
-there frequently isn't a good way for your code to know when a good time would be to switch to some other
-fiber.  Fibers tend to a tool that is good at only a very specific subset of the more general thread
-concurrency problems.
+Fibers are sometimes known as <em>user level threads</em>.  They are supported by many different operation
+systems, including linux.  The typical idea behind this is that they are similar to OS threads.  They each
+have a stack and register state.  You can make function calls, return from them and all the other "normal"
+things.  But unlinke normal operating system threads, they requrire an explicit call to switch from running
+one fiber to another.  For a whole host of reasons, switching fiber contexts by calling an API is almost
+always faster than the OS switching thread contexts.  But one common reason for them being faster is that
+you frequently don't have a particularly good strategy for deciding what fiber to run when.  A good OS thread
+scheduling algorithm ensures that all threads are run at reasonable times.  A fiber scheduling algorithm that
+attempted this sort of fairness would lose a great deal of its performance advantage over OS thread switching.
 </p>
 
 <p>
 But for anon, we have a perfect use case for fibers.  In anon, we can continue to execute in a single fiber
 until that fiber runs out of i/o.  For example, a fiber can continue to execute and do whatever its logic
-is designed for until it gets to the next point of wanting to read something from a socket when there is no
-data to be read.  That EAGAIN condition can be used to signify an appropirate time to switch fibers since
-some other fiber in the system might be at a point where there is data available for it to read or write.
+is designed for until it gets to the next point of wanting to read something from a socket that has no more
+data.  That EAGAIN condition can be used to signify an appropirate time to switch fibers since some other
+fiber in the system might be at a point where there is data available for it to read or write.
 </p>
 
 <p>
 A core piece of anon is that when a fiber hits an EAGAIN condition attempting to perform i/o, it does a
-fiber switch back to the point where it calls <b>epoll_wait</b>.  This allows the threads that run these
+fiber switch back to the point where it calls <b>epoll_wait</b>.  This allows the OS threads that run these
 fibers to remain busy executing interesting logic as long as there are sockets that are either ready to
 be read from or written to.
 </p>
@@ -187,8 +187,7 @@ Anon's fiber model permits code that is structured something like:
 </p>
 
 <div class="highlight highlight-C++"><pre>
-<span class="c1">
-// appears to run until the end of the message.
+<span class="c1">// appears to run until the end of the message.
 // but, in fact switches out to other fibers if
 // this socket runs out of data and others have
 // available data</span>
@@ -201,16 +200,17 @@ Anon's fiber model permits code that is structured something like:
 </pre></div>
 
 <p>
-In anon, <b>read_next_token</b> does a fiber-friendly read, which means that as soon as there are no bytes
-to be read it does a fiber-switch back to the <b>epoll_wait</b> code, alowing this
-thread to work on whatever sockets do have available data.  When this, or any other thread sees that
-there is again data for this socket (epoll_wait return a result for this socket), it fiber-switches back
-to the point where this fiber previously switched out.  So from a coding perspective it looks like linear
-flow the way that thread-blocking operations do.
+In anon, <b>read_next_token</b> does a <em>fiber friendly read</em>, which means that as soon as there are no bytes
+to be read it does a fiber-switch back to the <b>epoll_wait</b> code - allowing this OS thread to work on
+whatever sockets do have available data.  When this, or any other OS thread sees that there is again data
+for this socket (<b>epoll_wait</b> returns a result for this socket), it fiber-switches back to the point
+where this fiber previously switched out.  So from a source code perspective it looks like linear flow the
+way that thread-blocking operations do.  In the example above, the fiber is simply suspended inside of
+<b>read_next_token</b> until that function can read an entire token.
 </p>
 
 <p>
-This ends up meaning that the fiber schedule rules are based on epoll's i/o event delivery mechanism.
+This ends up meaning that anon's fiber scheduling rules are derived from epoll's i/o event delivery mechanism.
 Anon implements an <b>i/o driven concurrency model.</b>
 </p>
 
@@ -219,7 +219,7 @@ Anon implements an <b>i/o driven concurrency model.</b>
 </h3>
 
 <p>
-Like anything, it depends on what you measure against.  But you can do comparisons to similar thread-switching
+Like anything, it depends on what you measure against.  But you can do comparisons to similar OS thread switching
 by writing an application that does the following:
 </p>
 
@@ -229,18 +229,17 @@ by writing an application that does the following:
 </ul>
 
 <p>
-Now, consider a very simple "protocol" where the sender (second thread) just sends a single byte.
+Now, consider a very simple protocol where the sender (second thread) just sends a single byte.
 When the handler sees a byte it echos that byte back.  After the sender sends its byte it
-attempts to read this response byte from the handler.  To compare the fiber solution to a normal os
-solution we want to look at the difference between the first thread creating an operating system
-thread for each new handler vs. creating a fiber.  Since the syntax we can use once we are inside
-of a fiber is similar to what we can do inside of a thread, we can just say that the handlers all
+attempts to read this echoed byte from the handler.  To compare the fiber solution to a normal OS
+thread solution we want to look at the difference between the first thread creating new OS
+threads for each new handler vs. creating new fibers.  Since the syntax we can use once we are inside
+of a fiber is similar to what we can do inside of a thread, we can just say that in both cases the handlers
 look something like:
 </p>
 
 <div class="highlight highlight-C++"><pre>
-<span class="c1">
-// protocol handler</span>
+<span class="c1">// protocol handler</span>
 <span class="kt">void</span> <span class="nf">handle_message</span>(<span class="k">pipe</span>& p)
 {
   <span class="k">while</span> (byte = p.<span class="nf">read</span>()) {
@@ -250,21 +249,20 @@ look something like:
 </pre></div>
 
 <p>
-In an os thread case <b>pipe</b> is a type where <b>read</b> and <b>write</b> are directly
-mapped to <b>recv</b> and <b>send</b> and the underlying file descript is set <em>blocking</em>.
+In an OS thread case, <b>pipe</b> is a type where <b>read</b> and <b>write</b> are directly
+mapped to <b>recv</b> and <b>send</b> and the underlying file descriptor is set <em>blocking</em>.
 For the fiber case the file descriptor is <em>non-blocking</em> and the methods are mapped to versions of
-these calls that check for <b>EAGAIN</b> and when they detect it, fiber-switch back to the
+these calls that check for <b>EAGAIN</b>.  When they detect it they fiber-switch back to the
 <b>epoll_wait</b> code.  In both cases, when the caller sends a zero byte the protocol is over and
-the routine returns.
+the routine returns, terminating the OS thread or fiber.
 </p>
 
 <p>
-In the os thread case the code that calls <b>accept</b> looks something like:
+In the OS thread case the code that calls <b>accept</b> looks something like:
 </p>
 
 <div class="highlight highlight-C++"><pre>
-<span class="c1">
-// accept loop</span>
+<span class="c1">// accept loop</span>
 <span class="kt">void</span> <span class="nf">accept_loop</span>(<span class="k">int</span> listening_socket)
 {
   <span class="k">while</span> (<span class="kc">true</span>) {
@@ -276,8 +274,9 @@ In the os thread case the code that calls <b>accept</b> looks something like:
 
 <p>
 where you (incorrectly) have to assume that there is some way to automatically convert the new_connection
-int/file descriptor into a non-const <b>pipe</b>&.  But what is important here is to point out that each call
-to <b>accept</b> results in a new os thread running <b>handle_message</b> with that one socket.
+int (file descriptor) into a non-const <b>pipe</b>&.  Real C++ syntax wouldn't permit this.  But what is
+important here is to point out that each call to <b>accept</b> results in a new OS thread running
+<b>handle_message</b> with that one socket.
 </p>
 
 <p>
@@ -286,8 +285,55 @@ The fiber equivalent that we want to compare to is identical except that:
 
 <ul>
 <li>Its <b>handle_message</b> uses a <b>pipe</b> type that does fiber-friendly reads and writes</li>
-<li>Its <b>accept_loop</b> creates fibers running handle_message instead of std::threads</li>
+<li>Its <b>accept_loop</b> creates fibers running <b>handle_message</b> instead of std::threads</li>
 </ul>
+
+<p>
+With these two different versions of a server, we can write a client that looks something like:
+</p>
+
+<div class="highlight highlight-C++"><pre>
+<span class="kt">void</span> <span class="nf">client</span>()
+{
+  <span class="kt">int</span> socks[400];
+  <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
+    socks[i] = <span class="nf">connect</span>( ... to the server ... );
+    
+  <span class="k">for</span> (<span class="kt">int</span> msg=0; i<1000; msg++) {
+  
+    <span class="c1">// first send one message to each of the sockets</span>
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+      <span class="nf">send_one_byte</span>(socks[i]);
+      
+    <span class="c1">// now loop through and read all the responses</span>
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+      <span class="nf">read_one_byte</span>(socks[i]);
+  }
+}
+</pre></div>
+
+<p>
+The client app is being careful to force thread or fiber context switching in the server by writing
+one message to each of the connections before entering the phase where it reads replies.  This makes
+sure that the server isn't running in mode where it reads long sequences of messages on a single connection
+and just returns them without needing to switch to handling other connections.  That sort of "do a small
+amount of work on one connection and then move on to the next" behavior is typical in a real world
+web service, and is exactly what we want to measure.  What we want now is to put a timer around the
+second <b>for</b> loop and compare the timings for the two different kinds of servers.
+</p>
+
+<h3>
+<a id="fiber_timing_data" class="anchor" href="#fiber_timing_data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Some Actual Timing Data
+</h3>
+
+<p>
+Anon's test code contains this exact sort of testing, allowing you to make this comparison on whatever
+machine configuration you want to test.  The data below was run on an Ubuntu 14.04, 4 CPU core VM. This
+ran inside of VMWare running in a 2.3 GHz Intel Mac Pro laptop.  The fiber switching code is designed to
+run as many OS threads as there are CPU cores.  So while the <b>client</b> application causes the fiber
+server to create 400 fibers, all of these fibers are run on 4 OS threads that are calling <b>epoll_wait</b>.
+The OS thread server creates 400 OS threads in response to the <b>client</b> app.
+</p>
 
         </section>
 
