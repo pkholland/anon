@@ -299,7 +299,7 @@ With these two different versions of a server, we can write a client that looks 
   <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
     socks[i] = <span class="nf">connect</span>( ... to the server ... );
     
-  <span class="k">for</span> (<span class="kt">int</span> msg=0; i<1000; msg++) {
+  <span class="k">for</span> (<span class="kt">int</span> msg=0; i<10000; msg++) {
   
     <span class="c1">// first send one message to each of the sockets</span>
     <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
@@ -323,16 +323,73 @@ second <b>for</b> loop and compare the timings for the two different kinds of se
 </p>
 
 <h3>
-<a id="fiber_timing_data" class="anchor" href="#fiber_timing_data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Some Actual Timing Data
+<a id="fiber_timing_data" class="anchor" href="#fiber_timing_data" aria-hidden="true"><span class="octicon octicon-link"></span></a>Some Real Timing Data
 </h3>
 
 <p>
 Anon's test code contains this exact sort of testing, allowing you to make this comparison on whatever
-machine configuration you want to test.  The data below was run on an Ubuntu 14.04, 4 CPU core VM. This
-ran inside of VMWare running in a 2.3 GHz Intel Mac Pro laptop.  The fiber switching code is designed to
-run as many OS threads as there are CPU cores.  So while the <b>client</b> application causes the fiber
-server to create 400 fibers, all of these fibers are run on 4 OS threads that are calling <b>epoll_wait</b>.
-The OS thread server creates 400 OS threads in response to the <b>client</b> app.
+machine configuration you want to test.  The data below was run on an Ubuntu 14.04 VM, hosted by
+VMWare running on a 2.3 GHz Intel Core i7 MacBook Pro laptop.  Along one axis of the timing data it varies
+the number of CPU cores given to the VM instance, using 1, 2, and 4 cores.  The fiber switching code is
+designed to run as many OS threads as there are CPU cores.  So while the <b>client</b> application causes
+the fiber server to create 400 fibers, all of these fibers run on 4 OS threads if the VM is set to 4 cores.
+The OS thread server creates 400 OS threads in response to the <b>client</b> app, regardless of how many
+cores the VM has to work with.  The <b>connect</b> call, abbreviated in the code example above,
+is using the loopback network address so is short circuiting a great deal of the steps that would occur
+if the client and server were on different machines.
+</p>
+
+<p>
+<table style="width:100%">
+  <caption><b>Dispatch Timing Comparison for 4,000,000 Messages</b></caption>
+  <tr>
+    <td></td>
+    <td><b>1 Core</b></td>
+    <td><b>2 Cores</b></td>
+    <td><b>4 Cores</b></td>
+  </tr>
+  <tr>
+    <td><b>Fibers</b></td>
+    <td>3.7 - 3.8 secs.</td>
+    <td>2.4 - 2.5 secs.</td>
+    <td>2.3 - 2.4 secs.</td>
+  </tr>
+  <tr>
+    <td><b>OS Threads</b></td>
+    <td>8.7 - 9.0 secs.</td>
+    <td>10.6 - 10.9 secs.</td>
+    <td>12.4 - 17.2 secs.</td>
+  </tr>
+</table>
+</p>
+
+
+<p>
+This timing shows a number of interesting things.  First, fibers always beat OS threads by a significant
+margin.  But the two cases show interesting data as you vary the number of CPU cores.  In the 1 core, fiber
+case the vast majority of the time occurs when there is one OS thread running the <b>send</b> code of the
+client and a second thread running the <b>recv</b> code of the server (firber switching to the different
+fibers).  Neither of these threads can get very far ahead of other, so there is a considerable amount of
+thread context switching that occurs in the 1 core case that does not occur in the 2 and 4 core cases
+- which both have similar timings.
+</p>
+
+<p>
+Speculation about why increasing the number of available cores increases thread context switching
+time for OS threads is this.  There is likely to be some amount of synchronization between
+cores in order to correctly schedule threads, and this synchronization time increases as the number
+of cores increase.  Since there is very little done in each thread before it blocks again on the next
+<b>recv</b> call, this core synchronization time dominates the total execution time.
+</p>
+
+<h3>
+<a id="wrap_up" class="anchor" href="#wrap_up" aria-hidden="true"><span class="octicon octicon-link"></span></a>Final Observations
+</h3>
+
+<p>
+Fibers and efficient handling of i/o events can signficantly speed up processing time for a server
+under load.  Anon provides a tool set for using these that is similar to the way one uses normal
+threads and event dispatching mechanisms.
 </p>
 
         </section>
