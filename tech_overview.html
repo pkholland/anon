@@ -156,15 +156,16 @@ that happens next is frequently specified in some other function.
 </h3>
 
 <p>
-Fibers are sometimes known as <em>user level threads</em>.  They are supported by many different operation
+Fibers are sometimes known as <em>user level threads</em>.  They are supported by many different operating
 systems, including linux.  The typical idea behind this is that they are similar to OS threads.  They each
-have a stack and register state.  You can make function calls, return from them and all the other "normal"
-things.  But unlinke normal operating system threads, they requrire an explicit call to switch from running
-one fiber to another.  For a whole host of reasons, switching fiber contexts by calling an API is almost
-always faster than the OS switching thread contexts.  But one common reason for them being faster is that
-you frequently don't have a particularly good strategy for deciding what fiber to run when.  A good OS thread
-scheduling algorithm ensures that all threads are run at reasonable times.  A fiber scheduling algorithm that
-attempted this sort of fairness would lose a great deal of its performance advantage over OS thread switching.
+have a stack and register file.  Code running in a fiber can make function calls, return from them and all
+the other "normal" things.  But unlinke normal operating system threads, they requrire an explicit call to
+switch from running one fiber to another.  For a whole host of reasons, switching fiber contexts by calling
+an API is almost always faster than the OS switching thread contexts.  But one common reason for them being
+faster is that you frequently don't have a particularly good strategy for deciding what fiber to run when.
+A good OS thread scheduling algorithm ensures that all threads are run at reasonable times.  A fiber scheduling
+algorithm that attempted this sort of fairness would lose a great deal of its performance advantage over OS
+thread switching.
 </p>
 
 <p>
@@ -172,7 +173,7 @@ But for anon, we have a perfect use case for fibers.  In anon, we can continue t
 until that fiber runs out of i/o.  For example, a fiber can continue to execute and do whatever its logic
 is designed for until it gets to the next point of wanting to read something from a socket that has no more
 data.  That EAGAIN condition can be used to signify an appropirate time to switch fibers since some other
-fiber in the system might be at a point where there is data available for it to read or write.
+fiber in the system might be at a point where there is data available for it to read from its socket.
 </p>
 
 <p>
@@ -183,7 +184,7 @@ be read from or written to.
 </p>
 
 <p>
-Anon's fiber model permits code that is structured something like:
+Anon's fiber model permits code that is structured something like this:
 </p>
 
 <div class="highlight highlight-C++"><pre>
@@ -201,11 +202,11 @@ Anon's fiber model permits code that is structured something like:
 
 <p>
 In anon, <b>read_next_token</b> does a <em>fiber friendly read</em>, which means that as soon as there are no bytes
-to be read it does a fiber-switch back to the <b>epoll_wait</b> code - allowing this OS thread to work on
-whatever sockets do have available data.  When this, or any other OS thread sees that there is again data
+to be read it does a fiber-switch back to the <b>epoll_wait</b> code - allowing this OS thread to run other
+fibers whose sockets do have available data.  When this, or any other OS thread sees that there is again data
 for this socket (<b>epoll_wait</b> returns a result for this socket), it fiber-switches back to the point
 where this fiber previously switched out.  So from a source code perspective it looks like linear flow the
-way that thread-blocking operations do.  In the example above, the fiber is simply suspended inside of
+same way that thread-blocking operations do.  In the example above, the fiber is simply suspended inside of
 <b>read_next_token</b> until that function can read an entire token.
 </p>
 
@@ -319,7 +320,7 @@ sure that the server isn't running in mode where it reads long sequences of mess
 and just returns them without needing to switch to handling other connections.  That sort of "do a small
 amount of work on one connection and then move on to the next" behavior is typical in a real world
 web service, and is exactly what we want to measure.  What we want now is to put a timer around the
-second <b>for</b> loop and compare the timings for the two different kinds of servers.
+"msg" <b>for</b> loop and compare the timings for the two different kinds of servers.
 </p>
 
 <h3>
@@ -367,11 +368,12 @@ if the client and server were on different machines.
 <p>
 This timing shows a number of interesting things.  First, fibers always beat OS threads by a significant
 margin.  But the two cases show interesting data as you vary the number of CPU cores.  In the 1 core, fiber
-case the vast majority of the time occurs when there is one OS thread running the <b>send</b> code of the
-client and a second thread running the <b>recv</b> code of the server (firber switching to the different
-fibers).  Neither of these threads can get very far ahead of other, so there is a considerable amount of
-thread context switching that occurs in the 1 core case that does not occur in the 2 and 4 core cases
-- which both have similar timings.
+case both the client and server can get into a state where each has previously called <b>revc</b> from a
+thread whose socket didn't have data available at the time, so the thread was put to sleep.  Once in that
+state those threads can't be woken until the right other thread is woken and writes into the other side
+of the socket.  That fact that there is only a single CPU core sevicing these threads makes it harder to
+get out of this state once it has entered it.  This does not happen as frequently where there is more than
+one core and you can see that the timings for the 2 and 4 core cases are much more similar.
 </p>
 
 <p>
@@ -388,8 +390,8 @@ of cores increase.  Since there is very little done in each thread before it blo
 
 <p>
 Fibers and efficient handling of i/o events can signficantly speed up processing time for a server
-under load.  Anon provides a tool set for using these that is similar to the way one uses normal
-threads and event dispatching mechanisms.
+under load.  Anon provides a tool set for using these techniquest that is similar to the way one uses
+normal threads and event dispatching mechanisms.
 </p>
 
         </section>
