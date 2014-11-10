@@ -32,10 +32,17 @@
 <h1>
 <a id="tech-overview" class="anchor" href="#tech-overview" aria-hidden="true"><span class="octicon octicon-link"></span></a>Anon Technical Overview</h2>
 
-<ul>Table of Contents:
-<li><a href="#io_concur">Fibers and I/O Driven Concurency</a></li>
-<li>EAGAIN Propagation</li>
-<li>The look of the API</li>
+<ul>
+ <li><a href="#io_concur">Fibers and I/O Driven Concurency</a></li>
+ <ul>
+  <li><a href="#callback_design">Callback Oriented Design</a></li>
+  <li><a href="#fibers">Fibers and how they help</a></li>
+  <li><a href="#fiber_timing">Does that actually help?</a></li>
+  <li><a href="#fiber_timing_data">Some Real Timing Data</a></li>
+  <li><a href="#wrap_up">Final Observations</a></li>
+ </ul>
+ <li>EAGAIN Propagation</li>
+ <li>The look of the API</li>
 </ul>
 
 <h2>
@@ -118,7 +125,7 @@ above.  These handlers simply execute in the OS thread that recieved the notific
 </p>
 
 <h3>
-<a id="callback_design" class="anchor" href="#callback_deskgn" aria-hidden="true"><span class="octicon octicon-link"></span></a>Callback Oriented Design
+<a id="callback_design" class="anchor" href="#callback_design" aria-hidden="true"><span class="octicon octicon-link"></span></a>Callback Oriented Design
 </h3>
 
 <p>
