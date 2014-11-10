@@ -102,7 +102,7 @@ extern "C" int main(int argc, char** argv)
                       });
     
     
-    int num_pipe_pairs = 100;
+    int num_pipe_pairs = 400;
     int num_read_writes = 10000;
     
     while (true) {
