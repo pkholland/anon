@@ -275,7 +275,7 @@ In the OS thread case the code that calls <b>accept</b> looks something like:
 {
   <span class="k">while</span> (<span class="kc">true</span>) {
     <span class="kt">int</span> new_connection = <span class="nf">accept</span>(listening_socket, <span class="m">0</span>, <span class="m">0</span>);
-    std::thread(std::bind(<span class="nf">handle_message</span>, new_connection).<span class="nf">detach</span>();
+    std::thread(std::bind(<span class="nf">handle_message</span>, new_connection)).<span class="nf">detach</span>();
   }
 }
 </pre></div>
