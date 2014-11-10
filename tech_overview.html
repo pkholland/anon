@@ -371,8 +371,8 @@ margin.  But the two cases show interesting data as you vary the number of CPU c
 case both the client and server can get into a state where each has previously called <b>revc</b> from a
 thread whose socket didn't have data available at the time, so the thread was put to sleep.  Once in that
 state those threads can't be woken until the right other thread is woken and writes into the other side
-of the socket.  That fact that there is only a single CPU core sevicing these threads makes it harder to
-get out of this state once it has entered it.  This does not happen as frequently where there is more than
+of the socket.  That fact that there is only a single CPU core servicing these threads makes it harder to
+get out of this state once it has entered it.  This does not happen as frequently when there is more than
 one core and you can see that the timings for the 2 and 4 core cases are much more similar.
 </p>
 
