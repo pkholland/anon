@@ -43,7 +43,7 @@ other operations that might be interesting to look into?  This page looks at a c
 
 <ul>
   <li><a href="#context_create">Context Creation and Destruction</a></li>
-  <li><a href="#full_on_http">Full-on http API servers</a></li>
+  <li><a href="#full_on_http">Full-on Http API servers</a></li>
 </ul>
 
 <h2>
@@ -76,15 +76,34 @@ of things as you process the messages you are going to receive.
 </p>
 
 <p>
-Independent of whether you construct new objects or pool them, it is interesting to understand the cost
-of constructing new ones - since you will need to do this with some frequency.  So here is some data on
-the cost of constructing new OS threads, as shown above, and then running an empty function in that context.
-That is, simply waiting for all created contexts to exit.  This is done for OS threads vs. anon fibers.
+Independent of whether you always construct new objects or pool them, it is interesting to understand the cost
+of constructing new ones - since you will need to do this with some frequency.  To time this kind of data want to
+minimize the work being done inside the context (thread) so we can just look at creation and destruction time.
+So timing the OS thread case would be running a piece of code something like:
+</p>
+
+<div class="highlight highlight-C++"><pre>
+<span class="c1">// create lots of threads and wait for them to finish</span>
+<span class="kt">void</span> <span class="nf">time_threads</span>()
+{
+  std::vector&lt;std::thread&gt; threads;
+  
+  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">1000</span>; i++)
+    threads.<span class="nf">push_back</span>(std::thread([]{return <span class="m">0</span>;});
+    
+  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">1000</span>; i++)
+    threads[i].<span class="nf">join</span>();
+}
+</pre></div>
+
+<p>
+Fibers support similar syntax so we can write the fiber equivalent of this loop and time both of them.  Here
+is the timing data when this code is run on 1, 2, and 4 core linux VMs, hosted on a 2.3 GHz MacBook Pro.
 </p>
 
 <p>
 <table style="width:100%">
-  <caption><b>Time to create and execute 10,000 threads vs. fibers</b></caption>
+  <caption><b>Average time to create and execute a single fiber vs. OS thread</b></caption>
   <tr>
     <td></td>
     <td><b>1 Core</b></td>
@@ -92,13 +111,13 @@ That is, simply waiting for all created contexts to exit.  This is done for OS t
     <td><b>4 Cores</b></td>
   </tr>
   <tr>
-    <td><b>Fibers</b></td>
+    <td><b>Fiber</b></td>
     <td>0.022 - 0.022 secs.</td>
     <td>0.023 - 0.024 secs.</td>
     <td>0.031 - 0.033 secs.</td>
   </tr>
   <tr>
-    <td><b>OS Threads</b></td>
+    <td><b>OS Thread</b></td>
     <td>0.175 - 0.256 secs.</td>
     <td>0.410 - 0.600 secs.</td>
     <td>0.385 - 0.409 secs.</td>
@@ -108,7 +127,7 @@ That is, simply waiting for all created contexts to exit.  This is done for OS t
 
 <p>
 Again, this data shows some penalty to running with multiple cores.  But in general the fiber case
-is normally significantly faster than the OS thread case - approximately one order of magnitude faster.
+is significantly faster than the OS thread case by about one order of magnitude.
 </p>
 
 <h2>
@@ -120,33 +139,33 @@ Testing fully-functional Http parsers is both more interesting and more dangerou
 because it is getting closer to meaningful when considering different server designs.  But the performance
 of them can be affected by <em>lots</em> of different aspects of exactly what was tested.  For this, it is
 probably best to not speculate too much about what the causes of the differences are, but to just be careful
-in listing exactly what was tested.
+in describing exactly what is being tested.
 </p>
 
 <p>
 The goal here will be to try to implement a very similar server in several different environments and test
 it with the same code.  The tables will just show the performance numbers for each test.  To start with here
-is a basic description of the test code that is used on each server:
+is a basic description of the test code that is used to drive each server:
 </p>
 
 <div class="highlight highlight-C++"><pre>
 <span class="kt">void</span> <span class="nf">http_client</span>()
 {
   <span class="kt">int</span> socks[400];
-  <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
+  <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; i++)
     socks[i] = <span class="nf">connect</span>( ... to the server ... );
     
   <span class="c1">// a simple HTTP GET string...</span> 
   <span class="k">const</span> <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
     
-  <span class="k">for</span> (<span class="kt">int</span> msg=0; i<10000; msg++) {
+  <span class="k">for</span> (<span class="kt">int</span> msg=<span class="m">0</span>; i&lt;<span class="m">1000</span>; msg++) {
   
     <span class="c1">// send http string to the server</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; msg++)
       <span class="nf">send_string</span>(socks[i], http_GET_message);
       
     <span class="c1">// now loop through and read all the responses</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; msg++)
       <span class="nf">read_http_response</span>(socks[i]);
   }
 }
