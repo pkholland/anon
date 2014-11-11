@@ -302,11 +302,12 @@ void io_dispatch::epoll_loop()
 
   while (running_)  {
   
-    struct epoll_event event;
+    struct epoll_event event[8];
     int ret;
-    if ((ret = epoll_wait(ep_fd_, &event, 1, -1)) > 0) {
+    if ((ret = epoll_wait(ep_fd_, &event[0], sizeof(event)/sizeof(event[0]), -1)) > 0) {
     
-      ((handler*)event.data.ptr)->io_avail(event);
+      for (int i=0; i<ret; i++)
+        ((handler*)event[i].data.ptr)->io_avail(event[i]);
     
     } else if ((ret != 0) && (errno != EINTR)) {
     
