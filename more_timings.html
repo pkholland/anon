@@ -43,7 +43,7 @@ other operations that might be interesting to look into?  This page looks at a c
 
 <ul>
   <li><a href="#context_create">Context Creation and Destruction</a></li>
-  <li>Full-on http API servers</li>
+  <li><a href="#full_on_http">Full-on http API servers</a></li>
 </ul>
 
 <h2>
@@ -78,12 +78,13 @@ of things as you process the messages you are going to receive.
 <p>
 Independent of whether you construct new object or pool them, it is interesting to understand the cost
 of constructing new ones - since you will need to do this with some frequency.  So here is some data on
-the cost of constructing new OS threads, as shown above vs. creating new anon fibers.
+the cost of constructing new OS threads, as shown above, and then running an empty function in that context.
+That is, simply waiting for all created contexts to exit.  This is done for OS threads vs. anon fibers.
 </p>
 
 <p>
 <table style="width:100%">
-  <caption><b>Thread Creation vs. Fiber Creation</b></caption>
+  <caption><b>Time to create and execute 10,000 threads vs. fibers</b></caption>
   <tr>
     <td></td>
     <td><b>1 Core</b></td>
@@ -92,19 +93,169 @@ the cost of constructing new OS threads, as shown above vs. creating new anon fi
   </tr>
   <tr>
     <td><b>Fibers</b></td>
-    <td>3.7 - 3.8 secs.</td>
-    <td>2.4 - 2.5 secs.</td>
-    <td>2.3 - 2.4 secs.</td>
+    <td>0.022 - 0.022 secs.</td>
+    <td>0.023 - 0.024 secs.</td>
+    <td>0.031 - 0.033 secs.</td>
   </tr>
   <tr>
     <td><b>OS Threads</b></td>
-    <td>8.7 - 9.0 secs.</td>
-    <td>10.6 - 10.9 secs.</td>
-    <td>12.4 - 17.2 secs.</td>
+    <td>0.175 - 0.256 secs.</td>
+    <td>0.410 - 0.600 secs.</td>
+    <td>0.385 - 0.409 secs.</td>
   </tr>
 </table>
 </p>
 
+<p>
+Again, this data shows some penalty to running with multiple cores.  But in general the fiber case
+is normally significantly faster than the OS thread case - approximately one order of magnitude faster.
+</p>
+
+<h2>
+<a id="full_on_http" class="anchor" href="#full_on_http" aria-hidden="true"><span class="octicon octicon-link"></span></a>Full-on Http API Servers
+</h2>
+
+<p>
+Testing fully-functional Http parsers is both more interesting and more dangerous.  It is more interesting
+because it is getting closer to meaningful when considering different server designs.  But the performance
+of them can be affected by <em>lots</em> of different aspects of exactly what was tested.  For this, it is
+probably best to not speculate too much about what the causes of the differences are, but to just be careful
+in listing exactly what was tested.
+</p>
+
+<p>
+The goal here will be to try to implement a very similar server in several different environments and test
+it with the same code.  The tables will just show the performance numbers for each test.  To start with here
+is a basic description of the test code that is used on each server:
+</p>
+
+<div class="highlight highlight-C++"><pre>
+<span class="kt">void</span> <span class="nf">http_client</span>()
+{
+  <span class="kt">int</span> socks[400];
+  <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
+    socks[i] = <span class="nf">connect</span>( ... to the server ... );
+    
+  <span class="c1">// a simple HTTP GET string...</span> 
+  <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
+    
+  <span class="k">for</span> (<span class="kt">int</span> msg=0; i<10000; msg++) {
+  
+    <span class="c1">// send http string to the server</span>
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+      <span class="nf">send_string</span>(socks[i], http_GET_message);
+      
+    <span class="c1">// now loop through and read all the responses</span>
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+      <span class="nf">read_http_response</span>(socks[i]);
+  }
+}
+</pre></div>
+
+<p>
+Like other tests, this test code takes care to send the http get requests to lots of different sockets
+before attempting to read responses from any of them to force the server to perform context switches
+form one connection to another.  But it is also trying to avoid performing operations like constructing
+custom GET messages for each request.  While not explicily shown in this example, it also does only minimal
+parsing of the response message.  Also not really shown, but the client uses keep-alive strategies for the
+connection to avoid timing the process of the connect itself.  This sort of test is trying to only ensure
+that the server is switching connections and parsing the http request prior to sending its reply.
+</p>
+
+<p>
+What follows is the look of the source for these simple "echo" servers written in the differnt tool
+sets that are timed.  Following that is the table listing the timings.
+</p>
+
+<h4>
+The Anon Example
+</h4>
+
+<p>
+The anon example gets to use anon-style syntax and looks like this.  The <b>http_server</b> class is
+one provided by anon, and its constructor takes a callable function that is called - in a fiber - each
+time a new connection is established from a client.  The style of its API is inspired by the node.js
+syntax for this.  In this example it simply specifies that it will be returning plain text, and then
+writes "echo server!" into the body of the reply.
+</p>
+
+<div class="highlight highlight-C++"><pre>
+<span class="kt">http_server</span> my_http(/*port*/8080,
+    [](<span class="kc">const</span> <span class="kt">http_request</span>& request, <span class="kt">http_reply</span>& reply){
+      reply.<span class="nf">add_header</span>(<span class="s2">&quot;Content-Type&quot;</span>, <span class="s2">&quot;text/plain&quot;</span>);
+      reply &lt;&lt; <span class="s2">&quot;echo server!\n&quot;</span>;
+    });
+</pre></div>
+
+<h4>
+The Node.js Example
+</h4>
+
+<p>
+The node.js example is visually very similar to the anon one.  It makes use of syntax that lets it pass
+a function as a parameter to an http server.  That service calls the supplied function when new connections
+arive, and it is the function that writes the response information.  But in this case the lauguage is javascript,
+not C++
+</p>
+
+<div class="highlight highlight-C++"><pre>
+my_http = <span class="nf">require</span>(<span class="s2">&quot;http&quot;</span>);
+my_http.<span class="nf">createServer</span>(<span class="kc">function</span>(request,response){
+  response.<span class="nf">writeHeader</span>(200, {<span class="s2">&quot;Content-Type&quot;</span>: <span class="s2">&quot;text/plain&quot;</span>});
+  response.<span class="nf">write</span>(<span class="s2">&quot;echo server!&quot;</span>);
+  response.<span class="nf">end</span>();
+}).<span class="nf">listen</span>(/*port*/8080); 
+</pre></div>
+
+<h4>
+The Proxygen Example
+</h4>
+
+<p>
+Unfortunately, the proxygen example is a little too complicated to show in a short snippet like the anon
+and node.js examples.  However, it is just the standard "echo" server that comes with proxygen github project
+and the one that they talk about in their discussions.
+</p>
+
+<h4>
+The Comparison
+</h4>
+
+<p>
+This test is measured in "messages per second" as seen by the client application.  Like in other tests
+the client application is running on the same machine as the server, and so is using the loopback network
+address to connect to and communicate with the server.
+</p>
+
+<p>
+<table style="width:100%">
+  <caption><b>Messages Per Second</b></caption>
+  <tr>
+    <td></td>
+    <td><b>1 Core</b></td>
+    <td><b>2 Cores</b></td>
+    <td><b>4 Cores</b></td>
+  </tr>
+  <tr>
+    <td><b>Anon</b></td>
+    <td>107,000 </td>
+    <td>177,000</td>
+    <td>254,000</td>
+  </tr>
+  <tr>
+    <td><b>Proxygen</b></td>
+    <td>40,000</td>
+    <td>75,000</td>
+    <td>139,000</td>
+  </tr>
+  <tr>
+    <td><b>Node.js</b></td>
+    <td>3,700</td>
+    <td>3,700</td>
+    <td>3,700</td>
+  </tr>
+</table>
+</p>
 
         </section>
 
