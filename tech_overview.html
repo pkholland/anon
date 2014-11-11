@@ -166,7 +166,7 @@ that happens next is frequently specified in some other function.
 Fibers are sometimes known as <em>user level threads</em>.  They are supported by many different operating
 systems, including linux.  The typical idea behind this is that they are similar to OS threads.  They each
 have a stack and register file.  Code running in a fiber can make function calls, return from them and all
-the other "normal" things.  But unlinke normal operating system threads, they requrire an explicit call to
+the other "normal" things.  But unlike normal operating system threads, they requrire an explicit call to
 switch from running one fiber to another.  For a whole host of reasons, switching fiber contexts by calling
 an API is almost always faster than the OS switching thread contexts.  But one common reason for them being
 faster is that you frequently don't have a particularly good strategy for deciding what fiber to run when.
