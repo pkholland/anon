@@ -76,7 +76,7 @@ of things as you process the messages you are going to receive.
 </p>
 
 <p>
-Independent of whether you construct new object or pool them, it is interesting to understand the cost
+Independent of whether you construct new objects or pool them, it is interesting to understand the cost
 of constructing new ones - since you will need to do this with some frequency.  So here is some data on
 the cost of constructing new OS threads, as shown above, and then running an empty function in that context.
 That is, simply waiting for all created contexts to exit.  This is done for OS threads vs. anon fibers.
@@ -137,7 +137,7 @@ is a basic description of the test code that is used on each server:
     socks[i] = <span class="nf">connect</span>( ... to the server ... );
     
   <span class="c1">// a simple HTTP GET string...</span> 
-  <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
+  <span class="k">const</span> <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
     
   <span class="k">for</span> (<span class="kt">int</span> msg=0; i<10000; msg++) {
   
