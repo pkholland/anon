@@ -49,29 +49,29 @@ several goals.  These are:</p>
 
 <p>A common problem in some server designs is one that can be called the <em>infinite queue</em> problem.  It can be seen when the Service design has components that look something like the following -- shown in C++, but can exist in any language:</p>
 
-<div class="highlight highlight-C++"><pre><span class="c1">// some global</span>
-std::deque&lt;<span class="kt">int</span>&gt; g_new_connections;
+<div class="highlight highlight-C++"><pre><span class="pl-c"><span class="pl-pdc">//</span> some global</span>
+std::deque&lt;<span class="pl-s">int</span>&gt; g_new_connections;
 
-<span class="c1">// runs in one thread</span>
-<span class="kt">void</span> <span class="nf">new_connections_loop</span>(<span class="kt">int</span> listening_socket)
+<span class="pl-c"><span class="pl-pdc">//</span> runs in one thread</span>
+<span class="pl-s">void</span> <span class="pl-enf">new_connections_loop</span>(<span class="pl-s">int</span> listening_socket)
 {
-  <span class="k">while</span> (<span class="kc">true</span>) {
-    <span class="kt">int</span> new_connection = <span class="nf">accept</span>(listening_socket, <span class="m">0</span>, <span class="m">0</span>);
-    g_new_connections.<span class="nf">push_back</span>(new_connection);
+  <span class="pl-k">while</span> <span class="pl-pdp">(</span><span class="pl-c1">true</span>) {
+    <span class="pl-s">int</span> new_connection = <span class="pl-sf">accept</span>(listening_socket, <span class="pl-cn">0</span>, <span class="pl-cn">0</span>);
+    g_new_connections.<span class="pl-sf">push_back</span>(new_connection);
   }
 }
 
-<span class="c1">// runs in another thread</span>
-<span class="kt">void</span> <span class="nf">process_connections_loop</span>()
+<span class="pl-c"><span class="pl-pdc">//</span> runs in another thread</span>
+<span class="pl-s">void</span> <span class="pl-enf">process_connections_loop</span>()
 {
-  <span class="k">while</span> (<span class="kc">true</span>) {
-    <span class="kt">int</span> conn = g_new_connections.<span class="nf">front</span>();
-    g_new_connections.<span class="nf">pop_front</span>();
-    <span class="nf">process_one_connection</span>(conn);
+  <span class="pl-k">while</span> <span class="pl-pdp">(</span><span class="pl-c1">true</span>) {
+    <span class="pl-s">int</span> conn = g_new_connections.<span class="pl-sf">front</span>();
+    g_new_connections.<span class="pl-sf">pop_front</span>();
+    <span class="pl-sf">process_one_connection</span>(conn);
   }
 }</pre></div>
 
-<p>This code isn't meant to be fully correct.  It's missing mutex's and other stuff. But it shows a central feature of many Service designs where there exists some kind of queue, shown above as the std::deque <strong>g_new_connections</strong>.  Here one thread of execution accepts new network connections as fast as it can and puts each one on a queue.  Another thread pulls the recently established connections off the of the queue and processes them as fast as it can.  The basic problem illustrated here is that there isn't a good way for the second thread to keep the first from getting too far ahead of it.  If the <strong>process_one_connection</strong> function takes a long time to complete relative to how fast other machines are trying to establish new connections to this one, then the <strong>g_new_connections</strong> queue can grow arbitrarily large.  The root cause of many Critical Service Outages, particularly when they occur due to excessive server load, can be traced to a basic problem where a consumer of queued requests falls behind the producer of them.  When that starts to happen the percentage of the Service's total capacity that is dedicated to maintaining the queue itself grows.  In many designs this slows down <strong>process_one_connection</strong> more than it does <strong>process_connections_loop</strong>, which then compounds the original problem.</p>
+<p>This code isn't meant to be fully correct.  It's missing mutex's and other stuff. But it shows a central feature of many Service designs where there exists some kind of queue, shown above as the std::deque <strong>g_new_connections</strong>.  Here one thread of execution accepts new network connections as fast as it can and puts each one on a queue.  Another thread pulls the recently established connections off of the queue and processes them as fast as it can.  The basic problem illustrated here is that there isn't a good way for the second thread to keep the first from getting too far ahead of it.  If the <strong>process_one_connection</strong> function takes a long time to complete relative to how fast other machines are trying to establish new connections to this one, then the <strong>g_new_connections</strong> queue can grow arbitrarily large.  The root cause of many Critical Service Outages, particularly when they occur due to excessive server load, can be traced to a basic problem where a consumer of queued requests falls behind the producer of them.  When that starts to happen the percentage of the Service's total capacity that is dedicated to maintaining the queue itself grows.  In many designs this slows down <strong>process_one_connection</strong> more than it does <strong>process_connections_loop</strong>, which then compounds the original problem.</p>
 
 <p>Linux has an errno code named EAGAIN which it uses when certain operations are set to be non-blocking and are not currently possible for one reason or another.  For example, trying to read from a non-blocking socket that
 doesn't currently have any data to be read generates EAGAIN.  A common use of EAGAIN would be to set <strong>listening_socket</strong> above to be non-blocking.  Then the call to <strong>accept</strong> would return -1 and set errno to EAGAIN if there were not any connections that could be returned when it was called.  That kind of usage would allow the calling thread to go do something else instead of stay stuck in <strong>accept</strong> until someone tries to connect to the computer.</p>
