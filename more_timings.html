@@ -77,7 +77,7 @@ of things as you process the messages you are going to receive.
 
 <p>
 Independent of whether you always construct new objects or pool them, it is interesting to understand the cost
-of constructing new ones - since you will need to do this with some frequency.  To time this kind of data want to
+of constructing new ones - since you will need to do this with some frequency.  To time this kind of data we want to
 minimize the work being done inside the context (thread) so we can just look at creation and destruction time.
 So timing the OS thread case would be running a piece of code something like:
 </p>
