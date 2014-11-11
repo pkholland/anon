@@ -89,10 +89,10 @@ So timing the OS thread case would be running a piece of code something like:
 {
   std::vector&lt;std::thread&gt; threads;
   
-  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">1000</span>; i++)
+  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">10000</span>; i++)
     threads.<span class="nf">push_back</span>(std::thread([]{return <span class="m">0</span>;});
     
-  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">1000</span>; i++)
+  <span class="k">for</span> (<span class="k">int</span> i=<span class="m">0</span>; i&lt;<span class="m">10000</span>; i++)
     threads[i].<span class="nf">join</span>();
 }
 </pre></div>
@@ -104,7 +104,7 @@ is the timing data when this code is run on 1, 2, and 4 core linux VMs, hosted o
 
 <p>
 <table style="width:100%">
-  <caption><b>Average time to create and execute a single fiber vs. OS thread</b></caption>
+  <caption><b>Time to create and execute 10,000 fibers vs. 10,000 OS threads</b></caption>
   <tr>
     <td></td>
     <td><b>1 Core</b></td>
@@ -112,13 +112,13 @@ is the timing data when this code is run on 1, 2, and 4 core linux VMs, hosted o
     <td><b>4 Cores</b></td>
   </tr>
   <tr>
-    <td><b>Fiber</b></td>
+    <td><b>Fibers</b></td>
     <td>0.022 - 0.022 secs.</td>
     <td>0.023 - 0.024 secs.</td>
     <td>0.031 - 0.033 secs.</td>
   </tr>
   <tr>
-    <td><b>OS Thread</b></td>
+    <td><b>OS Threads</b></td>
     <td>0.175 - 0.256 secs.</td>
     <td>0.410 - 0.600 secs.</td>
     <td>0.385 - 0.409 secs.</td>
