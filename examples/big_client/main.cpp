@@ -40,8 +40,8 @@ extern "C" int main(int argc, char** argv)
   const char* port = argv[2];
   printf("running big_client against \"%s\", port %s\n", ip, port);
   
-  const int num_sockets = 200;
-  const int num_sends = 5000;
+  const int num_sockets = 400;
+  const int num_sends = 2000;
   
   // look ip the addr for ip/port
   struct addrinfo hints;
