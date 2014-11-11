@@ -156,9 +156,10 @@ is a basic description of the test code that is used to drive each server:
     socks[i] = <span class="nf">connect</span>( ... to the server ... );
     
   <span class="c1">// a simple HTTP GET string...</span> 
+  <span class="c1">// be sure to specify keep-alive...</span> 
   <span class="k">const</span> <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
     
-  <span class="k">for</span> (<span class="kt">int</span> msg=<span class="m">0</span>; i&lt;<span class="m">1000</span>; msg++) {
+  <span class="k">for</span> (<span class="kt">int</span> msg=<span class="m">0</span>; i&lt;<span class="m">2000</span>; msg++) {
   
     <span class="c1">// send http string to the server</span>
     <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; msg++)
@@ -231,19 +232,33 @@ The Proxygen Example
 </h4>
 
 <p>
-Unfortunately, the proxygen example is a little too complicated to show in a short snippet like the anon
-and node.js examples.  However, it is just the standard "echo" server that comes with proxygen github project
-and the one that they talk about in their discussions.
+The proxygen example is too complicated to show in a short code snippet like the
+anon and node.js examples.  However, it is just the standard "echo" server that comes with the
+<a href="https://github.com/facebook/proxygen">proxygen</a>
+github project and the one that they talk about in public discussions.  You can see the code in their
+<a href="https://github.com/facebook/proxygen/blob/master/proxygen/httpserver/samples/echo/EchoHandler.h">
+EchoHandler.h</a> and
+<a href="https://github.com/facebook/proxygen/blob/master/proxygen/httpserver/samples/echo/EchoHandler.cpp">
+EchoHandler.cpp</a> files.  In this design, proxygen supplies a base
+class named 
+<a href="https://github.com/facebook/proxygen/blob/master/proxygen/httpserver/RequestHandler.h">RequestHandler</a>
+that defines a number of virtual methods with names like <b>onRequest</b> and <b>onBody</b>.  <b>EchoHandler</b>
+is a subclass of this and implements those virtual methods with simple echoing behavior.
 </p>
 
 <h4>
-The Comparison
+The Comparison Numbers
 </h4>
 
 <p>
-This test is measured in "messages per second" as seen by the client application.  Like in other tests
-the client application is running on the same machine as the server, and so is using the loopback network
-address to connect to and communicate with the server.
+The table below is displayed in "messages per second" as seen by the <b>http_client</b> application, described above.
+Like in other tests, the client application is running on the same machine as the server, and so is using the
+loopback network address to connect to and communicate with the server.  The testing code uses http's "keep-alive"
+strategy on the sockets, so these numbers do not include connect/shutdown time on the sockets themselves.
+Particularly in the 1 core case, that one core is forced to run both the client and server threads.  This code
+is run in an Ubuntu 14.04 VM, running in VMWare on a 2.3 GHz MacBook Pro laptop.  There is variability in the
+numbers from one run to the next.  This table represents three consecutive runs, listing the slowest and fastest
+of those three.
 </p>
 
 <p>
@@ -269,9 +284,9 @@ address to connect to and communicate with the server.
   </tr>
   <tr>
     <td><b>Node.js</b></td>
-    <td>3,700</td>
-    <td>3,700</td>
-    <td>3,700</td>
+    <td>4,868 - 5,317</td>
+    <td>5,150 - 5,223</td>
+    <td>5,169 - 5,182</td>
   </tr>
 </table>
 </p>
