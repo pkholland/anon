@@ -31,6 +31,7 @@
 #include <iomanip>
 #include <system_error>
 #include <errno.h>
+#include <string.h>
 
 #if defined(ANON_LOG_FIBER_IDS)
 extern int get_current_fiber_id();
@@ -89,7 +90,13 @@ namespace Log
   }
 };
 
-inline std::string error_string(int err)
+inline std::string error_string2(int err)
+{
+  char  buff[256];
+  return strerror_r(err, &buff[0], sizeof(buff));
+}
+
+inline std::string error_string1(int err)
 {
   switch (err)
   {
@@ -162,6 +169,11 @@ inline std::string error_string(int err)
     default:
       return std::to_string(err);
     }
+}
+
+inline std::string error_string(int err)
+{
+  return std::string("(") + error_string1(err) + ") " + error_string2(err);
 }
 
 inline std::string errno_string()
