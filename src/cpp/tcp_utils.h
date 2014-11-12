@@ -49,3 +49,10 @@ T& operator<<(T& str, const struct sockaddr& addr)
   return str << *(const struct sockaddr_storage*)&addr;
 }
 
+template<typename T>
+T& operator<<(T& str, const struct sockaddr_in6& addr)
+{
+  return str << *(const struct sockaddr_storage*)&addr;
+}
+
+

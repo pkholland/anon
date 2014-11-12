@@ -133,8 +133,9 @@ extern "C" int main(int argc, char** argv)
           anon_log("  fi - run a fiber that creates additional fibers using \"in-fiber\" start mechanism");
           anon_log("  fr - run a fiber that creates additional fibers using \"run\" start mechanism");
           anon_log("  or - similar to 'fr', except using threads instead of fibers");
-          anon_log("  d  - dns cache lookup of \"www.google.com\", port 80");
-          anon_log("  df - same as 'd', except initiation of lookup is done from a fiber");
+          anon_log("  d  - dns cache lookup of \"www.google.com\", port 80 with \"lookup_and_run\"");
+          anon_log("  df - same as 'd', except \"lookup_and_run\" is called from a fiber");
+          anon_log("  id - same as 'df', except calling the fiber-blocking \"get_addrinfo\"");
           anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
@@ -436,6 +437,24 @@ extern "C" int main(int argc, char** argv)
                 else
                   anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
               });
+          });
+
+        } else if (!strcmp(&msgBuff[0], "id")) {
+        
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("running a fiber which calls get_addrinfo on \"" << host << "\", port " << port << " (twice)");
+          fiber::run_in_fiber([host, port]{
+            for (int i = 0; i < 2; i++ ) {
+              struct sockaddr_in6 addr;
+              socklen_t addrlen;
+              int ret = dns_cache::get_addrinfo(host, port, &addr, &addrlen);
+              if (ret == 0)
+                anon_log("dns lookup for \"" << host << "\", port " << port << " found: " << addr );
+              else
+                anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (ret > 0 ? error_string(ret) : gai_strerror(ret)));
+            }
           });
 
         } else

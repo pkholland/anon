@@ -444,5 +444,54 @@ void do_lookup_and_run(const char* host, int port, dns_caller* dnsc, size_t stac
   }
 }
 
+////////////////////////////////////////////////////////
+
+int get_addrinfo(const char* host, int port, struct sockaddr_in6* addr, socklen_t* addrlen)
+{
+  fiber_cond  cond;
+  fiber_mutex mtx;
+  bool        done = false;
+  int         ret = 0;
+  
+  // f is called in every case other than when
+  // dns_entry::call_from_cache returns true.  In that
+  // case dns_entry::call fills out addr before returning.
+  auto f = [&ret, &addr, &addrlen, &done, &mtx, &cond](int err_code, const struct sockaddr *_addr, socklen_t _addrlen)
+    {
+      ret = err_code;
+      if (ret == 0) {
+        memcpy(addr, _addr, _addrlen);
+        *addrlen = _addrlen;
+      }
+      
+      fiber_lock lock(mtx);
+      done = true;
+      cond.notify_all();
+    };
+    
+  dns_caller* dnsc = new dns_call<decltype(f)>(f);
+  
+  bool  immediate;
+  {
+    anon::lock_guard<std::mutex> lock(dns_map_mutex);
+    immediate = dns_map[host].call(host, port, dnsc, fiber::k_default_stack_size, *addr);
+  }
+  if (immediate)
+    delete dnsc;  // 'call' doesn't use dnsc in 'immediate=true' case, so we just delete it.
+  else {
+    // wait for 'f' above to be called (once dns resolution is done)
+    fiber_lock lock(mtx);
+    while (!done)
+      cond.wait(lock);
+  }
+  if (ret == 0) {
+    if (addr->sin6_family == AF_INET6)
+      ((struct sockaddr_in6*)addr)->sin6_port = htons(port);
+    else
+      ((struct sockaddr_in*)addr)->sin_port = htons(port);
+  }
+  return ret;
+}
+
 }
 

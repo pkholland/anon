@@ -25,6 +25,7 @@
 #include "fiber.h"
 #include "io_dispatch.h"
 #include <sys/socket.h>
+#include <netinet/in.h>
 
 namespace dns_cache
 {
@@ -64,6 +65,23 @@ namespace dns_cache
   {
     do_lookup_and_run(host, port, new dns_call<Fn>(f), stack_size);
   }
+  
+  // can only be called from within a fiber.
+  // if the given host/port is already in the cache and is currently
+  // available, then the addr will be filled out immediately and the
+  // function returns 0.
+  //
+  // Otherwise the current fiber is suspended while the dns lookup
+  // occurs, or until the eariest allowable time for host to be contacted
+  // has passed.  When the dns lookup completes the fiber will be resumed
+  // and the function will return 0 if it succeeded in finding an
+  // address for host/port, or an error code.  If the error code is
+  // >0 it is a gai_strerror error code.  If it is <0 it is a errno code.
+  // While the type for the 'addr' parameter is a ipv6 sockaddr, it is
+  // frequently the case that dns will return ipv4 addresses.  Look in
+  // addr->sin6_family field to tell which one you received (it will be
+  // either AF_INET or AF_INET6).
+  int get_addrinfo(const char* host, int port, struct sockaddr_in6* addr, socklen_t* addrlen);
   
 }
 
