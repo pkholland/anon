@@ -84,6 +84,15 @@ namespace tcp_client
   void connect_and_run(const char* host, int port, Fn f, size_t stack_size=fiber::k_default_stack_size)
   {
     do_connect_and_run(host, port, new tcp_call<Fn>(f), stack_size);
-  }  
+  }
+  
+  // can only be called from a fiber.  The calling fiber will
+  // be suspended while the dns (cache) lookup and tcp connect
+  // are performed.
+  // the return value is a pair where the first element is either
+  // 0 (the function succeeded and the second element is valid)
+  // or is an error code.  These are the same errors as are passed
+  // to connect_and_run described above.
+  std::pair<int, std::unique_ptr<fiber_pipe> > connect(const char* host, int port);
 }
 

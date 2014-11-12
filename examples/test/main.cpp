@@ -137,6 +137,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  df - same as 'd', except \"lookup_and_run\" is called from a fiber");
           anon_log("  id - same as 'df', except calling the fiber-blocking \"get_addrinfo\"");
           anon_log("  c  - tcp connect to \"www.google.com\", port 80 and print a message");
+          anon_log("  ic - same as 'c', except calling the fiber-blocking connect");
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
         } else if (!strcmp(&msgBuff[0], "p")) {
@@ -381,6 +382,20 @@ extern "C" int main(int argc, char** argv)
               anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << error_string(err_code));
             else
               anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << gai_strerror(err_code));
+          });
+          
+        } else if (!strcmp(&msgBuff[0], "ic")) {
+        
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("tcp connecting to \"" << host << "\", port " << port << ", with tcp_client::connect");
+          fiber::run_in_fiber([host, port]{
+            auto c = tcp_client::connect(host, port);
+            if (c.first == 0)
+              anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
+            else
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (c.first > 0 ? error_string(c.first) : gai_strerror(c.first)) );
           });
 
         } else if (!strcmp(&msgBuff[0], "cp")) {

@@ -114,5 +114,34 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
   }, stack_size);
 }
 
+std::pair<int, std::unique_ptr<fiber_pipe> > connect(const char* host, int port)
+{
+  int                         err = 0;
+  fiber_cond                  cond;
+  fiber_mutex                 mtx;
+  std::unique_ptr<fiber_pipe> fp;
+   
+  auto f = [&err, &fp, &mtx, &cond](int err_code, std::unique_ptr<fiber_pipe>&& pipe)
+    {
+      fiber_lock lock(mtx);
+      err = err_code;
+      if (err == 0)
+        fp = std::move(pipe);
+      cond.notify_all();
+    };
+    
+  tcp_caller* tcpc = new tcp_call<decltype(f)>(f);
+  do_connect_and_run(host, port, tcpc, fiber::k_default_stack_size);
+  
+  {
+    fiber_lock  lock(mtx);
+    while (!err && !fp)
+      cond.wait(lock);
+  }
+    
+  return std::make_pair(err, std::move(fp));
+}
+
+
 }
 
