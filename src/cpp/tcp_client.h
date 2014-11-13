@@ -91,7 +91,8 @@ namespace tcp_client
   // are performed.
   // the return value is a pair where the first element is either
   // 0 (the function succeeded and the second element is valid)
-  // or is an error code.  These are the same errors as are passed
+  // or is an error code (function failed and second element is
+  // invalid).  These are the same errors as are passed
   // to connect_and_run described above.
   std::pair<int, std::unique_ptr<fiber_pipe> > connect(const char* host, int port);
 }

@@ -174,7 +174,7 @@ public:
                           rp << it->first << ": " << it->second << "\r\n";
                         rp << "Content-Length: " << reply.get_body().length() << "\r\n\r\n";
                         rp << reply.get_body();
-                        rp << "\r\n\r\n\r\n";
+                        rp << "\r\n\r\n";
                          
                         pipe->write(rp.str().c_str(), rp.tellp());
                         
