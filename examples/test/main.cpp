@@ -86,19 +86,21 @@ extern "C" int main(int argc, char** argv)
     my_udp              m_udp(udp_port);
     
     http_server my_http(http_port,
-                      [](const http_server::http_request& request, http_server::http_reply& reply){
-                        reply.add_header("Content-Type", "text/plain");
-                        reply << "hello browser!\n\n";
-                        reply << "src addr: " << *request.src_addr << "\n";
-                        reply << "http version major: " << request.http_major << "\n";
-                        reply << "http version minor: " << request.http_minor << "\n";
-                        reply << "method: " << request.method_str() << "\n\n";
-                        reply << "-- headers --\n";
+                      [](http_server::pipe_t& pipe, const http_request& request){
+                        http_response response;
+                        response.add_header("Content-Type", "text/plain");
+                        response << "hello browser!\n\n";
+                        response << "src addr: " << *request.src_addr << "\n";
+                        response << "http version major: " << request.http_major << "\n";
+                        response << "http version minor: " << request.http_minor << "\n";
+                        response << "method: " << request.method_str() << "\n\n";
+                        response << "-- headers --\n";
                         for (auto it = request.headers.begin(); it != request.headers.end(); it++)
-                          reply << " " << it->first << ": " << it->second << "\n";
-                        reply << "\n";
-                        reply << "url path: " << request.get_url_field(UF_PATH) << "\n";
-                        reply << "url query: " << request.get_url_field(UF_QUERY) << "\n";
+                          response << " " << it->first << ": " << it->second << "\n";
+                        response << "\n";
+                        response << "url path: " << request.get_url_field(UF_PATH) << "\n";
+                        response << "url query: " << request.get_url_field(UF_QUERY) << "\n";
+                        pipe.respond(response);
                       });
     
     

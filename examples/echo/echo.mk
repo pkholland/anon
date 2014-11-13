@@ -10,6 +10,7 @@ $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\
 $(ANON_ROOT)/src/cpp/tcp_server.cpp\
 $(ANON_ROOT)/src/cpp/lock_checker.cpp\
+$(ANON_ROOT)/src/cpp/http_server.cpp\
 $(ANON_ROOT)/../http-parser/http_parser.c
 
 INC_DIRS+=\

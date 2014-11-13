@@ -39,10 +39,12 @@ extern "C" int main(int argc, char** argv)
   fiber::initialize();
   
   http_server my_http(http_port,
-                    [](const http_server::http_request& request, http_server::http_reply& reply){
-                      reply.add_header("Content-Type", "text/plain");
-                      reply << "echo server!\n";
-                      reply << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+                    [](http_server::pipe_t& pipe, const http_request& request){
+                      http_response response;
+                      response.add_header("Content-Type", "text/plain");
+                      response << "echo server!\n";
+                      response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+                      pipe.respond(response);
                     });
 
   while (true) {
