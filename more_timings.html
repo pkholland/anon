@@ -202,9 +202,11 @@ writes "echo server!" into the body of the reply.
 
 <div class="highlight highlight-C++"><pre>
 <span class="kt">http_server</span> my_http(/*port*/8080,
-    [](<span class="kc">const</span> <span class="kt">http_request</span>& request, <span class="kt">http_reply</span>& reply){
-      reply.<span class="nf">add_header</span>(<span class="s2">&quot;Content-Type&quot;</span>, <span class="s2">&quot;text/plain&quot;</span>);
-      reply &lt;&lt; <span class="s2">&quot;echo server!\n&quot;</span>;
+    [](<span class="kt">http_server::pipe_t</span>& pipe, <span class="kc">const</span> <span class="kt">http_request</span>& request){
+      <span class="kt">http_response</span> response;
+      response.<span class="nf">add_header</span>(<span class="s2">&quot;Content-Type&quot;</span>, <span class="s2">&quot;text/plain&quot;</span>);
+      response &lt;&lt; <span class="s2">&quot;echo server!\n&quot;</span>;
+      pipe.<span class="nf">respond</span>(response);
     });
 </pre></div>
 
