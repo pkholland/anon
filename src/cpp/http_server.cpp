@@ -27,8 +27,6 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
   auto server = new tcp_server(tcp_port,
   
     [base_handler, this](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
-
-      std::unique_ptr<body_handler> bh_del(base_handler);
     
       // parser callback struct used as "user data"
       // style communcation in the callbacks so we
@@ -174,8 +172,8 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
           // if so, handle that differently
           if (parser.upgrade) {
           
-            auto handler = m_upgrade_map.find(pcallback.request.get_header("Upgrade").str());
-            if (handler != m_upgrade_map.end())
+            auto handler = m_upgrade_map_.find(pcallback.request.get_header("Upgrade").str());
+            if (handler != m_upgrade_map_.end())
               handler->second->exec(body_pipe, pcallback.request);
             else {
               #if ANON_LOG_NET_TRAFFIC > 1
@@ -223,7 +221,8 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
                           
     }, listen_backlog);
 
-  tcp_server_ = std::move(std::unique_ptr<tcp_server>(server));
+  tcp_server_ = std::unique_ptr<tcp_server>(server);
+  body_holder_ = std::unique_ptr<body_handler>(base_handler);
 }
 
 size_t http_server::pipe_t::read(void* buff, size_t len)

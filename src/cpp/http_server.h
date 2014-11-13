@@ -143,22 +143,66 @@ private:
 
 class http_server
 {
-public:
+public:  
+  /*
+    For all of the following functions that take a functor as an argument,
+    this will be called whenever a new HTTP method has been parsed.  The
+    prototype for that call must be:
+    
+      void Fn(http_server::pipe_t& pipe, const http_request& request)
+      
+    When this is called, 'request' will contain all of headers, the HTTP
+    method, the client address, etc...  'pipe' will be positioned to the
+    first byte of the body of the message if there is one.  So calling
+    pipe.read() will begin reading the body.  A common behavior of an Fn
+    function is to construct an http response of some kind and write it
+    back to the client.  The simplest way to do this is to declare an
+    http_response object, set it the way you want, and then call
+    pipe.respond( <your response object> );
+    
+    If you want to support http "upgrades" (for example, switching
+    the parsing logic from HTTP/1.1 to WebSockets, or HTTP/2), then you
+    should use the default constructor for http_server, followed by
+    a series of calls to 'add_upgrade_handler', then followed by a call
+    to 'start'.  The http_server ctor that takes an Fn immediately calls
+    start, and it is thread-unsafe to attempt to call add_upgrade_handler
+    after start has been called.
+    
+    Declaring the http_server using the default ctor, not calling any
+    add_upgrade_handler calls, and then calling start is equivalent to
+    just using the ctor that takes an Fn.
+  */
+
+  // does _not_ start it running or associate with any port
   http_server()
   {}
 
+  // run immediately with the given 'f'
   template<typename Fn>
   http_server(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog)
   {
     start(tcp_port, f, listen_backlog);
   }
   
+  // add the given 'f' as an upgrade handler, identified by 'name'.
+  // if the HTTP headers contains:
+  //
+  //  Upgrade: <name>
+  //
+  // Then this 'f' will be called instead of the default 'f' passed to 'start'
   template<typename Fn>
   void add_upgrade_handler(const char* name, Fn f)
   {
-    m_upgrade_map[name] = std::unique_ptr<body_handler>(new bod_hand<Fn>(f));
+    #if defined(ANON_RUNTIME_CHECKS)
+    if (tcp_server_)
+      do_error("add_upgrade_handler called after start");
+    #endif
+    m_upgrade_map_[name] = std::unique_ptr<body_handler>(new bod_hand<Fn>(f));
   }
   
+  // used when you have constructed the http_server with the default ctor
+  // and now want to start it running (presumably because you wanted to call
+  // add_upgrade_handler prior to it starting)
   template<typename Fn>
   void start(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog)
   {
@@ -213,8 +257,9 @@ private:
   
   void start_(int tcp_port, body_handler* base_handler, int listen_backlog);
   
-  std::unique_ptr<tcp_server>  tcp_server_;
-  std::map<std::string, std::unique_ptr<body_handler> > m_upgrade_map;
+  std::unique_ptr<tcp_server>   tcp_server_;
+  std::unique_ptr<body_handler> body_holder_;
+  std::map<std::string, std::unique_ptr<body_handler> > m_upgrade_map_;
 };
 
 

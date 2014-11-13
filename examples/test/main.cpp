@@ -35,6 +35,7 @@
 #include "lock_checker.h"
 #include "time_utils.h"
 #include "http_server.h"
+#include "http2_handler.h"
 
 class my_udp : public udp_dispatch
 {
@@ -85,23 +86,27 @@ extern "C" int main(int argc, char** argv)
 
     my_udp              m_udp(udp_port);
     
-    http_server my_http(http_port,
-                      [](http_server::pipe_t& pipe, const http_request& request){
-                        http_response response;
-                        response.add_header("Content-Type", "text/plain");
-                        response << "hello browser!\n\n";
-                        response << "src addr: " << *request.src_addr << "\n";
-                        response << "http version major: " << request.http_major << "\n";
-                        response << "http version minor: " << request.http_minor << "\n";
-                        response << "method: " << request.method_str() << "\n\n";
-                        response << "-- headers --\n";
-                        for (auto it = request.headers.begin(); it != request.headers.end(); it++)
-                          response << " " << it->first << ": " << it->second << "\n";
-                        response << "\n";
-                        response << "url path: " << request.get_url_field(UF_PATH) << "\n";
-                        response << "url query: " << request.get_url_field(UF_QUERY) << "\n";
-                        pipe.respond(response);
-                      });
+    http_server my_http;
+    
+    http2_handler my_http2(my_http);
+    
+    my_http.start(http_port,
+                  [](http_server::pipe_t& pipe, const http_request& request){
+                    http_response response;
+                    response.add_header("Content-Type", "text/plain");
+                    response << "hello browser!\n\n";
+                    response << "src addr: " << *request.src_addr << "\n";
+                    response << "http version major: " << request.http_major << "\n";
+                    response << "http version minor: " << request.http_minor << "\n";
+                    response << "method: " << request.method_str() << "\n\n";
+                    response << "-- headers --\n";
+                    for (auto it = request.headers.begin(); it != request.headers.end(); it++)
+                      response << " " << it->first << ": " << it->second << "\n";
+                    response << "\n";
+                    response << "url path: " << request.get_url_field(UF_PATH) << "\n";
+                    response << "url query: " << request.get_url_field(UF_QUERY) << "\n";
+                    pipe.respond(response);
+                  });
     
     
     int num_pipe_pairs = 400;
@@ -142,6 +147,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  ic - same as 'c', except calling the fiber-blocking connect");
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
+          anon_log("  h2 - connect to localhost:" << http_port << " and send an HTTP/1.1 with Upgrade to HTTP/2 message");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -472,6 +478,17 @@ extern "C" int main(int argc, char** argv)
               else
                 anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (ret > 0 ? error_string(ret) : gai_strerror(ret)));
             }
+          });
+          
+        } else if (!strcmp(&msgBuff[0], "h2")) {
+        
+          anon_log("sending http/2 upgrade to localhost:" << http_port);
+          tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (err_code == 0) {
+              const char* simple_msg = "GET / HTTP/1.1\r\nHost: localhost:8619\r\nUpgrade: h2c\r\n\r\nhello http2";
+              pipe->write(simple_msg, strlen(simple_msg));
+            } else
+              anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
 
         } else
