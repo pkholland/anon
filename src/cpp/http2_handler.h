@@ -27,14 +27,25 @@
 class http2_handler
 {
 public:
+  const char* http2_name = "h2c-anon";
+
   http2_handler(http_server& serv)
   {
-    serv.add_upgrade_handler("h2c", [this](http_server::pipe_t& pipe, const http_request& request){exec(pipe, request);});
+    serv.add_upgrade_handler(http2_name, [this](http_server::pipe_t& pipe, const http_request& request){exec(pipe, request);});
   }
   
 private:
   void exec(http_server::pipe_t& pipe, const http_request& request)
   {
+    // start by acknowledging the 1.x -> 2 switch if the client is at least 1.1
+    if (request.http_major >= 1 && request.http_minor >= 1) {
+      http_response resp;
+      resp.set_status_code("101 Switching Protocols");
+      resp.add_header("Connection", "Upgrade");
+      resp.add_header("Upgrade", http2_name);
+      pipe.respond(resp);
+    }
+    
     char buff[100] = { 0 };
     pipe.read(&buff[0], sizeof(buff)-1);
     anon_log("got an http/2 upgrade, body starts with: \"" << &buff[0] << "\"!");

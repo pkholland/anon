@@ -485,7 +485,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("sending http/2 upgrade to localhost:" << http_port);
           tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0) {
-              const char* simple_msg = "GET / HTTP/1.1\r\nHost: localhost:8619\r\nUpgrade: h2c\r\n\r\nhello http2";
+              const char* simple_msg = "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c-anon\r\n\r\nhello http2";
               pipe->write(simple_msg, strlen(simple_msg));
             } else
               anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
