@@ -82,6 +82,11 @@ struct http_request
     return string_len("");
   }
   
+  bool contains_header(const char* field) const
+  {
+    return headers.find(string_len(field)) != headers.end();
+  }
+  
   void init()
   {
     headers.empty();
@@ -222,12 +227,14 @@ public:
     
     void write(const void* buff, size_t len)
     {
+      fiber_lock  lock(mutex);
       pipe->write(buf, len);
     }
     
     void respond(const http_response& response);
 
   private:
+    fiber_mutex mutex;
     fiber_pipe* pipe;
     char        (&buf)[4096];
     size_t&     bsp;

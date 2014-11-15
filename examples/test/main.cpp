@@ -88,7 +88,9 @@ extern "C" int main(int argc, char** argv)
     
     http_server my_http;
     
-    http2_handler my_http2(my_http);
+    http2_handler my_http2(my_http,[](std::unique_ptr<fiber_pipe>&& read_pipe, http_server::pipe_t& write_pipe, uint32_t stream_id){
+      anon_log("started new stream " << stream_id);
+    });
     
     my_http.start(http_port,
                   [](http_server::pipe_t& pipe, const http_request& request){
@@ -485,8 +487,15 @@ extern "C" int main(int argc, char** argv)
           anon_log("sending http/2 upgrade to localhost:" << http_port);
           tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0) {
-              const char* simple_msg = "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\nUpgrade: h2c-anon\r\n\r\nhello http2";
-              pipe->write(simple_msg, strlen(simple_msg));
+              std::ostringstream oss;
+              oss << "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\n";
+              oss << "Upgrade: " << http2_handler::http2_name << "\r\n";
+              oss << "HTTP2-Settings: \r\n";  // base64url encoded empty data block is empty, so here we use an empty SETTINGS frame to get default values
+              oss << "\r\n";
+              oss << "hello http2";
+              
+              std::string simple_msg = oss.str();
+              pipe->write(simple_msg.c_str(), simple_msg.length());
             } else
               anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
