@@ -30,7 +30,8 @@ public:
   // if/when HTTP/2 becomes a final standard and
   // anon fully implements it, then this will become
   // just "h2c".  For now, it is implementing draft 15
-  // of the IETF spec.
+  // of the IETF spec. and calls its protocol
+  // "h2c-15-anon"
   static const char* http2_name/* = "h2c-15-anon"*/;
 
   template<typename Fn>

@@ -238,7 +238,7 @@ public:
     void write(const void* buff, size_t len)
     {
       fiber_lock  lock(mutex);
-      pipe->write(buf, len);
+      pipe->write(buff, len);
     }
     
     void respond(const http_response& response);

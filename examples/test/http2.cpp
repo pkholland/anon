@@ -43,6 +43,8 @@ void run_http2_test(int http_port)
       std::string simple_msg = oss.str();
       pipe->write(simple_msg.c_str(), simple_msg.length());
       
+      anon_log("sent data");
+      
       // the response starts with a normal HTTP/1.1 -style response, telling us,
       // amoung other things, whether the server was willing/able to upgrade to
       // HTTP/2, so parse and read that
@@ -81,6 +83,7 @@ void run_http2_test(int http_port)
         int         http_major;
         int         http_minor;
         http_headers headers;
+        std::string response_status;
       };
       pc pcallback;
     
@@ -101,7 +104,8 @@ void run_http2_test(int http_port)
                         
       settings.on_status = [](http_parser* p, const char *at, size_t length)->int
       {
-        anon_log("got status of: \"" << std::string(at,length) << "\"");
+        pc* c = (pc*)p->data;
+        c->response_status = std::string(at,length);
         return 0;
       };
                           
@@ -166,20 +170,39 @@ void run_http2_test(int http_port)
     
       http_parser parser;
       parser.data = &pcallback;
-      http_parser_init(&parser, HTTP_REQUEST);
+      http_parser_init(&parser, HTTP_RESPONSE);
       
-      bool    keep_alive = true;
       char    buf[4096];
+      memset(buf, 0, sizeof(buf));
       size_t  bsp = 0, bep = 0;
-      while (keep_alive) {
-
-      }
-
+      while (!pcallback.message_complete) {
       
+        if (bsp == bep)
+          bep += pipe->read(&buf[bep], sizeof(buf)-bep);
+          
+        anon_log("read " << bep << " bytes from stream:\n" << buf << "\n===");
+          
+        // call the joyent parser
+        bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);
+      }
+      
+      if (pcallback.response_status == "Switching Protocols") {
+        anon_log("succeeded in switching protocols to HTTP/2");
+      } else {
+        anon_log("failed to switch protocols to HTTP/2, response from server had status: \"" << pcallback.response_status << "\"");
+        return;
+      }
+      
+      anon_log("finished reading body of response.  Body headers contain");
+      for (auto it = pcallback.headers.headers.begin(); it != pcallback.headers.headers.end(); it++)
+        anon_log(" " << it->first << ": " << it->second);
+        
+      http_server::pipe_t body_pipe(pipe.get(), buf, bsp, bep);
+
       unsigned char frame[http2_handler::k_frame_header_size];
       size_t bytes_read = 0;
       while (bytes_read < sizeof(frame))
-        bytes_read += pipe->read(&frame[bytes_read], sizeof(frame)-bytes_read);
+        bytes_read += body_pipe.read(&frame[bytes_read], sizeof(frame)-bytes_read);
                   
       uint32_t  netv = 0;
       memcpy(&((char*)&netv)[1], &frame[0], 3);
@@ -190,6 +213,8 @@ void run_http2_test(int http_port)
       uint8_t   flags = frame[4];
 
       anon_log("received response frame of type: " << (int)type << ", with size: " << frame_size);
+      
+      
 
     } else
       anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
