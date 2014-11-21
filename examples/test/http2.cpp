@@ -20,21 +20,39 @@
  THE SOFTWARE.
 */
 
-#include "http_server.h"
+#include "http2.h"
+#include "log.h"
+#include "tcp_client.h"
+#include "http2_handler.h"
+#include "http_parser.h"  // github.com/joyent/http-parser
+#include <netdb.h>
 
-void http_server::start_(int tcp_port, body_handler* base_handler, int listen_backlog)
+void run_http2_test(int http_port)
 {
-  auto server = new tcp_server(tcp_port,
-  
-    [base_handler, this](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
+  anon_log("sending http/2 upgrade to localhost:" << http_port);
+  tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+    if (err_code == 0) {
     
+      // request the upgrade
+      std::ostringstream oss;
+      oss << "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\n";
+      oss << "Upgrade: " << http2_handler::http2_name << "\r\n";
+      oss << "HTTP2-Settings: \r\n";  // base64url encoded empty data block is empty, so here we use an empty SETTINGS frame to get default values
+      oss << "\r\n";
+      
+      std::string simple_msg = oss.str();
+      pipe->write(simple_msg.c_str(), simple_msg.length());
+      
+      // the response starts with a normal HTTP/1.1 -style response, telling us,
+      // amoung other things, whether the server was willing/able to upgrade to
+      // HTTP/2, so parse and read that
+      
       // parser callback struct used as "user data"
       // style communcation in the callbacks so we
       // know what we are doing
       struct pc
       {
-        pc(const sockaddr* src_addr, socklen_t src_addr_len)
-          : request(src_addr, src_addr_len)
+        pc()
         {
           init();
         }
@@ -47,10 +65,8 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
           last_value_len = 0;
           last_field_start = 0;
           last_value_start = 0;
-          request.init();
         }
         
-        http_request    request;
         bool            message_complete;
         
         enum {
@@ -62,8 +78,11 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         size_t      last_field_len;
         const char* last_value_start;
         size_t      last_value_len;
+        int         http_major;
+        int         http_minor;
+        http_headers headers;
       };
-      pc pcallback(src_addr, src_addr_len);
+      pc pcallback;
     
       // joyent data structure, set its callback functions
       http_parser_settings settings;
@@ -74,17 +93,15 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
                                   
       settings.on_url = [](http_parser* p, const char *at, size_t length)->int
       {
-        pc* c = (pc*)p->data;
-        c->request.url_str += std::string(at,length);
-        http_parser_parse_url(at, length, true, &c->request.p_url);
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("http url ignored since this should be a response, url: \"" << std::string(at,length) << "\"");
+        #endif
         return 0;
       };
                         
       settings.on_status = [](http_parser* p, const char *at, size_t length)->int
       {
-        #if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("http status ignored since this should be a GET, status: \"" << std::string(at,length) << "\"");
-        #endif
+        anon_log("got status of: \"" << std::string(at,length) << "\"");
         return 0;
       };
                           
@@ -95,7 +112,7 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
           // <field,value> complete, add new pair
           http_headers::string_len fld(c->last_field_start,c->last_field_len);
           http_headers::string_len val(c->last_value_start,c->last_value_len);
-          c->request.headers.headers[fld] = val;
+          c->headers.headers[fld] = val;
           
           c->last_field_start = at;
           c->last_field_len = 0;
@@ -121,13 +138,12 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
       settings.on_headers_complete = [](http_parser* p)->int
       {
         pc* c = (pc*)p->data;
-        c->request.http_major = p->http_major;
-        c->request.http_minor = p->http_minor;
-        c->request.method = p->method;
+        c->http_major = p->http_major;
+        c->http_minor = p->http_minor;
         if (c->header_state == pc::k_value) {
           http_headers::string_len fld(c->last_field_start,c->last_field_len);
           http_headers::string_len val(c->last_value_start,c->last_value_len);
-          c->request.headers.headers[fld] = val;
+          c->headers.headers[fld] = val;
         }
         
         // note, see code in http_parser.c, returning 1 causes the
@@ -156,102 +172,27 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
       char    buf[4096];
       size_t  bsp = 0, bep = 0;
       while (keep_alive) {
-      
-        // if there is no un-parsed data in buf then read more
-        if (bsp == bep)
-          bep += pipe->read(&buf[bep], sizeof(buf)-bep);
-          
-        // call the joyent parser
-        bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);
-        
-        if (pcallback.message_complete) {
-        
-          pipe_t body_pipe(pipe.get(), buf, bsp, bep);
-        
-          // did the headers indicate an upgrade?
-          // if so, handle that differently
-          if (parser.upgrade) {
-          
-            auto handler = m_upgrade_map_.find(pcallback.request.headers.get_header("Upgrade").str());
-            if (handler != m_upgrade_map_.end())
-              handler->second->exec(body_pipe, pcallback.request);
-            else {
-              #if ANON_LOG_NET_TRAFFIC > 1
-              anon_log("unknown http upgrade type: \"" << pcallback.request.headers.get_header("Upgrade").str() << "\"");
-              #endif
-            }
-            
-            // an upgrade always results in final transfer
-            // of the socket to the handler.  We never go
-            // back and look at things like keep_alive again
-            // here.  Once the handler returns (or if there
-            // is no handler) we close the socket.
-            return;
-          }
-          
-          base_handler->exec(body_pipe, pcallback.request);
-          
-          keep_alive = http_should_keep_alive(&parser);
-          if (keep_alive) {
-            http_parser_init(&parser, HTTP_REQUEST);
-            memmove(&buf[0], &buf[bsp], bep-bsp);
-            bep -= bsp;
-            bsp = 0;
-            pcallback.init();
-          }
-        
-        } else {
-        
-          if (bsp != bep) {
-            #if ANON_LOG_NET_TRAFFIC > 1
-            anon_log("invalid http received from: " << *src_addr << ", error: " << http_errno_description((enum http_errno)parser.http_errno));
-            #endif
-            return;
-          }
-          if (bsp == sizeof(buf)) {
-            #if ANON_LOG_NET_TRAFFIC > 1
-            anon_log("http GET from: " << *src_addr << " invalid headers - bigger than " << sizeof(buf) << " bytes");
-            #endif
-            return;
-          }
-          
-        }
-      
+
       }
-                          
-    }, listen_backlog);
 
-  tcp_server_ = std::unique_ptr<tcp_server>(server);
-  body_holder_ = std::unique_ptr<body_handler>(base_handler);
+      
+      unsigned char frame[http2_handler::k_frame_header_size];
+      size_t bytes_read = 0;
+      while (bytes_read < sizeof(frame))
+        bytes_read += pipe->read(&frame[bytes_read], sizeof(frame)-bytes_read);
+                  
+      uint32_t  netv = 0;
+      memcpy(&((char*)&netv)[1], &frame[0], 3);
+      uint32_t  frame_size = ntohl(netv);
+      memcpy(&netv, &frame[5], 4);
+      uint32_t  stream_id = ntohl(netv);
+      uint8_t   type = frame[3];
+      uint8_t   flags = frame[4];
+
+      anon_log("received response frame of type: " << (int)type << ", with size: " << frame_size);
+
+    } else
+      anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+  });
 }
-
-size_t http_server::pipe_t::read(void* buff, size_t len)
-{
-  if (bsp != bep)
-  {
-    if (len > bsp-bep)
-      len = bsp-bep;
-    memcpy(buff, &buf[bsp], len);
-    bsp += len;
-    return len;
-  }
-  return pipe->read(buff, len);
-}
-
-void http_server::pipe_t::respond(const http_response& response)
-{
-  std::ostringstream rp;
-  rp << "HTTP/1.1 " << response.get_status_code() << "\r\n";
-  for (auto it = response.get_headers().begin(); it != response.get_headers().end(); it++)
-    rp << it->first << ": " << it->second << "\r\n";
-  if (response.get_body().length()) {
-    rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
-    rp << response.get_body() << "\r\n";
-  }
-  rp << "\r\n";
-   
-  pipe->write(rp.str().c_str(), rp.tellp());
-}
-
-
 

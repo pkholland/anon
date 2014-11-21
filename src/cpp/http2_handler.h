@@ -41,6 +41,42 @@ public:
     serv.add_upgrade_handler(http2_name, [this](http_server::pipe_t& pipe, const http_request& request){exec(pipe, request);});
   }
   
+  // frame types:
+  // note, these are the constants defined in section 6 of the IETF
+  // spec and so cannot be changed.
+  enum {
+    k_DATA,
+    k_HEADERS,
+    k_PRIORITY,
+    k_RST_STREAM,
+    k_SETTINGS,
+    k_PUSH_PROMISE,
+    k_PING,
+    k_GOAWAY,
+    k_WINDOW_UPDATE,
+    k_CONTINUATION
+  };
+  enum {
+    k_frame_header_size = 9
+  };
+  
+  // defined settings parameters
+  // note, these are the constants defined in section 6.5.2 of the IETF
+  // spec and so cannot be changed.
+  typedef enum {
+    k_SETTINGS_HEADER_TABLE_SIZE = 1,
+    k_SETTINGS_ENABLE_PUSH,
+    k_SETTINGS_MAX_CONCURRENT_STREAMS,
+    k_SETTINGS_INITIAL_WINDOW_SIZE,
+    k_SETTINGS_MAX_FRAME_SIZE,
+    k_SETTINGS_MAX_HEADER_LIST_SIZE,
+    
+    k_num_settings_params = k_SETTINGS_MAX_HEADER_LIST_SIZE
+  } settings_t;
+  enum {
+    k_settings_ack = 1
+  };
+  
 private:
   
   struct stream_handler
@@ -84,48 +120,12 @@ private:
 
   void exec(http_server::pipe_t& pipe, const http_request& request);
   
-  // frame types:
-  // note, these are the constants defined in section 6 of the IETF
-  // spec and so cannot be changed.
-  enum {
-    k_DATA,
-    k_HEADERS,
-    k_PRIORITY,
-    k_RST_STREAM,
-    k_SETTINGS,
-    k_PUSH_PROMISE,
-    k_PING,
-    k_GOAWAY,
-    k_WINDOW_UPDATE,
-    k_CONTINUATION
-  };
-  enum {
-    k_frame_header_size = 9
-  };
-  
   static void format_frame(char* buf, uint32_t length, uint8_t type, uint8_t flags, uint32_t stream_id);
   
   static void send_data();
   static void send_headers();
   static void send_priority();
   static void send_reset_stream();
-  
-  // defined settings parameters
-  // note, these are the constants defined in section 6.5.2 of the IETF
-  // spec and so cannot be changed.
-  typedef enum {
-    k_SETTINGS_HEADER_TABLE_SIZE = 1,
-    k_SETTINGS_ENABLE_PUSH,
-    k_SETTINGS_MAX_CONCURRENT_STREAMS,
-    k_SETTINGS_INITIAL_WINDOW_SIZE,
-    k_SETTINGS_MAX_FRAME_SIZE,
-    k_SETTINGS_MAX_HEADER_LIST_SIZE,
-    
-    k_num_settings_params = k_SETTINGS_MAX_HEADER_LIST_SIZE
-  } settings_t;
-  enum {
-    k_settings_ack = 1
-  };
   
   static void send_settings(http_server::pipe_t& pipe, uint32_t stream_id, const std::vector<std::pair<settings_t,uint32_t> >& settings = std::vector<std::pair<settings_t,uint32_t> >());
   

@@ -26,18 +26,8 @@
 #include "http_parser.h"  // github.com/joyent/http-parser
 #include "tcp_utils.h"
 
-// method, headers, url, etc... (not body)
-struct http_request
+struct http_headers
 {
-  http_request(const sockaddr* src_addr, socklen_t src_addr_len)
-    : src_addr(src_addr),
-      src_addr_len(src_addr_len)
-  {
-    memset(&p_url,0,sizeof(p_url)); // joyent data structure
-  }
-    
-  const char* method_str() const { return http_method_str((enum http_method)method); }
-  
   struct string_len {
     string_len()
       : str_(""),
@@ -90,10 +80,23 @@ struct http_request
   void init()
   {
     headers.empty();
-    memset(&p_url,0,sizeof(p_url));
   }
   
   std::map<string_len, string_len>  headers;
+};
+
+// method, headers, url, etc... (not body)
+struct http_request
+{
+  http_request(const sockaddr* src_addr, socklen_t src_addr_len)
+    : src_addr(src_addr),
+      src_addr_len(src_addr_len)
+  {
+    memset(&p_url,0,sizeof(p_url)); // joyent data structure
+  }
+    
+  const char* method_str() const { return http_method_str((enum http_method)method); }
+  
   http_parser_url                   p_url;
   std::string                       url_str;
   
@@ -104,8 +107,15 @@ struct http_request
     return "";
   }
   
+  void init()
+  {
+    headers.init();
+    memset(&p_url,0,sizeof(p_url));
+  }
+  
   const sockaddr* src_addr;
   socklen_t       src_addr_len;
+  http_headers    headers;
   int             http_major;
   int             http_minor;
   int             method;
@@ -113,7 +123,7 @@ struct http_request
 
 // helper
 template<typename T>
-T& operator<<(T& str, const http_request::string_len& sl)
+T& operator<<(T& str, const http_headers::string_len& sl)
 {
   return str << sl.str();
 }

@@ -6,6 +6,7 @@ ANON_ROOT := $(call parent_dir,$(call parent_dir,$(call parent_dir,$(THIS_MAKE))
 
 SOURCES+=\
 $(ANON_ROOT)/examples/test/main.cpp\
+$(ANON_ROOT)/examples/test/http2.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\

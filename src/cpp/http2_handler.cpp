@@ -25,10 +25,10 @@
 
 const char* http2_handler::http2_name = "h2c-15-anon";
 
-struct running_stream_handler
+struct open_stream_handler
 {
   template<typename Fn>
-  running_stream_handler(Fn f, size_t stack_size, int fd)
+  open_stream_handler(Fn f, size_t stack_size, int fd)
     : fiber_(f,stack_size),
       pipe_(fd, fiber_pipe::unix_domain)
   {}
@@ -39,7 +39,7 @@ struct running_stream_handler
 
 struct handlers_t
 {
-  std::map<uint32_t, std::unique_ptr<running_stream_handler> >  map;
+  std::map<uint32_t, std::unique_ptr<open_stream_handler> >  map;
   
   ~handlers_t()
   {
@@ -67,14 +67,14 @@ void http2_handler::exec(http_server::pipe_t& pipe, const http_request& request)
   // this isn't quite right here.  We disconnect the socket if the header is not
   // present. the spec seems to suggest that it simply not upgrade -- which we aren't
   // doing -- but probably doesn't imply that we should disconnect.
-  if (!request.contains_header("HTTP2-Settings")) {
+  if (!request.headers.contains_header("HTTP2-Settings")) {
     #if ANON_LOG_NET_TRAFFIC > 1
     anon_log("ignoring http/2 upgrade sent from " << *request.src_addr << ", because it does not contain an HTTP2-Settings header");
     #endif
     return;
   }
     
-  // acknowledging the 1.x -> 2 upgrade
+  // acknowledg the 1.x -> 2 upgrade
   http_response resp;
   resp.set_status_code("101 Switching Protocols");
   resp.add_header("Connection", "Upgrade");
@@ -96,6 +96,7 @@ void http2_handler::exec(http_server::pipe_t& pipe, const http_request& request)
   
   while (true) {
   
+    // read (all of) the frame header for the next frame
     unsigned char frame[k_frame_header_size];
     size_t bytes_read = 0;
     while (bytes_read < sizeof(frame))
@@ -116,6 +117,8 @@ void http2_handler::exec(http_server::pipe_t& pipe, const http_request& request)
  
       if (type == k_HEADERS || type == k_PUSH_PROMISE) {
       
+        // a request to open a new stream_id. if legal, we create a new handler for it
+      
         if (handlers.map.find(stream_id) != handlers.map.end()) {
           #if ANON_LOG_NET_TRAFFIC > 1
           anon_log("invalid " << (type == k_HEADERS ? "HEADERS" : "PUSH_PROMISE") << " sent to already-open stream " << stream_id << " from " << *request.src_addr);
@@ -123,14 +126,17 @@ void http2_handler::exec(http_server::pipe_t& pipe, const http_request& request)
           return;
         }
       
+        // the new handler will be reading from a different (unix-domain) socket
+        // that we will forward into.  So create that here
         int sv[2];
         if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
           do_error("socketpair(AF_UNIX, SOCK_STREAM | NONBLOCK | SOCK_CLOEXEC, 0, sv)");
           
-        int svv = sv[0];
+        auto svv = sv[0];
         auto handv = stream_handler_factory_->new_handler();
         
-        handlers.map[stream_id] = std::unique_ptr<running_stream_handler>( new running_stream_handler([svv, &pipe, stream_id, handv]{
+        // now start the handler running in a new fiber
+        handlers.map[stream_id] = std::unique_ptr<open_stream_handler>( new open_stream_handler([svv, &pipe, stream_id, handv]{
           std::unique_ptr<stream_handler> hd(handv);
           handv->exec(svv, pipe, stream_id);
         }, stack_size_, sv[1]));

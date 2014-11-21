@@ -36,6 +36,7 @@
 #include "time_utils.h"
 #include "http_server.h"
 #include "http2_handler.h"
+#include "http2.h"
 
 class my_udp : public udp_dispatch
 {
@@ -102,7 +103,7 @@ extern "C" int main(int argc, char** argv)
                     response << "http version minor: " << request.http_minor << "\n";
                     response << "method: " << request.method_str() << "\n\n";
                     response << "-- headers --\n";
-                    for (auto it = request.headers.begin(); it != request.headers.end(); it++)
+                    for (auto it = request.headers.headers.begin(); it != request.headers.headers.end(); it++)
                       response << " " << it->first << ": " << it->second << "\n";
                     response << "\n";
                     response << "url path: " << request.get_url_field(UF_PATH) << "\n";
@@ -484,21 +485,7 @@ extern "C" int main(int argc, char** argv)
           
         } else if (!strcmp(&msgBuff[0], "h2")) {
         
-          anon_log("sending http/2 upgrade to localhost:" << http_port);
-          tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
-            if (err_code == 0) {
-              std::ostringstream oss;
-              oss << "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\n";
-              oss << "Upgrade: " << http2_handler::http2_name << "\r\n";
-              oss << "HTTP2-Settings: \r\n";  // base64url encoded empty data block is empty, so here we use an empty SETTINGS frame to get default values
-              oss << "\r\n";
-              oss << "hello http2";
-              
-              std::string simple_msg = oss.str();
-              pipe->write(simple_msg.c_str(), simple_msg.length());
-            } else
-              anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
-          });
+          run_http2_test(http_port);
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
