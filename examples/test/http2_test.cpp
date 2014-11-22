@@ -20,23 +20,28 @@
  THE SOFTWARE.
 */
 
-#pragma once
+#include "http2_test.h"
+#include "http2_client.h"
 
-#include "http_server.h"
-#include "http2.h"
-
-class http2_handler
+void run_http2_test(int http_port)
 {
-public:
-  template<typename Fn>
-  http2_handler(http_server& serv, Fn f, size_t stack_size = fiber::k_default_stack_size)
-    : http2_(f, stack_size)
-  {
-    serv.add_upgrade_handler(http2::http2_name, [this](http_server::pipe_t& pipe, const http_request& request){exec(pipe, request);});
-  }
+  anon_log("sending http/2 upgrade to localhost:" << http_port);
+  http2_client::connect_and_run("localhost", http_port, [](http_server::pipe_t& pipe){
   
-private:
-  void exec(http_server::pipe_t& pipe, const http_request& request);
-  http2 http2_;
-};
+    anon_log("upgrade request succeeded!");
+    
+    http2 h2([](std::unique_ptr<fiber_pipe>&& read_pipe, http_server::pipe_t& write_pipe, uint32_t stream_id){
+    
+      anon_log("new HEADERS or PUSH_PROMISE for stream_id: " << stream_id);
+      
+    });
+    
+    fiber cf([&h2, &pipe]{
+      h2.run(pipe);
+    });
+    
+    while (true) {}
+    
+  });
+}
 

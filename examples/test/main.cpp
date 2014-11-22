@@ -36,7 +36,7 @@
 #include "time_utils.h"
 #include "http_server.h"
 #include "http2_handler.h"
-#include "http2.h"
+#include "http2_test.h"
 
 class my_udp : public udp_dispatch
 {
@@ -211,7 +211,7 @@ extern "C" int main(int argc, char** argv)
             });
           }
           fiber::run_in_fiber([fds,num_pipe_pairs,num_read_writes]{
-            std::vector<std::unique_ptr<fiber_pipe> > pipes;
+            std::vector<std::unique_ptr<fiber_pipe>> pipes;
             for (int pc=0; pc<num_pipe_pairs; pc++)
               pipes.push_back(std::move(std::unique_ptr<fiber_pipe>(new fiber_pipe(fds[pc*2+1],fiber_pipe::unix_domain))));
             for (int wc=0; wc<num_read_writes; wc++) {

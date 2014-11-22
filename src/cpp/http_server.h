@@ -276,7 +276,7 @@ private:
   
   std::unique_ptr<tcp_server>   tcp_server_;
   std::unique_ptr<body_handler> body_holder_;
-  std::map<std::string, std::unique_ptr<body_handler> > m_upgrade_map_;
+  std::map<std::string, std::unique_ptr<body_handler>> m_upgrade_map_;
 };
 
 

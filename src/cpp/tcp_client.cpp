@@ -114,7 +114,7 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
   }, stack_size);
 }
 
-std::pair<int, std::unique_ptr<fiber_pipe> > connect(const char* host, int port)
+std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char* host, int port)
 {
   int                         err = 0;
   fiber_cond                  cond;

@@ -296,7 +296,7 @@ private:
   int                       num_paused_threads_;
   
   std::mutex                                    task_mutex_;
-  std::multimap<struct timespec,std::unique_ptr<virt_caller_> >  task_map_;
+  std::multimap<struct timespec,std::unique_ptr<virt_caller_>>  task_map_;
   
   static io_dispatch        io_d;
 };

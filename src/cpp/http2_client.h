@@ -20,30 +20,36 @@
  THE SOFTWARE.
 */
 
-#include "http2.h"
+#pragma once
+
 #include "log.h"
 #include "tcp_client.h"
-#include "http2_handler.h"
+#include "http2.h"
 #include "http_parser.h"  // github.com/joyent/http-parser
 #include <netdb.h>
 
-void run_http2_test(int http_port)
+namespace http2_client
 {
-  anon_log("sending http/2 upgrade to localhost:" << http_port);
-  tcp_client::connect_and_run("localhost", http_port, [http_port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
-    if (err_code == 0) {
+  template<typename Fn>
+  void connect_and_run(const char* host, int port, Fn f, size_t stack_size=fiber::k_default_stack_size)
+  {
+    tcp_client::connect_and_run(host, port, [f, host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+    
+      if (err_code != 0) {
+        #if ANON_LOG_NET_TRAFFIC > 0
+        anon_log("connect to " << host << ": " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+        #endif
+      }
     
       // request the upgrade
       std::ostringstream oss;
-      oss << "GET / HTTP/1.1\r\nHost: localhost:8619\r\nConnection: Upgrade, HTTP2-Settings\r\n";
-      oss << "Upgrade: " << http2_handler::http2_name << "\r\n";
+      oss << "GET / HTTP/1.1\r\nHost: " << host << ":" << port << "\r\nConnection: Upgrade, HTTP2-Settings\r\n";
+      oss << "Upgrade: " << http2::http2_name << "\r\n";
       oss << "HTTP2-Settings: \r\n";  // base64url encoded empty data block is empty, so here we use an empty SETTINGS frame to get default values
       oss << "\r\n";
       
       std::string simple_msg = oss.str();
       pipe->write(simple_msg.c_str(), simple_msg.length());
-      
-      anon_log("sent data");
       
       // the response starts with a normal HTTP/1.1 -style response, telling us,
       // amoung other things, whether the server was willing/able to upgrade to
@@ -180,26 +186,20 @@ void run_http2_test(int http_port)
         if (bsp == bep)
           bep += pipe->read(&buf[bep], sizeof(buf)-bep);
           
-        anon_log("read " << bep << " bytes from stream:\n" << buf << "\n===");
-          
         // call the joyent parser
         bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);
       }
       
-      if (pcallback.response_status == "Switching Protocols") {
-        anon_log("succeeded in switching protocols to HTTP/2");
-      } else {
+      if (pcallback.response_status != "Switching Protocols") {
         anon_log("failed to switch protocols to HTTP/2, response from server had status: \"" << pcallback.response_status << "\"");
         return;
       }
-      
-      anon_log("finished reading body of response.  Body headers contain");
-      for (auto it = pcallback.headers.headers.begin(); it != pcallback.headers.headers.end(); it++)
-        anon_log(" " << it->first << ": " << it->second);
         
       http_server::pipe_t body_pipe(pipe.get(), buf, bsp, bep);
 
-      unsigned char frame[http2_handler::k_frame_header_size];
+      // first HTTP/2 frame from the server is a SETTINGS frame,
+      // parse that
+      unsigned char frame[http2::k_frame_header_size];
       size_t bytes_read = 0;
       while (bytes_read < sizeof(frame))
         bytes_read += body_pipe.read(&frame[bytes_read], sizeof(frame)-bytes_read);
@@ -211,13 +211,23 @@ void run_http2_test(int http_port)
       uint32_t  stream_id = ntohl(netv);
       uint8_t   type = frame[3];
       uint8_t   flags = frame[4];
-
-      anon_log("received response frame of type: " << (int)type << ", with size: " << frame_size);
       
+      if (type != http2::k_SETTINGS) {
+        anon_log("server sent first frame of some type other than SETTINGS.  It sent: " << (int)type);
+        return;
+      }
       
-
-    } else
-      anon_log("connect to localhost: " << http_port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
-  });
+      // for now, skip the actual content of the SETTINGS frame
+      char  buff[256];
+      uint32_t  skipped_bytes = 0;
+      while (skipped_bytes < frame_size)
+        skipped_bytes += body_pipe.read(&buff[0], std::min((size_t)(frame_size-skipped_bytes),sizeof(buff)));
+        
+      // finally, now run 'f'
+      f(body_pipe);
+    
+    }, stack_size);
+  }
+  
 }
 

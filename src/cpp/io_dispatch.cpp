@@ -150,10 +150,10 @@ class io_timer_handler : public io_dispatch::handler
       
       struct timespec now = cur_time();
         
-      std::vector<std::unique_ptr<io_dispatch::virt_caller_> > ready_tasks;
+      std::vector<std::unique_ptr<io_dispatch::virt_caller_>> ready_tasks;
       {
         anon::unique_lock<std::mutex> lock(io_d.task_mutex_);
-        std::multimap<struct timespec,std::unique_ptr<io_dispatch::virt_caller_> >::iterator beg;
+        std::multimap<struct timespec,std::unique_ptr<io_dispatch::virt_caller_>>::iterator beg;
         while (((beg=io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= now)) {
           ready_tasks.push_back(std::move(beg->second));
           io_d.task_map_.erase(beg);

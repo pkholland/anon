@@ -94,6 +94,6 @@ namespace tcp_client
   // or is an error code (function failed and second element is
   // invalid).  These are the same errors as are passed
   // to connect_and_run described above.
-  std::pair<int, std::unique_ptr<fiber_pipe> > connect(const char* host, int port);
+  std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char* host, int port);
 }
 

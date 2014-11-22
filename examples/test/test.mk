@@ -6,7 +6,7 @@ ANON_ROOT := $(call parent_dir,$(call parent_dir,$(call parent_dir,$(THIS_MAKE))
 
 SOURCES+=\
 $(ANON_ROOT)/examples/test/main.cpp\
-$(ANON_ROOT)/examples/test/http2.cpp\
+$(ANON_ROOT)/examples/test/http2_test.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
@@ -18,6 +18,7 @@ $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_ROOT)/src/cpp/http_server.cpp\
 $(ANON_ROOT)/src/cpp/http2_handler.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
+$(ANON_ROOT)/src/cpp/http2.cpp\
 $(ANON_ROOT)/../http-parser/http_parser.c
 
 INC_DIRS+=\
