@@ -19,9 +19,22 @@ $(ANON_ROOT)/src/cpp/http_server.cpp\
 $(ANON_ROOT)/src/cpp/http2_handler.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
 $(ANON_ROOT)/src/cpp/http2.cpp\
-$(ANON_ROOT)/../http-parser/http_parser.c
+$(ANON_ROOT)/../http-parser/http_parser.c\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKContext.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKEncoder.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKEncodeBuffer.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKHeader.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HeaderTable.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/StaticHeaderTable.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/Huffman.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/Logging.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/fbthrift/thrift/folly/folly/io/IOBuf.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/fbthrift/thrift/folly/folly/Malloc.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/fbthrift/thrift/folly/folly/SpookyHashV2.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/fbthrift/thrift/folly/folly/io/IOBufQueue.cpp
 
 INC_DIRS+=\
 $(ANON_ROOT)/src/cpp\
-$(ANON_ROOT)/../http-parser
+$(ANON_ROOT)/../http-parser\
+$(ANON_ROOT)/../proxygen
 

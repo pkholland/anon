@@ -40,7 +40,13 @@ void run_http2_test(int http_port)
       h2.run(pipe);
     });
     
-    while (true) {}
+    std::vector<http2::hpack_header> req_headers;
+    req_headers.push_back(http2::hpack_header(":method", "GET"));
+    req_headers.push_back(http2::hpack_header(":scheme", "http"));
+    req_headers.push_back(http2::hpack_header(":path", "/"));
+    http2::hpack_encoder encoder(proxygen::HPACK::MessageType::REQ, false);
+    std::unique_ptr<folly::IOBuf> encoded = encoder.encode(req_headers);
+    anon_log("encoded " << encoded->length() << " bytes of header data");
     
   });
 }

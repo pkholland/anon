@@ -35,7 +35,7 @@ release: all
 
 anon.INTERMEDIATE_DIR=obj
 anon.OUT_DIR=deploy
-LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl
+LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl -lglog
 
 include examples/test/test.mk
 

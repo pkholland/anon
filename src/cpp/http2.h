@@ -23,6 +23,8 @@
 #pragma once
 
 #include "http_server.h"
+#include "proxygen/lib/http/codec/compress/HPACKDecoder.h"
+#include "proxygen/lib/http/codec/compress/HPACKEncoder.h"
 
 class http2
 {
@@ -80,6 +82,10 @@ public:
   enum {
     k_settings_ack = 1
   };
+  
+  typedef proxygen::HPACKHeader   hpack_header;
+  typedef proxygen::HPACKEncoder  hpack_encoder;
+  typedef proxygen::HPACKDecoder  hpack_decoder;
 
   static void format_frame(char* buf, uint32_t length, uint8_t type, uint8_t flags, uint32_t stream_id);
   
