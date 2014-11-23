@@ -78,6 +78,8 @@ void http2::run(http_server::pipe_t& pipe)
  
       if (type == k_HEADERS || type == k_PUSH_PROMISE) {
       
+        anon_log("received " << (type == k_HEADERS ? "HEADERS" : "PUSH_PROMISE") << " for stream_id " << stream_id);
+      
         // a request to open a new stream_id. if legal, we create a new handler for it
       
         if (handlers.map.find(stream_id) != handlers.map.end()) {
@@ -92,6 +94,8 @@ void http2::run(http_server::pipe_t& pipe)
         int sv[2];
         if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, sv) != 0)
           do_error("socketpair(AF_UNIX, SOCK_STREAM | NONBLOCK | SOCK_CLOEXEC, 0, sv)");
+          
+        anon_log(" new " << (type == k_HEADERS ? "HEADERS" : "PUSH_PROMISE") << " for stream_id " << stream_id << " will use fds: " << sv[0] << " and " << sv[1]);
           
         auto svv = sv[0];
         auto handv = stream_handler_factory_->new_handler();
@@ -280,5 +284,107 @@ void http2::parse_settings(uint32_t stream_id, uint8_t flags, uint32_t frame_siz
     format_frame(&buf[0], 0/*frame size*/, k_SETTINGS, k_settings_ack, stream_id);
   }
 }
+
+#if 0
+Headers format from section 6.2
+
+     0                   1                   2                   3
+     0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+    +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+    |Pad Length? (8)|
+    +-+-------------+-----------------------------------------------+
+    |E|                 Stream Dependency? (31)                     |
+    +-+-------------+-----------------------------------------------+
+    |  Weight? (8)  |
+    +-+-------------+-----------------------------------------------+
+    |                   Header Block Fragment (*)                 ...
+    +---------------------------------------------------------------+
+    |                           Padding (*)                       ...
+    +---------------------------------------------------------------+
+
+                     Figure 7: HEADERS Frame Payload
+
+   The HEADERS frame payload has the following fields:
+
+   Pad Length:  An 8-bit field containing the length of the frame
+      padding in units of octets.  This field is only present if the
+      PADDED flag is set.
+
+   E: A single bit flag indicates that the stream dependency is
+      exclusive, see Section 5.3.  This field is only present if the
+      PRIORITY flag is set.
+
+   Stream Dependency:  A 31-bit stream identifier for the stream that
+      this stream depends on, see Section 5.3.  This field is only
+      present if the PRIORITY flag is set.
+
+   Weight:  An 8-bit weight for the stream, see Section 5.3.  Add one to
+      the value to obtain a weight between 1 and 256.  This field is
+      only present if the PRIORITY flag is set.
+
+   Header Block Fragment:  A header block fragment (Section 4.3).
+
+   Padding:  Padding octets that contain no application semantic value.
+      Padding octets MUST be set to zero when sending and ignored when
+      receiving.
+
+   The HEADERS frame defines the following flags:
+
+   END_STREAM (0x1):  Bit 0 being set indicates that the header block
+      (Section 4.3) is the last that the endpoint will send for the
+      identified stream.  Setting this flag causes the stream to enter
+      one of "half closed" states (Section 5.1).
+
+      A HEADERS frame carries the END_STREAM flag that signals the end
+      of a stream.  However, a HEADERS frame with the END_STREAM flag
+      set can be followed by CONTINUATION frames on the same stream.
+      Logically, the CONTINUATION frames are part of the HEADERS frame.
+
+   END_HEADERS (0x4):  Bit 2 being set indicates that this frame
+      contains an entire header block (Section 4.3) and is not followed
+      by any CONTINUATION frames.
+
+      A HEADERS frame without the END_HEADERS flag set MUST be followed
+      by a CONTINUATION frame for the same stream.  A receiver MUST
+      treat the receipt of any other type of frame or a frame on a
+      different stream as a connection error (Section 5.4.1) of type
+      PROTOCOL_ERROR.
+
+   PADDED (0x8):  Bit 3 being set indicates that the Pad Length field
+      and any padding that it describes is present.
+
+   PRIORITY (0x20):  Bit 5 being set indicates that the Exclusive Flag
+      (E), Stream Dependency, and Weight fields are present; see
+      Section 5.3.
+
+#endif
+
+
+uint32_t http2::open_stream(http_server::pipe_t& pipe, std::vector<http2::hpack_header>& headers, bool is_headers)
+{
+  auto encoded = req_enc_.encode(headers);
+  auto encoded_len = encoded ? encoded->length() : 0;
+  
+  // for now...
+  // padding will be 0 (turned off)
+  // stream dependency will be turned off
+  // weight will be turned off
+  // this means that the size of the header itself (the frame's 'payload')
+  // is just the size of the encoded headers
+  
+  char  buf[1024];
+  if (encoded_len > sizeof(buf) - k_frame_header_size)
+    do_error("encoded headers too big: must be smaller than " << sizeof(buf) - k_frame_header_size + 1 << ", it is " << encoded_len);
+    
+  uint32_t stream_id = next_stream_id_;
+  next_stream_id_ += 2;
+  format_frame(&buf[0], encoded_len, k_HEADERS, k_HEADERS_END_HEADERS, stream_id);
+  if (encoded_len)
+    memcpy(&buf[k_frame_header_size],encoded->data(),encoded_len);
+anon_log("sending " << k_frame_header_size + encoded_len << " byte HEADERS request for stream_id " << stream_id);
+  pipe.write(&buf[0], k_frame_header_size + encoded_len);
+  return stream_id;
+}
+
 
 

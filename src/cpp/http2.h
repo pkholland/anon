@@ -40,9 +40,14 @@ public:
   // of the HTTP/2 connection sends a HEADERS or PUSH_PROMISE
   // to open a new stream
   template<typename Fn>
-  http2(Fn f, size_t stack_size = fiber::k_default_stack_size)
-    : stream_handler_factory_(std::unique_ptr<stream_handler_factory>(new strm_hand_fact<Fn>(f))),
-      stack_size_(stack_size)
+  http2(bool client /*vs. server*/, Fn f, size_t stack_size = fiber::k_default_stack_size)
+    : req_enc_(proxygen::HPACK::MessageType::REQ, true),
+      req_dec_(proxygen::HPACK::MessageType::REQ),
+      resp_enc_(proxygen::HPACK::MessageType::RESP, true),
+      resp_dec_(proxygen::HPACK::MessageType::RESP),
+      stream_handler_factory_(std::unique_ptr<stream_handler_factory>(new strm_hand_fact<Fn>(f))),
+      stack_size_(stack_size),
+      next_stream_id_(client ? 3 : 2)
   {}
   
   void run(http_server::pipe_t& pipe);
@@ -83,9 +88,14 @@ public:
     k_settings_ack = 1
   };
   
+  enum {
+    k_HEADERS_END_STREAM = 0x1,
+    k_HEADERS_END_HEADERS = 0x4,
+    k_HEADERS_PADDED = 0x8,
+    k_HEADERS_PRIORITY = 0x20
+  };
+  
   typedef proxygen::HPACKHeader   hpack_header;
-  typedef proxygen::HPACKEncoder  hpack_encoder;
-  typedef proxygen::HPACKDecoder  hpack_decoder;
 
   static void format_frame(char* buf, uint32_t length, uint8_t type, uint8_t flags, uint32_t stream_id);
   
@@ -103,8 +113,20 @@ public:
   static void send_continuation();
   
   static void parse_settings(uint32_t stream_id, uint8_t flags, uint32_t frame_size);
+  
+  // open a new stream (send the request to the peer)
+  // with the given headers.  Returns the stream_id for this new
+  // stream.  If is_headers is true then it will be opened with
+  // k_HEADERS, otherwise it is opened with k_PUSH_PROMISE
+  uint32_t  open_stream(http_server::pipe_t& pipe, std::vector<http2::hpack_header>& headers, bool is_headers /*vs. is_push_promise*/);
 
 private:
+  proxygen::HPACKEncoder  req_enc_;
+  proxygen::HPACKDecoder  req_dec_;
+  proxygen::HPACKEncoder  resp_enc_;
+  proxygen::HPACKDecoder  resp_dec_;
+  uint32_t                next_stream_id_;
+
   struct stream_handler
   {
     virtual ~stream_handler() {}

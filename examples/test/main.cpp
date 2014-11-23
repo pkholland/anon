@@ -90,7 +90,7 @@ extern "C" int main(int argc, char** argv)
     http_server my_http;
     
     http2_handler my_http2(my_http,[](std::unique_ptr<fiber_pipe>&& read_pipe, http_server::pipe_t& write_pipe, uint32_t stream_id){
-      anon_log("started new stream " << stream_id);
+      anon_log("started new stream " << stream_id << ", should be reading from fd " << read_pipe->get_fd() << ", but am closing it!");
     });
     
     my_http.start(http_port,
