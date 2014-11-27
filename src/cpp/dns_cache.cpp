@@ -350,7 +350,7 @@ void dns_entry::initiate_lookup(const char* host, int port, dns_caller* dnsc, si
 
   // what we are trying to look up,
   // where to store the result...
-  nc->cb_.ar_name = host;
+  nc->cb_.ar_name = nc->host_.c_str();
   nc->cb_.ar_service = &nc->portString_[0];
   nc->cb_.ar_request = &nc->hints_;
   
@@ -427,12 +427,12 @@ void do_lookup_and_run(const char* host, int port, dns_caller* dnsc, size_t stac
   // by filling out the 'addr' we supply and returning true.
   // We then unlock the mutex and call after it is unlocked.
   struct sockaddr_in6 addr;
-  bool                do_call;
+  bool                immediate;
   {
     anon::lock_guard<std::mutex> lock(dns_map_mutex);
-    do_call = dns_map[host].call(host, port, dnsc, stack_size, addr);
+    immediate = dns_map[host].call(host, port, dnsc, stack_size, addr);
   }
-  if (do_call) {
+  if (immediate) {
     fiber::run_in_fiber([port,dnsc,addr]{
       call_deleter cd(dnsc);
       if (addr.sin6_family == AF_INET6)

@@ -41,7 +41,7 @@ namespace http2_client
         #endif
       }
     
-      // request the upgrade
+      // request the upgrade to HTTP/2
       std::ostringstream oss;
       oss << "GET / HTTP/1.1\r\nHost: " << host << ":" << port << "\r\nConnection: Upgrade, HTTP2-Settings\r\n";
       oss << "Upgrade: " << http2::http2_name << "\r\n";
@@ -52,7 +52,7 @@ namespace http2_client
       pipe->write(simple_msg.c_str(), simple_msg.length());
       
       // the response starts with a normal HTTP/1.1 -style response, telling us,
-      // amoung other things, whether the server was willing/able to upgrade to
+      // among other things, whether the server was willing/able to upgrade to
       // HTTP/2, so parse and read that
       
       // parser callback struct used as "user data"
@@ -119,7 +119,7 @@ namespace http2_client
       {
         pc* c = (pc*)p->data;
         if (c->header_state == pc::k_value) {
-          // <field,value> complete, add new pair
+          // previous <field,value> complete, add them
           http_headers::string_len fld(c->last_field_start,c->last_field_len);
           http_headers::string_len val(c->last_value_start,c->last_value_len);
           c->headers.headers[fld] = val;
@@ -198,19 +198,23 @@ namespace http2_client
       http_server::pipe_t body_pipe(pipe.get(), buf, bsp, bep);
 
       // first HTTP/2 frame from the server is a SETTINGS frame,
-      // parse that
+      // read that
       unsigned char frame[http2::k_frame_header_size];
       size_t bytes_read = 0;
       while (bytes_read < sizeof(frame))
         bytes_read += body_pipe.read(&frame[bytes_read], sizeof(frame)-bytes_read);
-                  
-      uint32_t  netv = 0;
-      memcpy(&((char*)&netv)[1], &frame[0], 3);
-      uint32_t  frame_size = ntohl(netv);
-      memcpy(&netv, &frame[5], 4);
-      uint32_t  stream_id = ntohl(netv);
+          
+      // extract the frame fields (in host byte order)        
+      uint32_t  frame_size = frame[0];
+      frame_size <<= 8;
+      frame_size += frame[1];
+      frame_size <<= 8;
+      frame_size += frame[2];
       uint8_t   type = frame[3];
       uint8_t   flags = frame[4];
+      uint32_t netv;
+      memcpy(&netv, &frame[5], 4);
+      uint32_t  stream_id = ntohl(netv);
       
       if (type != http2::k_SETTINGS) {
         anon_log("server sent first frame of some type other than SETTINGS.  It sent: " << (int)type);
