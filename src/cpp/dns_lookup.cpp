@@ -91,14 +91,14 @@ struct notify_complete
   
   static void resolve_complete(union sigval sv);
   
-  std::string                 host_;
+  std::string                             host_;
   std::unique_ptr<dns_lookup::dns_caller> dnsc_;
-  size_t                      stack_size_;
-  struct gaicb                cb_;
-  struct addrinfo             hints_;
-  struct sigevent             se_;
-  pthread_attr_t              ptattr_;
-  char                        portString_[8];
+  size_t                                  stack_size_;
+  struct gaicb                            cb_;
+  struct addrinfo                         hints_;
+  struct sigevent                         se_;
+  pthread_attr_t                          ptattr_;
+  char                                    portString_[8];
 };
 
 // callback that getaddrinfo_a calls when

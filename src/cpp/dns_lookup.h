@@ -61,7 +61,14 @@ namespace dns_lookup
   
   // stall this fiber and initiate an async dns lookup,
   // once that dns lookup completes resume this fiber
-  // with the returned information
+  // and returned looked up information.  .first is the
+  // err_code.  If this is zero then .second is one or
+  // more sockaddrs returned by the dns lookup.  They are
+  // stored as inet6 addrs, but can be either normal inet(4)
+  // or inet6.  You can tell by looking at sa6_family field.
+  // If .first != 0, then an error has occured and .second
+  // is empty.  Error's less than 0 indicate gai errors.
+  // errors greater than 0 indicate errno errors.
   std::pair<int, std::vector<sockaddr_in6>> get_addrinfo(const char* host, int port);
 }
 
