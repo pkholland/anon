@@ -34,6 +34,7 @@
 #include "dns_cache.h"
 #include "lock_checker.h"
 #include "time_utils.h"
+#include "dns_lookup.h"
 #include "http_server.h"
 #include "http2_handler.h"
 #include "http2_test.h"
@@ -151,6 +152,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  cp - tcp connect to \"www.google.com\", port 79 and print a message - fails slowly");
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
           anon_log("  h2 - connect to localhost:" << http_port << " and send an HTTP/1.1 with Upgrade to HTTP/2 message");
+          anon_log("  dl - dns_lookup \"www.google.com\", port 80 and print all addresses");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -486,6 +488,24 @@ extern "C" int main(int argc, char** argv)
         } else if (!strcmp(&msgBuff[0], "h2")) {
         
           run_http2_test(http_port);
+          
+        } else if (!strcmp(&msgBuff[0], "dl")) {
+
+          const char* host = "www.google.com";
+          int port = 80;
+        
+          anon_log("looking up \"" << host << "\", port " << port << ", and printing all ip addresses");
+          fiber::run_in_fiber([host,port]{
+            auto addrs = dns_lookup::get_addrinfo(host,port);
+            if (addrs.first != 0)
+              anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (addrs.first > 0 ? error_string(addrs.first) : gai_strerror(addrs.first)));
+            else {
+              anon_log("dns lookup for \"" << host << "\", port " << port << " found " << addrs.second.size() << " addresses");
+              for (auto addr : addrs.second)
+                anon_log(" " << addr);
+            }
+              
+          });
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
