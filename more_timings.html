@@ -252,6 +252,35 @@ is a subclass of this and implements those virtual methods with simple echoing b
 </p>
 
 <h4>
+The Spring 4 Example
+</h4>
+
+<p>
+<a href="http://spring.io">Spring</a> is a Java framework somewhat similar to Java EE.  It has recently been
+updated to version 4.0.  This version comes with a number of example projects that one can build.  One of these
+is an example of how to build a RESTful server.  Although simpler than the Proxygen example, it is still a
+little too complicated to show in a short code snippet.  But it is simple enough to serve as a fair comparison
+to the "echo" servers we are testing here.  The source code for this Spring example can be found in github
+<a href="https://github.com/spring-guides/gs-rest-service">here.</a>  The design of this example server makes
+use of Java's support for "annotations" to provide much of the wiring that routes an HTTP GET request for
+"/greeting" to the code shown in the
+<a href="https://github.com/spring-guides/gs-rest-service/blob/master/complete/src/main/java/hello/GreetingController.java">
+GreetingController.java</a> class.
+</p>
+
+<p>
+To run this Spring example we modify the <b>http_client</b> example code slightly so that it requests "/greeting"
+instead of "/" in the HTTP GET request. We also modify it so that the Accept header specifies "application/json"
+(which is what this particular server is designed to return).  As explained above, the <b>http_client</b> application
+specifies the HTTP "keep-alive" behavior, but unlike the other servers tested here which keep the connection open during
+the entire test, the Spring server closes it every 100 api calls.  So there is a slight penalty reported
+by this test because it has to reconnect every 100 calls.  There is also a very significant "warm up" period
+when the server is first started, causing the first execution of <b>http_client</b> to be measurably slower
+than subsequent executions.  In the numbers reported below we discard the first run of <b>http_client</b>
+and then only report the next 3.
+</p>
+
+<h4>
 The Comparison Numbers
 </h4>
 
@@ -259,11 +288,11 @@ The Comparison Numbers
 The table below is displayed in "messages per second" as seen by the <b>http_client</b> application, described above.
 Like in other tests, the client application is running on the same machine as the server, and so is using the
 loopback network address to connect to and communicate with the server.  The testing code uses http's "keep-alive"
-strategy on the sockets, so these numbers do not include connect/shutdown time on the sockets themselves.
-Particularly in the 1 core case, that one core is forced to run both the client and server threads.  This code
-is run in an Ubuntu 14.04 VM, running in VMWare on a 2.3 GHz MacBook Pro laptop.  There is variability in the
-numbers from one run to the next.  This table represents three consecutive runs, listing the slowest and fastest
-of those three.
+strategy on the sockets, so these numbers do not include connect/shutdown time on the sockets themselves (other
+than the Spring 4 numbers as described above).  Particularly in the 1 core case, that one core is forced to run
+both the client and server threads.  This code is run in an Ubuntu 14.04 VM, running in VMWare on a 2.3 GHz MacBook
+Pro laptop.  There is variability in the numbers from one run to the next.  This table represents three consecutive
+runs, listing the slowest and fastest of those three.
 </p>
 
 <p>
@@ -286,6 +315,12 @@ of those three.
     <td>47,400 - 51,300</td>
     <td>86,200 - 91,000</td>
     <td>120,500 - 124,300</td>
+  </tr>
+  <tr>
+    <td><b>Spring 4</b></td>
+    <td>9,193 - 9,472</td>
+    <td>19,544 - 19,913</td>
+    <td>26,550 - 26,716</td>
   </tr>
   <tr>
     <td><b>Node.js</b></td>
