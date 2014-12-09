@@ -28,6 +28,31 @@
 #include <sstream>
 #include <string.h>
 
+int retry(int& fd, struct addrinfo* addr_result, const char* buf, size_t len)
+{
+  //printf("getsockopt reported error %d on read, reconnecting\n", result);
+  close(fd);
+  fd = socket(addr_result->ai_addr->sa_family, SOCK_STREAM, 0);
+  if (fd == -1) {
+    printf("socket failed with errno: %d\n", errno);
+    return 1;
+  }
+  if (connect(fd, addr_result->ai_addr, addr_result->ai_addrlen) != 0) {
+    printf("connect failed with errno: %d\n", errno);
+    return 1;
+  }
+  size_t tot_bytes = 0;
+  while (tot_bytes<len) {
+    auto bytes = write(fd,&buf[tot_bytes],len-tot_bytes);
+    if (bytes < 0) {
+      printf("write failed, errno: %d\n", errno);
+      return 1;
+    }
+    tot_bytes += bytes;
+  }
+  return 0;
+}
+
 extern "C" int main(int argc, char** argv)
 {
   if (argc != 3)
@@ -40,8 +65,8 @@ extern "C" int main(int argc, char** argv)
   const char* port = argv[2];
   printf("running big_client against \"%s\", port %s\n", ip, port);
   
-  const int num_sockets = 400;
-  const int num_sends = 2000;
+  const int num_sockets = 400;//400;
+  const int num_sends = 2000;//2000;
   
   // look ip the addr for ip/port
   struct addrinfo hints;
@@ -49,8 +74,8 @@ extern "C" int main(int argc, char** argv)
   hints.ai_family = AF_UNSPEC;  // use IPv4 or IPv6, whichever
   hints.ai_socktype = SOCK_STREAM;
   
-  struct addrinfo* result;
-  if (getaddrinfo(ip,port,&hints,&result)!=0) {
+  struct addrinfo* addr_result;
+  if (getaddrinfo(ip,port,&hints,&addr_result)!=0) {
     printf("getaddrinfo failed with errno: %d\n", errno);
     return 1;
   }
@@ -58,26 +83,25 @@ extern "C" int main(int argc, char** argv)
   // loop through and get all the sockets connected
   std::vector<int> conns;
   for (int i=0; i<num_sockets; i++) {
-    int fd = socket(result->ai_addr->sa_family, SOCK_STREAM, 0);
+    int fd = socket(addr_result->ai_addr->sa_family, SOCK_STREAM, 0);
     if (fd == -1) {
       printf("socket failed with errno: %d\n", errno);
       return 1;
     }
-    if (connect(fd, result->ai_addr, result->ai_addrlen) != 0) {
+    if (connect(fd, addr_result->ai_addr, addr_result->ai_addrlen) != 0) {
       printf("connect failed with errno: %d\n", errno);
       return 1;
     }
     conns.push_back(fd);
   }
-  freeaddrinfo(result);
   
   // construct the GET request we are going to send
   // (it needs to have the Host attribute set right)
   std::ostringstream oss;
-  oss << "GET /?a=10&b=20 HTTP/1.1\r\n";
+  oss << "GET /greeting?a=10&b=20 HTTP/1.1\r\n";
   oss << "Host: " << ip << ":" << port << "\r\n";
   oss << "User-Agent: big_client test agent\r\n";
-  oss << "Accept: text/html\r\n";
+  oss << "Accept: application/json\r\n";
   oss << "Accept-Language: en-US,en;q-0.5\r\n";
   oss << "Accept-Encoding: gzip, deflate\r\n";
   oss << "Connection: keep-alive\r\n";
@@ -89,9 +113,20 @@ extern "C" int main(int argc, char** argv)
   auto start_time = cur_time();
   
   for (int send_count=0; send_count<num_sends; send_count++) {
-  
+    
     // send the request to each one
     for (int sock_count=0; sock_count<num_sockets; sock_count++) {
+      int result;
+      socklen_t optlen = sizeof(result);
+      if (getsockopt(conns[sock_count], SOL_SOCKET, SO_ERROR, &result, &optlen) != 0) {
+        printf("getsockopt failed, errno: %d\n", errno);
+        return 1;
+      }
+      if (result != 0) {
+        printf("getsockopt reported error %d on write\n", result);
+        return 1;
+      }
+    
       size_t tot_bytes = 0;
       while (tot_bytes<len) {
         auto bytes = write(conns[sock_count],&buf[tot_bytes],len-tot_bytes);
@@ -105,13 +140,24 @@ extern "C" int main(int argc, char** argv)
     
     // read the response from each one
     for (int sock_count=0; sock_count<num_sockets; sock_count++) {
+      int result;
+      socklen_t optlen = sizeof(result);
+      if (getsockopt(conns[sock_count], SOL_SOCKET, SO_ERROR, &result, &optlen) != 0) {
+        printf("getsockopt failed, errno: %d\n", errno);
+        return 1;
+      }
+      if (result != 0) {
+        if (retry(conns[sock_count], addr_result, buf, len) != 0)
+          return 1;
+      }
+      
       char    reply[4096];
       size_t  bytes_read = 0;
       while (true) {
         auto bytes = read(conns[sock_count],&reply[bytes_read],sizeof(reply)-bytes_read);
         if (bytes < 0) {
-          printf("read failed, errno: %d\n", errno);
-          return 1;
+          if (retry(conns[sock_count], addr_result, buf, len) != 0)
+            return 1;
         }
         bytes_read += bytes;
         if (bytes_read == sizeof(reply)) {
@@ -124,6 +170,7 @@ extern "C" int main(int argc, char** argv)
     }
     
   }
+  freeaddrinfo(addr_result);
   
   auto tot_time = cur_time() - start_time;
   std::ostringstream msg;

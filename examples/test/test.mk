@@ -20,6 +20,7 @@ $(ANON_ROOT)/src/cpp/http_server.cpp\
 $(ANON_ROOT)/src/cpp/http2_handler.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
 $(ANON_ROOT)/src/cpp/http2.cpp\
+$(ANON_ROOT)/src/cpp/epc.cpp\
 $(ANON_ROOT)/../http-parser/http_parser.c\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKContext.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKEncoder.cpp\

@@ -55,4 +55,13 @@ T& operator<<(T& str, const struct sockaddr_in6& addr)
   return str << *(const struct sockaddr_storage*)&addr;
 }
 
+inline bool operator==(const struct sockaddr_in6& addr1, const struct sockaddr_in6& addr2)
+{
+  if (addr1.sin6_family != addr2.sin6_family)
+    return false;
+  size_t sz = addr1.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+  return memcmp(&addr1, &addr2, sz) == 0;
+}
+
+
 

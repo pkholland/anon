@@ -95,5 +95,9 @@ namespace tcp_client
   // invalid).  These are the same errors as are passed
   // to connect_and_run described above.
   std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char* host, int port);
+  
+  // similar to the version of connect above, except that no dns
+  // logic is involved.
+  std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen);
 }
 
