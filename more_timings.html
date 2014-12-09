@@ -160,14 +160,14 @@ is a basic description of the test code that is used to drive each server:
   <span class="c1">// be sure to specify keep-alive...</span> 
   <span class="k">const</span> <span class="kt">char</span>* http_GET_message = "GET / HTTP/1.1\r\nHost: ...";
     
-  <span class="k">for</span> (<span class="kt">int</span> msg=<span class="m">0</span>; i&lt;<span class="m">2000</span>; msg++) {
+  <span class="k">for</span> (<span class="kt">int</span> msg=<span class="m">0</span>; msg&lt;<span class="m">2000</span>; msg++) {
   
     <span class="c1">// send http string to the server</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; i++)
       <span class="nf">send_string</span>(socks[i], http_GET_message);
       
     <span class="c1">// now loop through and read all the responses</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=<span class="m">0</span>; i&lt;<span class="m">400</span>; i++)
       <span class="nf">read_http_response</span>(socks[i]);
   }
 }
