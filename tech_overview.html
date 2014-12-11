@@ -313,11 +313,11 @@ With these two different versions of a server, we can write a client that looks 
   <span class="k">for</span> (<span class="kt">int</span> msg=0; i<10000; msg++) {
   
     <span class="c1">// first send one message to each of the sockets</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
       <span class="nf">send_one_byte</span>(socks[i]);
       
     <span class="c1">// now loop through and read all the responses</span>
-    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; msg++)
+    <span class="k">for</span> (<span class="kt">int</span> i=0; i<400; i++)
       <span class="nf">read_one_byte</span>(socks[i]);
   }
 }
