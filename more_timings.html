@@ -286,6 +286,7 @@ The Comparison Numbers
 
 <p>
 The table below is displayed in "api calls per second" as seen by the <b>http_client</b> application, described above.
+For this, a single "api call" is sending the Http message to the server, and then reading the response it sends back.
 Like in other tests, the client application is running on the same machine as the server, and so is using the
 loopback network address to connect to and communicate with the server.  The testing code uses http's "keep-alive"
 strategy on the sockets, so these numbers do not include connect/shutdown time on the sockets themselves (other
