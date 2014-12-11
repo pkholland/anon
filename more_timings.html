@@ -195,7 +195,7 @@ The Anon Example
 <p>
 The anon example gets to use anon-style syntax and looks like this.  The <b>http_server</b> class is
 one provided by anon, and its constructor takes a callable function that is called - in a fiber - each
-time a new connection is established from a client.  The style of its API is inspired by the node.js
+time a new api request is sent from a client.  The style of its API is inspired by the node.js
 syntax for this.  In this example it simply specifies that it will be returning plain text, and then
 writes "echo server!" into the body of the reply.
 </p>
@@ -216,7 +216,7 @@ The Node.js Example
 
 <p>
 The node.js example is visually very similar to the anon one.  It makes use of syntax that lets it pass
-a function as a parameter to an http server.  That service calls the supplied function when new connections
+a function as a parameter to an http server.  That service calls the supplied function when new api requests
 arrive, and it is the function that writes the response information.  But in this case the lauguage is javascript,
 not C++
 </p>
