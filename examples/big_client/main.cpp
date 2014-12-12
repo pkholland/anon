@@ -30,7 +30,7 @@
 
 int retry(int& fd, struct addrinfo* addr_result, const char* buf, size_t len)
 {
-  //printf("getsockopt reported error %d on read, reconnecting\n", result);
+  //printf("getsockopt reported error on read, reconnecting\n");
   close(fd);
   fd = socket(addr_result->ai_addr->sa_family, SOCK_STREAM, 0);
   if (fd == -1) {
@@ -98,14 +98,11 @@ extern "C" int main(int argc, char** argv)
   // construct the GET request we are going to send
   // (it needs to have the Host attribute set right)
   std::ostringstream oss;
-  oss << "GET /greeting?a=10&b=20 HTTP/1.1\r\n";
+  oss << "GET /ims/profiles HTTP/1.1\r\n";
   oss << "Host: " << ip << ":" << port << "\r\n";
   oss << "User-Agent: big_client test agent\r\n";
-  oss << "Accept: application/json\r\n";
-  oss << "Accept-Language: en-US,en;q-0.5\r\n";
-  oss << "Accept-Encoding: gzip, deflate\r\n";
-  oss << "Connection: keep-alive\r\n";
-  oss << "\r\n\r\n";
+  oss << "Accept: */*\r\n";
+  oss << "\r\n";
   std::string st = oss.str();
   const char* buf = st.c_str();
   size_t len = st.length();
