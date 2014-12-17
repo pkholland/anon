@@ -24,7 +24,9 @@ $(ANON_ROOT)/src/cpp/epc.cpp\
 $(ANON_ROOT)/../http-parser/http_parser.c\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKContext.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKEncoder.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKDecoder.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKEncodeBuffer.cpp\
+$(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKDecodeBuffer.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HPACKHeader.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/HeaderTable.cpp\
 $(ANON_ROOT)/../proxygen/proxygen/lib/http/codec/compress/StaticHeaderTable.cpp\
