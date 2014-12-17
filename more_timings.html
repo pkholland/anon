@@ -281,6 +281,37 @@ and then only report the next 3.
 </p>
 
 <h4>
+Spray
+</h4>
+
+<a href="http://www.spray.io">Spray</a> is a Scala-based Http server framework (Scala is a Java-based language).  Like
+the anon and node.js cases spray supports very simple expressions of simple servers.  This test is the
+"spray-template" example project found in github <a href="https://github.com/spray/spray-template/">here</a>.  The server
+code looks like:
+
+<div class="highlight highlight-C++"><pre>
+
+<span class="nf">trait</span> <span class="kt">MyService</span> <span class="nf">extends</span> <span class="kt">HttpService</span> {
+
+  <span class="nf">val</span> <span class="kt">myRoute</span> <span class="nf">=</span>
+    path(<span class="s2">&quot;&quot;</span>) {
+      get {
+        respondWithMediaType(`text/html`) {
+          complete {
+            &lt;<span class="s2">html</span>&gt;
+              &lt;<span class="s2">body</span>&gt;
+                &lt;<span class="s2">h1</span>&gt;Say hello to &lt;<span class="s2">i</span>&gt;spray-routing&lt;<span class="s2">/i</span>&gt; on &lt;<span class="s2">i</span>&gt;spray-can&lt;<span class="s2">/i</span>&gt;!&lt;<span class="s2">/h1</span>&gt;
+              &lt;<span class="s2">/body</span>&gt;
+            &lt;<span class="s2">/html</span>&gt;
+          }
+        }
+      }
+    }
+}
+</pre></div>
+
+
+<h4>
 The Comparison Numbers
 </h4>
 
@@ -316,6 +347,12 @@ runs, listing the slowest and fastest of those three.
     <td>47,400 - 51,300</td>
     <td>86,200 - 91,000</td>
     <td>120,500 - 124,300</td>
+  </tr>
+  <tr>
+    <td><b>Spray</b></td>
+    <td>43,441 - 45,323</td>
+    <td>64,136 - 68,948</td>
+    <td>112,553 - 116,278</td>
   </tr>
   <tr>
     <td><b>Spring 4</b></td>
