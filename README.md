@@ -18,6 +18,6 @@ Basic Build Instructions:<br>
 11) make<br>
 
 Running the test code:<br>
-./deploy/releate/test<br>
+./deploy/release/test<br>
 
 
