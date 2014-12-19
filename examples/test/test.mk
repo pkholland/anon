@@ -17,6 +17,7 @@ $(ANON_ROOT)/src/cpp/dns_cache.cpp\
 $(ANON_ROOT)/src/cpp/dns_lookup.cpp\
 $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_ROOT)/src/cpp/http_server.cpp\
+$(ANON_ROOT)/src/cpp/tls_fiber.cpp\
 $(ANON_ROOT)/src/cpp/http2_handler.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
 $(ANON_ROOT)/src/cpp/http2.cpp\

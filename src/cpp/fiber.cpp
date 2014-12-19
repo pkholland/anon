@@ -187,6 +187,16 @@ int get_current_fiber_id()
   return fiber::get_current_fiber_id();
 }
 
+void* fiber::get_current_fiber()
+{
+  return tls_io_params.current_fiber_;
+}
+
+void* get_current_fiber()
+{
+  return fiber::get_current_fiber();
+}
+
 /////////////////////////////////////////////////
 
 void fiber_pipe::io_avail(const struct epoll_event& event)

@@ -36,8 +36,9 @@
 #include "time_utils.h"
 #include "dns_lookup.h"
 #include "http_server.h"
-#include "http2_handler.h"
-#include "http2_test.h"
+#include "tls_fiber.h"
+//#include "http2_handler.h"
+//#include "http2_test.h"
 
 class my_udp : public udp_dispatch
 {
@@ -65,6 +66,8 @@ extern "C" int main(int argc, char** argv)
     return 1;
   }
   
+  tls_fiber_init  tfi;
+  
   uint8_t id_data[32] = {0, 1, 2, 3, 4, 5, 6, 7,
                          8,  9, 10, 11, 12, 13, 14, 15,
                         16, 17, 18, 19, 20, 21, 22, 23,
@@ -90,9 +93,11 @@ extern "C" int main(int argc, char** argv)
     
     http_server my_http;
     
+  #if 0
     http2_handler my_http2(my_http,[](std::unique_ptr<fiber_pipe>&& read_pipe, http_server::pipe_t& write_pipe, uint32_t stream_id){
       anon_log("started new stream " << stream_id << ", should be reading from fd " << read_pipe->get_fd() << ", but am closing it!");
     });
+  #endif
     
     my_http.start(http_port,
                   [](http_server::pipe_t& pipe, const http_request& request){
@@ -153,6 +158,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
           anon_log("  h2 - connect to localhost:" << http_port << " and send an HTTP/1.1 with Upgrade to HTTP/2 message");
           anon_log("  dl - dns_lookup \"www.google.com\", port 80 and print all addresses");
+          anon_log("  ss - do a tls connection to \"www.adobe.com\", port 443");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -487,7 +493,9 @@ extern "C" int main(int argc, char** argv)
           
         } else if (!strcmp(&msgBuff[0], "h2")) {
         
+        #if 0
           run_http2_test(http_port);
+        #endif
           
         } else if (!strcmp(&msgBuff[0], "dl")) {
 
@@ -505,6 +513,20 @@ extern "C" int main(int argc, char** argv)
                 anon_log(" " << addr);
             }
               
+          });
+          
+        } else if (!strcmp(&msgBuff[0], "ss")) {
+
+          const char* host = "www.adobe.com";
+          int port = 443;
+          
+          anon_log("trying to tcp connect to \"" << host << "\", port " << port);
+          tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            if (err_code == 0) {
+              anon_log("connected to \"" << host << "\", port " << port << ", now starting tls handshake");
+              tls_pipe  p(std::move(pipe), true/*client*/, host);
+            } else
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
 
         } else

@@ -221,6 +221,8 @@ public:
   {
     return fiber_id_;
   }
+  
+  static void* get_current_fiber();
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
@@ -300,6 +302,7 @@ private:
 };
 
 extern int get_current_fiber_id();
+extern void* get_current_fiber();
 
 ////////////////////////////////////////////////////////////////////////
 
