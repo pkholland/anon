@@ -62,7 +62,7 @@ tls_fiber_init::tls_fiber_init()
   RAND_load_file("/dev/urandom", 1024);
   
   CRYPTO_set_locking_callback(locking_func);
-  CRYPTO_set_id_callback(id_func);
+  //CRYPTO_set_id_callback(id_func);
 }
 
 tls_fiber_init::~tls_fiber_init()
@@ -162,10 +162,10 @@ static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
       anon_log("fp_ctrl BIO_CTRL_GET");
       break;
     case BIO_CTRL_PUSH:
-      anon_log("fp_ctrl BIO_CTRL_PUSH");
+      //anon_log("fp_ctrl BIO_CTRL_PUSH");
       break;
     case BIO_CTRL_POP:
-      anon_log("fp_ctrl BIO_CTRL_POP");
+      //anon_log("fp_ctrl BIO_CTRL_POP");
       break;
     case BIO_CTRL_GET_CLOSE:
       anon_log("fp_ctrl BIO_CTRL_GET_CLOSE");
@@ -178,7 +178,7 @@ static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
       ret = 0;
       break;
     case BIO_CTRL_FLUSH:
-      anon_log("fp_ctrl BIO_CTRL_FLUSH");
+      //anon_log("fp_ctrl BIO_CTRL_FLUSH");
       break;
     case BIO_CTRL_DUP:
       anon_log("fp_ctrl BIO_CTRL_DUP");
@@ -224,6 +224,9 @@ static void throw_ssl_error()
   throw_ssl_error(ERR_get_error());
 }
 
+//#define PRINT_CERT_INFO
+
+#ifdef PRINT_CERT_INFO
 static void print_cn_name(const char* label, X509_NAME* const name)
 {
   int idx = -1, success = 0;
@@ -315,7 +318,7 @@ void print_san_name(const char* label, X509* const cert)
   if(!success)
     anon_log(label << ": not available");
 }
-
+#endif
 
 static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 {
@@ -328,6 +331,7 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
   X509_NAME* iname = cert ? X509_get_issuer_name(cert) : NULL;
   X509_NAME* sname = cert ? X509_get_subject_name(cert) : NULL;
 
+#ifdef PRINT_CERT_INFO
   anon_log("ssl verify_callback depth: " << depth << ", preverify: " << preverify);
 
   /* Issuer is the authority we trust that warrants nothing useful */
@@ -358,6 +362,7 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
     else
       anon_log("Error = " << err);
   }
+#endif
 
   #if defined(IGNORE_ERRORS)
   return 1;
@@ -371,19 +376,13 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
   ctx_ = SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method());
   if (ctx_ == 0)
     throw_ssl_error();
-  SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER, verify_callback);
+  SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
   SSL_CTX_set_verify_depth(ctx_, 5);
 
   const long flags = SSL_OP_ALL /*| SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3*/ | SSL_OP_NO_COMPRESSION;
   (void)SSL_CTX_set_options(ctx_, flags);
   
-  if (SSL_CTX_use_certificate_file(ctx_,"verisign.pem",SSL_FILETYPE_PEM)==0) {
-    auto ec = ERR_get_error();
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-  
-  if (false && SSL_CTX_load_verify_locations(ctx_, "verisign.pem", 0) == 0) {
+  if (SSL_CTX_load_verify_locations(ctx_, 0, "/etc/ssl/certs") == 0) {
     auto ec = ERR_get_error();
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
@@ -405,7 +404,9 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
   BIO_push(ssl_,fpb);
   
   if (BIO_do_handshake(ssl_) != 1) {
+    anon_log("BIO_do_handshake returned error");
     auto ec = ERR_get_error();
+    anon_log("ERR_get_error returned: " << ec);
     BIO_free(ssl_);
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
@@ -430,12 +431,15 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
     
     auto res = SSL_get_verify_result(ssl);
     if (res != X509_V_OK) {
+      anon_log("SSL_get_verify_result returned error: " << res);
       BIO_free(ssl_);
       SSL_CTX_free(ctx_);
       throw_ssl_error((unsigned long)res);
     }
         
-    // check host_name        
+    // check host_name
+    
+    anon_log("handshake completed, certificates accepted, ready to communicate");    
     
   }
 
