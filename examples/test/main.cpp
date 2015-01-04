@@ -517,7 +517,7 @@ extern "C" int main(int argc, char** argv)
           
         } else if (!strcmp(&msgBuff[0], "ss")) {
 
-          const char* host = "www.adobe.com";
+          const char* host = "na1r.services.adobe.com";
           int port = 443;
           
           anon_log("trying to tcp connect to \"" << host << "\", port " << port);

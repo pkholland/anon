@@ -224,6 +224,73 @@ static void throw_ssl_error()
   throw_ssl_error(ERR_get_error());
 }
 
+static bool verify_host_name(X509* const cert, const char* host_name)
+{
+  int success = 0;
+  GENERAL_NAMES* names = NULL;
+  unsigned char* utf8 = NULL;
+
+  do
+  {
+    if(!cert) break; /* failed */
+
+    names = (GENERAL_NAMES*)X509_get_ext_d2i(cert, NID_subject_alt_name, 0, 0);
+    if(!names) break;
+
+    int i = 0, count = sk_GENERAL_NAME_num(names);
+    if(!count) break; /* failed */
+
+    for( i = 0; i < count; ++i ) {
+      GENERAL_NAME* entry = sk_GENERAL_NAME_value(names, i);
+      if(!entry) continue;
+
+      if(GEN_DNS == entry->type) {
+        int len1 = 0, len2 = -1;
+
+        len1 = ASN1_STRING_to_UTF8(&utf8, entry->d.dNSName);
+        if(utf8)
+          len2 = (int)strlen((const char*)utf8);
+
+        if(len1 != len2)
+          anon_log("Strlen and ASN1_STRING size do not match (embedded null?): " << len2 << " vs " << len1);
+
+        /* If there's a problem with string lengths, then     */
+        /* we skip the candidate and move on to the next.     */
+        /* Another policy would be to fails since it probably */
+        /* indicates the client is under attack.              */
+        if(utf8 && len1 && len2 && (len1 == len2)) {
+          if (len1 > 1 && utf8[0] == '*') {
+            auto pos = strstr(host_name, (const char*)&utf8[1]);
+            if (pos == &host_name[strlen(host_name)-(len1-1)]);
+              success = 1;
+          } else if (!strcmp((const char*)utf8, host_name))
+            success = 1;
+        }
+
+        if(utf8)
+          OPENSSL_free(utf8), utf8 = NULL;
+      }
+      else
+        anon_log("Unknown GENERAL_NAME type: " << entry->type);
+    }
+
+  } while (0);
+
+  if(names)
+    GENERAL_NAMES_free(names);
+
+  if(utf8)
+    OPENSSL_free(utf8);
+
+  if(!success)
+  {
+    anon_log("unable to verify given cert belongs to " << host_name);
+    return true;
+  }
+  return true;
+}
+
+
 //#define PRINT_CERT_INFO
 
 #ifdef PRINT_CERT_INFO
@@ -394,57 +461,108 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
   }
-  ssl_ = BIO_new_ssl(ctx_,client);
-  if (!ssl_) {
+  ssl_bio_ = BIO_new_ssl(ctx_,client);
+  if (!ssl_bio_) {
     auto ec = ERR_get_error();
     BIO_free(fpb);
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
   }
-  BIO_push(ssl_,fpb);
+  BIO_push(ssl_bio_,fpb);
   
-  if (BIO_do_handshake(ssl_) != 1) {
+  if (BIO_do_handshake(ssl_bio_) != 1) {
     anon_log("BIO_do_handshake returned error");
     auto ec = ERR_get_error();
     anon_log("ERR_get_error returned: " << ec);
-    BIO_free(ssl_);
+    BIO_free(ssl_bio_);
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
   }
   
-  SSL *ssl = 0;
-  BIO_get_ssl(ssl_, &ssl);
+  BIO_get_ssl(ssl_bio_, &ssl_);
+  
+  if (!ssl_) {
+    auto ec = ERR_get_error();
+    BIO_free(ssl_bio_);
+    SSL_CTX_free(ctx_);
+    throw_ssl_error(ec);
+  }
   
   if (client) {
     
     /* Step 1: verify a server certifcate was presented during negotiation
               Anonymous Diffie-Hellman (ADH) is not allowed
     */
-    X509* cert = SSL_get_peer_certificate(ssl);
-    if(cert)
+    X509* cert = SSL_get_peer_certificate(ssl_);
+    if(cert && verify_host_name(cert,host_name)) {
       X509_free(cert); /* Free immediately */
-    else {
-      BIO_free(ssl_);
+    } else {
+      if (cert)
+        X509_free(cert);
+      BIO_free(ssl_bio_);
       SSL_CTX_free(ctx_);
       throw_ssl_error(X509_V_ERR_APPLICATION_VERIFICATION);
     }
     
-    auto res = SSL_get_verify_result(ssl);
+    auto res = SSL_get_verify_result(ssl_);
     if (res != X509_V_OK) {
       anon_log("SSL_get_verify_result returned error: " << res);
-      BIO_free(ssl_);
+      BIO_free(ssl_bio_);
       SSL_CTX_free(ctx_);
       throw_ssl_error((unsigned long)res);
     }
-        
-    // check host_name
     
-    anon_log("handshake completed, certificates accepted, ready to communicate");    
+#if 0
+    anon_log("handshake completed, certificates accepted, ready to communicate");
+ 
+    std::ostringstream body;
+    body << "<ReqBody version=\"1.5\" clientId=\"TEST_CLIENT\">\n";
+    body << " <req dest=\"UserManagement\" api=\"authUserWithCredentials\">\n";
+    body << "  <string>user@domain.com</string>\n";
+    body << "  <string>password</string>\n";
+    body << "  <AuthRequest/>\n";
+    body << " </req>\n";
+    body << "</ReqBody>\n";
+    std::string body_st = body.str();
+   
+    std::ostringstream oss;
+    oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
+    oss << "Host: " << host_name << "\r\n";
+    oss << "Content-Length: " << body_st.length() << "\r\n";
+    oss << "User-Agent: big_client test agent\r\n";
+    oss << "Content-Type: text/xml\r\n";
+    oss << "Accept: */*\r\n";
+    oss << "\r\n";
+    oss << body_st.c_str();
+
+    std::string st = oss.str();
+    const char* buf = st.c_str();
+    size_t len = st.length();
     
+    anon_log("sending:\n" << buf);
+    
+    auto written = SSL_write(ssl_, st.c_str(), len);
+    anon_log("SSL_write returned: " << written);
+    
+    char  ret_buf[10250];
+    auto ret_len = SSL_read(ssl_, &ret_buf[0], sizeof(ret_buf)-1);
+    anon_log("SSL_read returned " << ret_len);
+    
+    ret_buf[ret_len] = 0;
+    anon_log("contents start with:\n" << &ret_buf[0]);
+#endif
+
   }
 
   
 }
+
+tls_pipe::~tls_pipe()
+{
+  BIO_free(ssl_bio_);
+  SSL_CTX_free(ctx_);
+}
+
 
 
 

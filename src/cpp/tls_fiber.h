@@ -44,12 +44,29 @@ public:
   // (that does not thow an exception) all future read and write
   // calls will be encrypted/decrypted and then sent over this pipe;
   tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/, const char* host_name);
+  
+  ~tls_pipe();
     
-  size_t read(void* buff, size_t len);
-  void write(const void* buff, size_t len);
+  size_t read(void* buff, size_t len)
+  {
+    return SSL_read(ssl_, buff, len);
+  }
+  
+  void write(const void* buff, size_t len)
+  {
+#if 0
+    size_t tot_bytes = 0;
+    while (tot_bytes < len) {
+      auto writtten = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
+      if (written < 0)
+        
+    }
+#endif
+  }
   
 private:
-  SSL_CTX* ctx_;
-  BIO* ssl_;
+  SSL_CTX*  ctx_;
+  BIO*      ssl_bio_;
+  SSL*      ssl_;
 };
 
