@@ -52,17 +52,7 @@ public:
     return SSL_read(ssl_, buff, len);
   }
   
-  void write(const void* buff, size_t len)
-  {
-#if 0
-    size_t tot_bytes = 0;
-    while (tot_bytes < len) {
-      auto writtten = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
-      if (written < 0)
-        
-    }
-#endif
-  }
+  void write(const void* buff, size_t len);
   
 private:
   SSL_CTX*  ctx_;

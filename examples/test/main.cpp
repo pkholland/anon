@@ -158,7 +158,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  ch - tcp connect to \"nota.yyrealhostzz.com\", port 80 and print a message - fails quickly");
           anon_log("  h2 - connect to localhost:" << http_port << " and send an HTTP/1.1 with Upgrade to HTTP/2 message");
           anon_log("  dl - dns_lookup \"www.google.com\", port 80 and print all addresses");
-          anon_log("  ss - do a tls connection to \"www.adobe.com\", port 443");
+          anon_log("  ss - send a simple command to adobe's renga server");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -519,12 +519,53 @@ extern "C" int main(int argc, char** argv)
 
           const char* host = "na1r.services.adobe.com";
           int port = 443;
-          
+                    
           anon_log("trying to tcp connect to \"" << host << "\", port " << port);
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0) {
+            
+              const char* user_name = "user@domain.com";
+              const char* password = "password";
+
               anon_log("connected to \"" << host << "\", port " << port << ", now starting tls handshake");
               tls_pipe  p(std::move(pipe), true/*client*/, host);
+                         
+              std::ostringstream body;
+              body << "<ReqBody version=\"1.5\" clientId=\"anon_client\">\n";
+              body << " <req dest=\"UserManagement\" api=\"authUserWithCredentials\">\n";
+              body << "  <string>" << user_name << "</string>\n";
+              body << "  <string>" << password << "</string>\n";
+              body << "  <AuthRequest/>\n";
+              body << " </req>\n";
+              body << "</ReqBody>\n";
+              std::string body_st = body.str();
+             
+              std::ostringstream oss;
+              oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
+              oss << "Host: " << host << "\r\n";
+              oss << "Content-Length: " << body_st.length() << "\r\n";
+              oss << "User-Agent: anon_agent\r\n";
+              oss << "Content-Type: text/xml\r\n";
+              oss << "Accept: */*\r\n";
+              oss << "\r\n";
+              oss << body_st.c_str();
+
+              std::string st = oss.str();
+              const char* buf = st.c_str();
+              size_t len = st.length();
+              
+              anon_log("tls handshake completed, certificates accepted, now sending (encrypted):\n\n" << buf);
+              
+              p.write(st.c_str(), len);
+              
+              char  ret_buf[10250];
+              auto ret_len = p.read(&ret_buf[0], sizeof(ret_buf)-1);
+              
+              ret_buf[ret_len] = 0;
+              anon_log("server return starts with:\n\n" << &ret_buf[0] << "\n");
+              
+              anon_log("closing connection to \"" << host << "\"");
+
             } else
               anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });

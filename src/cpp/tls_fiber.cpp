@@ -511,46 +511,6 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
       SSL_CTX_free(ctx_);
       throw_ssl_error((unsigned long)res);
     }
-    
-#if 0
-    anon_log("handshake completed, certificates accepted, ready to communicate");
- 
-    std::ostringstream body;
-    body << "<ReqBody version=\"1.5\" clientId=\"TEST_CLIENT\">\n";
-    body << " <req dest=\"UserManagement\" api=\"authUserWithCredentials\">\n";
-    body << "  <string>user@domain.com</string>\n";
-    body << "  <string>password</string>\n";
-    body << "  <AuthRequest/>\n";
-    body << " </req>\n";
-    body << "</ReqBody>\n";
-    std::string body_st = body.str();
-   
-    std::ostringstream oss;
-    oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
-    oss << "Host: " << host_name << "\r\n";
-    oss << "Content-Length: " << body_st.length() << "\r\n";
-    oss << "User-Agent: big_client test agent\r\n";
-    oss << "Content-Type: text/xml\r\n";
-    oss << "Accept: */*\r\n";
-    oss << "\r\n";
-    oss << body_st.c_str();
-
-    std::string st = oss.str();
-    const char* buf = st.c_str();
-    size_t len = st.length();
-    
-    anon_log("sending:\n" << buf);
-    
-    auto written = SSL_write(ssl_, st.c_str(), len);
-    anon_log("SSL_write returned: " << written);
-    
-    char  ret_buf[10250];
-    auto ret_len = SSL_read(ssl_, &ret_buf[0], sizeof(ret_buf)-1);
-    anon_log("SSL_read returned " << ret_len);
-    
-    ret_buf[ret_len] = 0;
-    anon_log("contents start with:\n" << &ret_buf[0]);
-#endif
 
   }
 
@@ -563,6 +523,17 @@ tls_pipe::~tls_pipe()
   SSL_CTX_free(ctx_);
 }
 
+void tls_pipe::write(const void* buff, size_t len)
+{
+  size_t tot_bytes = 0;
+  const char* buf = (const char*)buff;
+  while (tot_bytes < len) {
+    auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
+    if (written < 0)
+      throw_ssl_error(SSL_get_error(ssl_, id_func()));
+    tot_bytes += written;      
+  }
+}
 
 
 
