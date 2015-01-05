@@ -72,6 +72,8 @@ tls_fiber_init::~tls_fiber_init()
 
 ////////////////////////////////////////////////////////////////////
 
+// an implementation of an openssl "BIO" based on anon's fiberpipe
+
 #define BIO_TYPE_FIBER_PIPE	(53|0x0400|0x0100)	/* '53' is our custom type, 4, and 1 are BIO_TYPE_SOURCE_SINK and BIO_TYPE_DESCRIPTOR */
 
 static int fp_write(BIO *h, const char *buf, int num);
@@ -224,23 +226,40 @@ static void throw_ssl_error()
   throw_ssl_error(ERR_get_error());
 }
 
+static bool compare_to_host(const unsigned char* cert_name, const char* host_name)
+{
+  const char* utf8 = (const char*)cert_name;
+  auto len1 = strlen(utf8);
+  if (len1 > 1 && utf8[0] == '*') {
+    auto pos = strstr(host_name, &utf8[1]);
+    if (pos == &host_name[strlen(host_name)-(len1-1)]);
+      return true;
+  } else if (!strcmp((const char*)utf8, host_name))
+    return true;
+  return false;
+}
+
+#define PRINT_CERT_INFO
+
 static bool verify_host_name(X509* const cert, const char* host_name)
 {
+  if (!cert)
+    return false;
+    
   int success = 0;
   GENERAL_NAMES* names = NULL;
   unsigned char* utf8 = NULL;
 
+  // first try the "Subject Alternate Names"
   do
   {
-    if(!cert) break; /* failed */
-
     names = (GENERAL_NAMES*)X509_get_ext_d2i(cert, NID_subject_alt_name, 0, 0);
     if(!names) break;
 
     int i = 0, count = sk_GENERAL_NAME_num(names);
-    if(!count) break; /* failed */
+    if(!count) break;
 
-    for( i = 0; i < count; ++i ) {
+    for( i = 0; i < count && !success; ++i ) {
       GENERAL_NAME* entry = sk_GENERAL_NAME_value(names, i);
       if(!entry) continue;
 
@@ -258,112 +277,14 @@ static bool verify_host_name(X509* const cert, const char* host_name)
         /* we skip the candidate and move on to the next.     */
         /* Another policy would be to fails since it probably */
         /* indicates the client is under attack.              */
-        if(utf8 && len1 && len2 && (len1 == len2)) {
-          if (len1 > 1 && utf8[0] == '*') {
-            auto pos = strstr(host_name, (const char*)&utf8[1]);
-            if (pos == &host_name[strlen(host_name)-(len1-1)]);
-              success = 1;
-          } else if (!strcmp((const char*)utf8, host_name))
-            success = 1;
-        }
-
-        if(utf8)
-          OPENSSL_free(utf8), utf8 = NULL;
-      }
-      else
-        anon_log("Unknown GENERAL_NAME type: " << entry->type);
-    }
-
-  } while (0);
-
-  if(names)
-    GENERAL_NAMES_free(names);
-
-  if(utf8)
-    OPENSSL_free(utf8);
-
-  if(!success)
-  {
-    anon_log("unable to verify given cert belongs to " << host_name);
-    return true;
-  }
-  return true;
-}
-
-
-//#define PRINT_CERT_INFO
-
-#ifdef PRINT_CERT_INFO
-static void print_cn_name(const char* label, X509_NAME* const name)
-{
-  int idx = -1, success = 0;
-  unsigned char *utf8 = NULL;
-
-  do
-  {
-    if(!name) break; /* failed */
-
-    idx = X509_NAME_get_index_by_NID(name, NID_commonName, -1);
-    if(!(idx > -1))  break; /* failed */
-
-    X509_NAME_ENTRY* entry = X509_NAME_get_entry(name, idx);
-    if(!entry) break; /* failed */
-
-    ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
-    if(!data) break; /* failed */
-
-    int length = ASN1_STRING_to_UTF8(&utf8, data);
-    if(!utf8 || !(length > 0))  break; /* failed */
-
-    anon_log(label << ": " << (char*)utf8);
-
-    success = 1;
-
-  } while (0);
-
-  if(utf8)
-    OPENSSL_free(utf8);
-
-  if(!success)
-    anon_log(label << ": <not available>");
-}
-
-void print_san_name(const char* label, X509* const cert)
-{
-  int success = 0;
-  GENERAL_NAMES* names = NULL;
-  unsigned char* utf8 = NULL;
-
-  do
-  {
-    if(!cert) break; /* failed */
-
-    names = (GENERAL_NAMES*)X509_get_ext_d2i(cert, NID_subject_alt_name, 0, 0);
-    if(!names) break;
-
-    int i = 0, count = sk_GENERAL_NAME_num(names);
-    if(!count) break; /* failed */
-
-    for( i = 0; i < count; ++i ) {
-      GENERAL_NAME* entry = sk_GENERAL_NAME_value(names, i);
-      if(!entry) continue;
-
-      if(GEN_DNS == entry->type) {
-        int len1 = 0, len2 = -1;
-
-        len1 = ASN1_STRING_to_UTF8(&utf8, entry->d.dNSName);
-        if(utf8)
-          len2 = (int)strlen((const char*)utf8);
-
-        if(len1 != len2)
-          anon_log("Strlen and ASN1_STRING size do not match (embedded null?): " << len2 << " vs " << len1);
-
-        /* If there's a problem with string lengths, then     */
-        /* we skip the candidate and move on to the next.     */
-        /* Another policy would be to fails since it probably */
-        /* indicates the client is under attack.              */
-        if(utf8 && len1 && len2 && (len1 == len2)) {
-          anon_log(label << ": " << utf8);
+        #ifdef PRINT_CERT_INFO
+        if (utf8 && len1 && len2 && (len1 == len2))
+          anon_log("  comparing hostname \"" << host_name << "\" to certificate's Subject Alternate Name \"" << (const char*)utf8 << "\"");
+        #endif
+        if(utf8 && len1 && len2 && (len1 == len2) && compare_to_host(utf8, host_name)) {
+          #ifdef PRINT_CERT_INFO
+          anon_log("   names match, certificate is issued to this host");
+          #endif
           success = 1;
         }
 
@@ -381,11 +302,57 @@ void print_san_name(const char* label, X509* const cert)
 
   if(utf8)
     OPENSSL_free(utf8);
+    
+  // now try the common name field of the subject
+  if (!success) {
+    X509_NAME* sname = X509_get_subject_name(cert);
+    if (sname) {
+      int idx = X509_NAME_get_index_by_NID(sname, NID_commonName, -1);
+      if (idx != -1) {
+        X509_NAME_ENTRY* entry = X509_NAME_get_entry(sname,idx);
+        if (entry) {
+          ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+          if (data) {
+            unsigned char* utf8 = 0;
+            int length = ASN1_STRING_to_UTF8(&utf8, data);
+            if (utf8 != 0) {
+              #ifdef PRINT_CERT_INFO
+              if (length > 0)
+                anon_log("  comparing hostname \"" << host_name << "\" to certificate's Subject Common Name \"" << (const char*)utf8 << "\"");
+              #endif
+              if (length > 0 && compare_to_host(utf8, host_name)) {
+                #ifdef PRINT_CERT_INFO
+                anon_log("   names match, certificate is issued to this host");
+                #endif
+                success = 1;
+              }
+              OPENSSL_free(utf8);
+            }
+          }
+        }
+      }
+    }
+  }
 
   if(!success)
-    anon_log(label << ": not available");
+  {
+    anon_log("unable to verify given cert belongs to " << host_name);
+    return false;
+  }
+  return true;
 }
-#endif
+
+
+
+#ifdef PRINT_CERT_INFO
+
+template<typename T>
+T& operator<<(T& str, X509_NAME *xn)
+{
+  char  name[200] = { 0 };
+  X509_NAME_oneline(xn, &name[0], sizeof(name)-1);
+  return str << name;
+}
 
 static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 {
@@ -393,23 +360,13 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 
   int depth = X509_STORE_CTX_get_error_depth(x509_ctx);
   int err = X509_STORE_CTX_get_error(x509_ctx);
+  
+  anon_log("  ssl verify certificate chain depth: " << depth);
 
   X509* cert = X509_STORE_CTX_get_current_cert(x509_ctx);
-  X509_NAME* iname = cert ? X509_get_issuer_name(cert) : NULL;
-  X509_NAME* sname = cert ? X509_get_subject_name(cert) : NULL;
-
-#ifdef PRINT_CERT_INFO
-  anon_log("ssl verify_callback depth: " << depth << ", preverify: " << preverify);
-
-  /* Issuer is the authority we trust that warrants nothing useful */
-  print_cn_name("Issuer (cn)", iname);
-
-  /* Subject is who the certificate is issued to by the authority  */
-  print_cn_name("Subject (cn)", sname);
-
-  if(depth == 0) {
-    /* If depth is 0, its the server's certificate. Print the SANs */
-    print_san_name("Subject (san)", cert);
+  if (cert) {
+    anon_log("   Issuer:  " << X509_get_issuer_name(cert));
+    anon_log("   Subject: " << X509_get_subject_name(cert));
   }
 
   if(preverify == 0)
@@ -429,7 +386,6 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
     else
       anon_log("Error = " << err);
   }
-#endif
 
   #if defined(IGNORE_ERRORS)
   return 1;
@@ -437,13 +393,16 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
   return preverify;
   #endif
 }
+#endif
 
 tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/, const char* host_name)
 {
   ctx_ = SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method());
   if (ctx_ == 0)
     throw_ssl_error();
+#ifdef PRINT_CERT_INFO
   SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
+#endif
   SSL_CTX_set_verify_depth(ctx_, 5);
 
   const long flags = SSL_OP_ALL /*| SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3*/ | SSL_OP_NO_COMPRESSION;

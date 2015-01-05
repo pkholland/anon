@@ -545,8 +545,8 @@ extern "C" int main(int argc, char** argv)
               oss << "Host: " << host << "\r\n";
               oss << "Content-Length: " << body_st.length() << "\r\n";
               oss << "User-Agent: anon_agent\r\n";
-              oss << "Content-Type: text/xml\r\n";
-              oss << "Accept: */*\r\n";
+              oss << "Content-Type: text/xml;charset=utf-8\r\n";
+              oss << "Accept: text/xml;charset=utf-8\r\n";
               oss << "\r\n";
               oss << body_st.c_str();
 
@@ -562,7 +562,7 @@ extern "C" int main(int argc, char** argv)
               auto ret_len = p.read(&ret_buf[0], sizeof(ret_buf)-1);
               
               ret_buf[ret_len] = 0;
-              anon_log("server return starts with:\n\n" << &ret_buf[0] << "\n");
+              anon_log("server return starts with (also encrypted):\n\n" << &ret_buf[0] << "\n");
               
               anon_log("closing connection to \"" << host << "\"");
 
