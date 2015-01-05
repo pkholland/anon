@@ -239,7 +239,7 @@ static bool compare_to_host(const unsigned char* cert_name, const char* host_nam
   return false;
 }
 
-#define PRINT_CERT_INFO
+//#define PRINT_CERT_INFO
 
 static bool verify_host_name(X509* const cert, const char* host_name)
 {
