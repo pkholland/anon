@@ -62,7 +62,7 @@ tls_fiber_init::tls_fiber_init()
   RAND_load_file("/dev/urandom", 1024);
   
   CRYPTO_set_locking_callback(locking_func);
-  //CRYPTO_set_id_callback(id_func);
+  CRYPTO_set_id_callback(id_func);
 }
 
 tls_fiber_init::~tls_fiber_init()
@@ -213,12 +213,57 @@ static int fp_gets(BIO *b, char *buf, int size)
 
 ////////////////////////////////////////////////////////////////////
 
+// openssl is weird in the way it returns errors.  Depending on
+// whether SHOW_ENTIRE_CHAIN is defined below (causing it to
+// iterate throught the entire cert chain, ignoring errors) or not
+// it changes the sort of error code we get back from ERR_get_error
+// (further below).  So here we attempt to handle both cases of either
+// direct error codes or the funky error codes that ERR_reason_error_string
+// accepts.
+
+const char* ssl_errors(unsigned long err)
+{
+  switch (err) {
+    case X509_V_OK:                                     return "X509_V_OK";
+    case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:          return "X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT";
+    case X509_V_ERR_UNABLE_TO_GET_CRL:                  return "X509_V_ERR_UNABLE_TO_GET_CRL";
+    case X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE:   return "X509_V_OK";
+    case X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE:    return "X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE";
+    case X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY: return "X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY";
+    case X509_V_ERR_CERT_SIGNATURE_FAILURE:             return "X509_V_ERR_CERT_SIGNATURE_FAILURE";
+    case X509_V_ERR_CRL_SIGNATURE_FAILURE:              return "X509_V_ERR_CRL_SIGNATURE_FAILURE";
+    case X509_V_ERR_CERT_NOT_YET_VALID:                 return "X509_V_ERR_CERT_NOT_YET_VALID";
+    case X509_V_ERR_CERT_HAS_EXPIRED:                   return "X509_V_ERR_CERT_HAS_EXPIRED";
+    case X509_V_ERR_CRL_NOT_YET_VALID:                  return "X509_V_ERR_CRL_NOT_YET_VALID";
+    case X509_V_ERR_CRL_HAS_EXPIRED:                    return "X509_V_ERR_CRL_HAS_EXPIRED";
+    case X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD:     return "X509_V_ERR_ERROR_IN_CERT_NOT_BEFORE_FIELD";
+    case X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD:      return "X509_V_ERR_ERROR_IN_CERT_NOT_AFTER_FIELD";
+    case X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD:     return "X509_V_ERR_ERROR_IN_CRL_LAST_UPDATE_FIELD";
+    case X509_V_ERR_OUT_OF_MEM:                         return "X509_V_ERR_OUT_OF_MEM";
+    case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:        return "X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT";
+    case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:          return "X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN";
+    case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:  return "X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY";
+    case X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE:    return "X509_V_ERR_UNABLE_TO_VERIFY_LEAF_SIGNATURE";
+    case X509_V_ERR_CERT_CHAIN_TOO_LONG:                return "X509_V_ERR_CERT_CHAIN_TOO_LONG";
+    case X509_V_ERR_CERT_REVOKED:                       return "X509_V_ERR_CERT_REVOKED";
+    case X509_V_ERR_INVALID_CA:                         return "X509_V_ERR_INVALID_CA";
+    case X509_V_ERR_PATH_LENGTH_EXCEEDED:               return "X509_V_ERR_PATH_LENGTH_EXCEEDED";
+    case X509_V_ERR_INVALID_PURPOSE:                    return "X509_V_ERR_INVALID_PURPOSE";
+    case X509_V_ERR_CERT_UNTRUSTED:                     return "X509_V_ERR_CERT_UNTRUSTED";
+    case X509_V_ERR_CERT_REJECTED:                      return "X509_V_ERR_CERT_REJECTED";
+    case X509_V_ERR_SUBJECT_ISSUER_MISMATCH:            return "X509_V_ERR_SUBJECT_ISSUER_MISMATCH";
+    case X509_V_ERR_AKID_SKID_MISMATCH:                 return "X509_V_ERR_AKID_SKID_MISMATCH";
+    case X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH:        return "X509_V_ERR_AKID_ISSUER_SERIAL_MISMATCH";
+    case X509_V_ERR_KEYUSAGE_NO_CERTSIGN:               return "X509_V_ERR_KEYUSAGE_NO_CERTSIGN";
+    case X509_V_ERR_APPLICATION_VERIFICATION:           return "X509_V_ERR_APPLICATION_VERIFICATION";
+  }
+  const char* er = ERR_reason_error_string(err);
+  return er ? er : "unknown X509 error";
+}
+
 static void throw_ssl_error(unsigned long err)
 {
-  const char* er = ERR_reason_error_string(err);
-  if (er)
-    throw std::runtime_error(er);
-  throw std::runtime_error("unknown openssl error");
+  throw std::runtime_error(ssl_errors(err));
 }
 
 static void throw_ssl_error()
@@ -239,7 +284,19 @@ static bool compare_to_host(const unsigned char* cert_name, const char* host_nam
   return false;
 }
 
+// Defining PRINT_CERT_INFO will cause the code to
+// log basic information about the certificates in the chain.
+// If PRINT_CERT_INFO is defined, then also defining SHOW_ENTIRE_CHAIN
+// will cause it to show this information for each certificate
+// in the chain, regardless of whether that certificate is considered
+// "valid" or not.  Without SHOW_ENTIRE_CHAIN defined it will
+// stop on the first invalid certificate.  HOWEVER, as a subtle
+// by-product of this, defining SHOW_ENTIRE_CHAIN also changes the
+// error code seen (and then thrown) by BIO_do_handshake in the
+// case where certificate chain cannot be verified -- that is, there
+// is an error.
 //#define PRINT_CERT_INFO
+//#define SHOW_ENTIRE_CHAIN
 
 static bool verify_host_name(X509* const cert, const char* host_name)
 {
@@ -342,8 +399,6 @@ static bool verify_host_name(X509* const cert, const char* host_name)
   return true;
 }
 
-
-
 #ifdef PRINT_CERT_INFO
 
 template<typename T>
@@ -356,12 +411,7 @@ T& operator<<(T& str, X509_NAME *xn)
 
 static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 {
-  /* For error codes, see http://www.openssl.org/docs/apps/verify.html  */
-
-  int depth = X509_STORE_CTX_get_error_depth(x509_ctx);
-  int err = X509_STORE_CTX_get_error(x509_ctx);
-  
-  anon_log("  ssl verify certificate chain depth: " << depth);
+  anon_log("  ssl verify certificate chain depth: " << X509_STORE_CTX_get_error_depth(x509_ctx));
 
   X509* cert = X509_STORE_CTX_get_current_cert(x509_ctx);
   if (cert) {
@@ -369,25 +419,11 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
     anon_log("   Subject: " << X509_get_subject_name(cert));
   }
 
+  /* For error codes, see http://www.openssl.org/docs/apps/verify.html  */
   if(preverify == 0)
-  {
-    if(err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY)
-      anon_log("Error = X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY");
-    else if(err == X509_V_ERR_CERT_UNTRUSTED)
-      anon_log("Error = X509_V_ERR_CERT_UNTRUSTED");
-    else if(err == X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN)
-      anon_log("Error = X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN");
-    else if(err == X509_V_ERR_CERT_NOT_YET_VALID)
-      anon_log("Error = X509_V_ERR_CERT_NOT_YET_VALID");
-    else if(err == X509_V_ERR_CERT_HAS_EXPIRED)
-      anon_log("Error = X509_V_ERR_CERT_HAS_EXPIRED");
-    else if(err == X509_V_OK)
-      anon_log("Error = X509_V_OK\n");
-    else
-      anon_log("Error = " << err);
-  }
+    anon_log("   Error = " << ssl_errors(X509_STORE_CTX_get_error(x509_ctx)));
 
-  #if defined(IGNORE_ERRORS)
+  #ifdef SHOW_ENTIRE_CHAIN
   return 1;
   #else
   return preverify;
@@ -432,7 +468,7 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
   if (BIO_do_handshake(ssl_bio_) != 1) {
     anon_log("BIO_do_handshake returned error");
     auto ec = ERR_get_error();
-    anon_log("ERR_get_error returned: " << ec);
+    ERR_print_errors_cb([](const char *str, size_t len, void *u)->int{anon_log(str); return 1;}, 0);
     BIO_free(ssl_bio_);
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
@@ -465,7 +501,6 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
     
     auto res = SSL_get_verify_result(ssl_);
     if (res != X509_V_OK) {
-      anon_log("SSL_get_verify_result returned error: " << res);
       BIO_free(ssl_bio_);
       SSL_CTX_free(ctx_);
       throw_ssl_error((unsigned long)res);
