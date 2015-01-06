@@ -47,11 +47,7 @@ public:
   
   ~tls_pipe();
     
-  size_t read(void* buff, size_t len)
-  {
-    return SSL_read(ssl_, buff, len);
-  }
-  
+  size_t read(void* buff, size_t len);
   void write(const void* buff, size_t len);
   
 private:

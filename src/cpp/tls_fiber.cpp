@@ -34,9 +34,37 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/x509v3.h>
-
-
 #include <vector>
+
+#if (OPENSSL_VERSION_NUMBER & 0xf0000000) >= 0x10000000
+
+struct CRYPTO_dynlock_value : public fiber_mutex
+{};
+
+static struct CRYPTO_dynlock_value *dyn_create_func(const char *file, int line)
+{
+  return new CRYPTO_dynlock_value;
+}
+
+static void dyn_lock_func(int mode, struct CRYPTO_dynlock_value *l, const char *file, int line)
+{
+  if (mode & CRYPTO_LOCK)
+    l->lock();
+  else
+    l->unlock();
+}
+
+static void dyn_destroy_func(struct CRYPTO_dynlock_value *l, const char *file, int line)
+{
+  delete l;
+}
+
+static void threadid_func(CRYPTO_THREADID *id)
+{
+  CRYPTO_THREADID_set_pointer(id,get_current_fiber());
+}
+
+#else
 
 static std::vector<fiber_mutex>  mutex_buff(CRYPTO_num_locks());
 
@@ -53,7 +81,9 @@ static unsigned long id_func(void)
 {
   //anon_log("id_func returning " << get_current_fiber());
   return (unsigned long)get_current_fiber();
-} 
+}
+
+#endif
 
 tls_fiber_init::tls_fiber_init()
 {
@@ -61,8 +91,19 @@ tls_fiber_init::tls_fiber_init()
   SSL_load_error_strings();  
   RAND_load_file("/dev/urandom", 1024);
   
+  #if (OPENSSL_VERSION_NUMBER & 0xf0000000) >= 0x10000000
+  
+  CRYPTO_set_dynlock_create_callback(dyn_create_func);
+  CRYPTO_set_dynlock_lock_callback(dyn_lock_func);
+  CRYPTO_set_dynlock_destroy_callback(dyn_destroy_func);
+  CRYPTO_THREADID_set_callback(threadid_func);
+  
+  #else
+  
   CRYPTO_set_locking_callback(locking_func);
   CRYPTO_set_id_callback(id_func);
+  
+  #endif
 }
 
 tls_fiber_init::~tls_fiber_init()
@@ -271,6 +312,27 @@ static void throw_ssl_error()
   throw_ssl_error(ERR_get_error());
 }
 
+static const char* ssl_io_errors(unsigned long err)
+{
+  switch (err) {
+    case SSL_ERROR_NONE:              return "SSL_ERROR_NONE";
+    case SSL_ERROR_ZERO_RETURN:       return "SSL_ERROR_ZERO_RETURN";
+    case SSL_ERROR_WANT_READ:         return "SSL_ERROR_WANT_READ";
+    case SSL_ERROR_WANT_WRITE:        return "SSL_ERROR_WANT_WRITE";
+    case SSL_ERROR_WANT_CONNECT:      return "SSL_ERROR_WANT_CONNECT";
+    case SSL_ERROR_WANT_ACCEPT:       return "SSL_ERROR_WANT_ACCEPT";
+    case SSL_ERROR_WANT_X509_LOOKUP:  return "SSL_ERROR_WANT_X509_LOOKUP";
+    case SSL_ERROR_SYSCALL:           return "SSL_ERROR_SYSCALL";
+    case SSL_ERROR_SSL:               return "SSL_ERROR_SSL";
+  }
+  return "unknown SSL io error";
+}
+
+static void throw_ssl_io_error(unsigned long err)
+{
+  throw std::runtime_error(ssl_io_errors(err));
+}
+
 static bool compare_to_host(const unsigned char* cert_name, const char* host_name)
 {
   const char* utf8 = (const char*)cert_name;
@@ -464,17 +526,15 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/
     throw_ssl_error(ec);
   }
   BIO_push(ssl_bio_,fpb);
+
+  BIO_get_ssl(ssl_bio_, &ssl_);
   
   if (BIO_do_handshake(ssl_bio_) != 1) {
-    anon_log("BIO_do_handshake returned error");
     auto ec = ERR_get_error();
-    ERR_print_errors_cb([](const char *str, size_t len, void *u)->int{anon_log(str); return 1;}, 0);
     BIO_free(ssl_bio_);
     SSL_CTX_free(ctx_);
     throw_ssl_error(ec);
   }
-  
-  BIO_get_ssl(ssl_bio_, &ssl_);
   
   if (!ssl_) {
     auto ec = ERR_get_error();
@@ -517,6 +577,14 @@ tls_pipe::~tls_pipe()
   SSL_CTX_free(ctx_);
 }
 
+size_t tls_pipe::read(void* buff, size_t len)
+{
+  auto ret = SSL_read(ssl_, buff, len);
+  if (ret <= 0)
+    throw_ssl_io_error(SSL_get_error(ssl_, ret));
+  return ret;
+}
+  
 void tls_pipe::write(const void* buff, size_t len)
 {
   size_t tot_bytes = 0;
@@ -524,7 +592,7 @@ void tls_pipe::write(const void* buff, size_t len)
   while (tot_bytes < len) {
     auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
     if (written < 0)
-      throw_ssl_error(SSL_get_error(ssl_, id_func()));
+      throw_ssl_io_error(SSL_get_error(ssl_, written));
     tot_bytes += written;      
   }
 }
