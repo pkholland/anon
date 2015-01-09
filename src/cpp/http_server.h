@@ -25,6 +25,7 @@
 #include "tcp_server.h"
 #include "http_parser.h"  // github.com/joyent/http-parser
 #include "tcp_utils.h"
+#include "tls_context.h"
 
 struct http_headers
 {
@@ -193,10 +194,13 @@ public:
   {}
 
   // run immediately with the given 'f'
+  // NOTE, if tls_ctx != 0 it must remain valid for the life
+  // of this http_server
   template<typename Fn>
-  http_server(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog)
+  http_server(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog,
+            tls_context* tls_ctx = 0)
   {
-    start(tcp_port, f, listen_backlog);
+    start(tcp_port, f, listen_backlog, tls_ctx);
   }
   
   // add the given 'f' as an upgrade handler, identified by 'name'.
@@ -218,15 +222,18 @@ public:
   // used when you have constructed the http_server with the default ctor
   // and now want to start it running (presumably because you wanted to call
   // add_upgrade_handler prior to it starting)
+  // NOTE, if tls_ctx != 0 it must remain valid for the life
+  // of this http_server
   template<typename Fn>
-  void start(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog)
+  void start(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog,
+            tls_context* tls_ctx = 0)
   {
-    start_(tcp_port, new bod_hand<Fn>(f), listen_backlog);
+    start_(tcp_port, new bod_hand<Fn>(f), listen_backlog, std::move(tls_ctx));
   }
     
   struct pipe_t
   {
-    pipe_t(fiber_pipe* pipe, char (&buf)[4096], size_t& bsp, size_t& bep)
+    pipe_t(::pipe_t* pipe, char (&buf)[4096], size_t& bsp, size_t& bep)
       : pipe(pipe),
         buf(buf),
         bep(bep),
@@ -245,7 +252,7 @@ public:
 
   private:
     fiber_mutex mutex;
-    fiber_pipe* pipe;
+    ::pipe_t*   pipe;
     char        (&buf)[4096];
     size_t&     bsp;
     size_t&     bep;
@@ -272,7 +279,7 @@ private:
     Fn f_;
   };
   
-  void start_(int tcp_port, body_handler* base_handler, int listen_backlog);
+  void start_(int tcp_port, body_handler* base_handler, int listen_backlog, tls_context* tls_ctx);
   
   std::unique_ptr<tcp_server>   tcp_server_;
   std::unique_ptr<body_handler> body_holder_;

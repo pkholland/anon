@@ -212,8 +212,8 @@ size_t fiber_pipe::read(void *buf, size_t count)
   while (true) {
     num_bytes_read = ::read(fd_, buf, count);
     if (num_bytes_read == -1) {
-			if (errno == EAGAIN)
-				tls_io_params.sleep_until_data_available(this);
+      if (errno == EAGAIN)
+        tls_io_params.sleep_until_data_available(this);
       else
         do_error("read(" << fd_ << ", <ptr>, " << count << ")");
     } else if (num_bytes_read == 0 && count != 0) {
@@ -222,10 +222,10 @@ size_t fiber_pipe::read(void *buf, size_t count)
       #endif
       throw std::runtime_error("read returned 0, other end probably closed");
     }
-		else
-			break;
-	}
-	return (size_t)num_bytes_read;
+    else
+      break;
+  }
+  return (size_t)num_bytes_read;
 }
 
 void fiber_pipe::write(const void *buf, size_t count)
@@ -233,7 +233,7 @@ void fiber_pipe::write(const void *buf, size_t count)
   anon::assert_no_locks();
   size_t total_bytes_written = 0;
   const char* p = (const char*)buf;
-	
+
   while (total_bytes_written < count) {
     auto bytes_written = ::send(fd_, &p[total_bytes_written], count - total_bytes_written, MSG_NOSIGNAL);
     if (bytes_written == -1) {
@@ -249,7 +249,7 @@ void fiber_pipe::write(const void *buf, size_t count)
     }
     else
       total_bytes_written += bytes_written;
-	}
+  }
 }
 
 
@@ -305,20 +305,20 @@ void io_params::wake_all(fiber* first)
 
 void io_params::sleep_until_data_available(fiber_pipe* pipe)
 {
-	opcode_ = oc_read;
-	io_pipe_ = pipe;
-	pipe->io_fiber_ = current_fiber_;
-	current_fiber_->switch_to_fiber(parent_fiber_);
-	pipe->io_fiber_ = 0;
+  opcode_ = oc_read;
+  io_pipe_ = pipe;
+  pipe->io_fiber_ = current_fiber_;
+  current_fiber_->switch_to_fiber(parent_fiber_);
+  pipe->io_fiber_ = 0;
 }
 
 void io_params::sleep_until_write_possible(fiber_pipe* pipe)
 {
-	opcode_ = oc_write;
-	io_pipe_ = pipe;
-	pipe->io_fiber_ = current_fiber_;
-	current_fiber_->switch_to_fiber(parent_fiber_);
-	pipe->io_fiber_ = 0;
+  opcode_ = oc_write;
+  io_pipe_ = pipe;
+  pipe->io_fiber_ = current_fiber_;
+  current_fiber_->switch_to_fiber(parent_fiber_);
+  pipe->io_fiber_ = 0;
 }
 
 void io_params::sleep_cur_until_write_possible(fiber_pipe* pipe)

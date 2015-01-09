@@ -25,6 +25,7 @@
 #include "io_dispatch.h"
 #include "log.h"
 #include "lock_checker.h"
+#include "pipe.h"
 #include <ucontext.h>
 #include <vector>
 #include <atomic>
@@ -50,7 +51,7 @@ struct fiber_cond
   void notify_all();
 
 private:
-  fiber*	wake_head_;
+  fiber*  wake_head_;
 };
 
 struct fiber_mutex
@@ -99,14 +100,14 @@ private:
       if (std::atomic_compare_exchange_weak(&state_, &expected, 0))
         break;
     }
-	}
-	
-	void sleep_till_woken();
-	void wake_sleepers();
+  }
+  
+  void sleep_till_woken();
+  void wake_sleepers();
 
   std::atomic<int>  state_;
-	fiber*            fiber_wake_head_;
-	fiber*            fiber_wake_tail_;
+  fiber*            fiber_wake_head_;
+  fiber*            fiber_wake_tail_;
 };
 
 struct fiber_lock
@@ -306,13 +307,13 @@ extern void* get_current_fiber();
 
 ////////////////////////////////////////////////////////////////////////
 
-class fiber_pipe : public io_dispatch::handler
+class fiber_pipe : public io_dispatch::handler, public pipe_t
 {
 public:
-	enum pipe_sock_t	{
-		unix_domain = 0,
-		network = 1
-	};
+  enum pipe_sock_t  {
+    unix_domain = 0,
+    network = 1
+  };
 
   fiber_pipe(int socket_fd, pipe_sock_t socket_type)
     : fd_(socket_fd),
@@ -322,7 +323,7 @@ public:
     io_dispatch::epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
   }
   
-  ~fiber_pipe()
+  virtual ~fiber_pipe()
   {
     if (fd_ != -1) {
       if (socket_type_ == network)
@@ -356,8 +357,8 @@ public:
     return ret;
   }
 
-  size_t read(void* buff, size_t len);
-  void write(const void* buff, size_t len);
+  virtual size_t read(void* buff, size_t len);
+  virtual void write(const void* buff, size_t len);
 
 private:
   // fiber_pipe's are neither movable, nor copyable.
@@ -434,13 +435,13 @@ inline void fiber_mutex::lock()
         sleep_till_woken();
         break;
 
-			default:
+      default:
         // someone has it locked, and someone else is
         // manipulating the wake list. spin and try again
         state_.fetch_add(-1);
         break;
-		}
-	}
+    }
+  }
 }
 
 inline void fiber_mutex::unlock()
@@ -464,17 +465,17 @@ inline void fiber_mutex::unlock()
   if (fiber_wake_head_)
     wake_sleepers();
 
-	// release both our lock on the mutex and ownership of manipulating the wake
-	// list (2) Again, although we know state_ was == 2 above when we got through
-	// the while loop at the start of this routine, it might be > 2 now, meaning
-	// some other fiber has incremented it when it attempted to lock it.  In that
-	// case we can't simply decrement state_ by 2 here because that might leave
-	// it set to 1 (for example, if it had been 3), looking to that other fiber
-	// like it was locked.  If yet another fiber attempted to lock it at that point
-	// before the first other thread decremented it back to 0 it would look locked
-	// to that third thread, causing it to add itself to the wake list.  That is
-	// wrong because no one owns the lock at that point.  Here we only set state_
-	// back to zero at a point in time when it is equal to 2.
+  // release both our lock on the mutex and ownership of manipulating the wake
+  // list (2) Again, although we know state_ was == 2 above when we got through
+  // the while loop at the start of this routine, it might be > 2 now, meaning
+  // some other fiber has incremented it when it attempted to lock it.  In that
+  // case we can't simply decrement state_ by 2 here because that might leave
+  // it set to 1 (for example, if it had been 3), looking to that other fiber
+  // like it was locked.  If yet another fiber attempted to lock it at that point
+  // before the first other thread decremented it back to 0 it would look locked
+  // to that third thread, causing it to add itself to the wake list.  That is
+  // wrong because no one owns the lock at that point.  Here we only set state_
+  // back to zero at a point in time when it is equal to 2.
   while (true) {
     int expected = 2;
     if (std::atomic_compare_exchange_weak(&state_, &expected, 0))

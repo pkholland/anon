@@ -22,36 +22,26 @@
 
 #pragma once
 
+#include "tls_context.h"
 #include "fiber.h"
-#include <openssl/ssl.h>
+#include <memory>
 
-// singlton object that should exist for the life of the process.
-// This object initializes openssl, and binds it to the fiber-based
-// mechanism in anon.  This permits opensll to be called from fiber
-// but also _requires_ that it only be called from fibers.
-class tls_fiber_init
-{
-public:
-  tls_fiber_init();
-  ~tls_fiber_init();
-};
-
-class tls_pipe
+class tls_pipe : public pipe_t
 {
 public:
   // takes ownership of the given pipe.
   // establishes a tls handshake over this pipe, and if sucessful
-  // (that does not thow an exception) all future read and write
+  // (does not thow an exception) all future read and write
   // calls will be encrypted/decrypted and then sent over this pipe;
-  tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/, const char* host_name);
+  tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client,
+          bool verify_peer, const char* host_name, const tls_context& context);
   
-  ~tls_pipe();
+  virtual ~tls_pipe();
     
-  size_t read(void* buff, size_t len);
-  void write(const void* buff, size_t len);
+  virtual size_t read(void* buff, size_t len);
+  virtual void write(const void* buff, size_t len);
   
 private:
-  SSL_CTX*  ctx_;
   BIO*      ssl_bio_;
   SSL*      ssl_;
 };

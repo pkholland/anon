@@ -20,7 +20,8 @@
  THE SOFTWARE.
 */
 
-#include "tls_fiber.h"
+#include "tls_context.h"
+#include "fiber.h"
 
 #define OPENSSL_THREAD_DEFINES
 #include <openssl/opensslconf.h>
@@ -33,8 +34,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
-#include <openssl/x509v3.h>
-#include <vector>
+
+// basic mutex locking functions for anon's fibers, in both modern (dynamic) and pre-1.0 OpenSSL format
 
 #if (OPENSSL_VERSION_NUMBER & 0xf0000000) >= 0x10000000
 
@@ -66,6 +67,8 @@ static void threadid_func(CRYPTO_THREADID *id)
 
 #else
 
+#include <vector>
+
 static std::vector<fiber_mutex>  mutex_buff(CRYPTO_num_locks());
 
 static void locking_func(int mode,int n, const char *file,int line)
@@ -85,10 +88,12 @@ static unsigned long id_func(void)
 
 #endif
 
-tls_fiber_init::tls_fiber_init()
+tls_context::fiber_init tls_context::fiber_init_;
+
+tls_context::fiber_init::fiber_init()
 {
-  (void)SSL_library_init();
   SSL_load_error_strings();  
+  (void)SSL_library_init();
   RAND_load_file("/dev/urandom", 1024);
   
   #if (OPENSSL_VERSION_NUMBER & 0xf0000000) >= 0x10000000
@@ -106,163 +111,17 @@ tls_fiber_init::tls_fiber_init()
   #endif
 }
 
-tls_fiber_init::~tls_fiber_init()
+tls_context::fiber_init::~fiber_init()
 {
   ERR_free_strings();
 }
 
-////////////////////////////////////////////////////////////////////
 
-// an implementation of an openssl "BIO" based on anon's fiberpipe
+/////////////////////////////////////////////////////////////////////////
 
-#define BIO_TYPE_FIBER_PIPE	(53|0x0400|0x0100)	/* '53' is our custom type, 4, and 1 are BIO_TYPE_SOURCE_SINK and BIO_TYPE_DESCRIPTOR */
+// some error handling support
 
-static int fp_write(BIO *h, const char *buf, int num);
-static int fp_read(BIO *h, char *buf, int size);
-static int fp_puts(BIO *h, const char *str);
-static int fp_gets(BIO *h, char *buf, int size);
-static long fp_ctrl(BIO *h, int cmd, long arg1, void *arg2);
-static int fp_new(BIO *h);
-static int fp_free(BIO *data);
-
-static BIO_METHOD methods_fdp =
-{
-  BIO_TYPE_FIBER_PIPE,"fiber_pipe",
-  fp_write,
-  fp_read,
-  fp_puts,
-  fp_gets,
-  fp_ctrl,
-  fp_new,
-  fp_free,
-  NULL,
-};
-
-static BIO *BIO_new_fp(std::unique_ptr<fiber_pipe>&& pipe)
-{
-  BIO *b = BIO_new(&methods_fdp);
-  if (b == 0)
-    return 0;
-  b->ptr = new std::unique_ptr<fiber_pipe>(std::move(pipe));
-  return b;
-}
-
-static int fp_new(BIO *b)
-{
-  b->init = 1;
-  b->ptr=NULL;
-  return 1;
-}
-
-static int fp_free(BIO *b)
-{
-  if (b == NULL)
-    return 0;
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
-  if (p)
-    delete p;
-  b->ptr = 0;
-  return 1;
-}
-
-static int fp_read(BIO *b, char *out, int outl)
-{
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
-  if (p)
-    return (*p)->read(out, outl);
-  return -1;
-}
-
-static int fp_write(BIO *b, const char *in, int inl)
-{
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
-  if (p) {
-    (*p)->write(in, inl);
-    return inl;
-  }
-  return -1;
-}
-
-
-static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
-{
-  long ret=1;
-
-  switch (cmd) {
-    case BIO_CTRL_RESET:
-      anon_log("fp_ctrl BIO_CTRL_RESET");
-      break;
-    case BIO_CTRL_EOF:
-      anon_log("fp_ctrl BIO_CTRL_EOF");
-      break;
-    case BIO_CTRL_INFO:
-      anon_log("fp_ctrl BIO_CTRL_INFO");
-      break;
-    case BIO_CTRL_SET:
-      anon_log("fp_ctrl BIO_CTRL_SET");
-      break;
-    case BIO_CTRL_GET:
-      anon_log("fp_ctrl BIO_CTRL_GET");
-      break;
-    case BIO_CTRL_PUSH:
-      //anon_log("fp_ctrl BIO_CTRL_PUSH");
-      break;
-    case BIO_CTRL_POP:
-      //anon_log("fp_ctrl BIO_CTRL_POP");
-      break;
-    case BIO_CTRL_GET_CLOSE:
-      anon_log("fp_ctrl BIO_CTRL_GET_CLOSE");
-      break;
-    case BIO_CTRL_SET_CLOSE:
-      anon_log("fp_ctrl BIO_CTRL_SET_CLOSE");
-      break;
-    case BIO_CTRL_PENDING:
-      anon_log("fp_ctrl BIO_CTRL_PENDING");
-      ret = 0;
-      break;
-    case BIO_CTRL_FLUSH:
-      //anon_log("fp_ctrl BIO_CTRL_FLUSH");
-      break;
-    case BIO_CTRL_DUP:
-      anon_log("fp_ctrl BIO_CTRL_DUP");
-      break;
-    default:
-      anon_log("fp_ctrl unknown: " << cmd);
-      ret=0;
-      break;
-  }
-  return ret;
-}
-
-static int fp_puts(BIO *b, const char *str)
-{
-  return fp_write(b, str, strlen(str));
-}
-
-static int fp_gets(BIO *b, char *buf, int size)
-{
-  int ret=0;
-  char *ptr=buf;
-  char *end=buf+size-1;
-
-  while ((ptr < end) && (fp_read(b, ptr, 1) > 0) && (ptr[0] != '\n'))
-    ptr++;
-
-  ptr[0] = 0;
-  return strlen(buf);
-}
-
-////////////////////////////////////////////////////////////////////
-
-// openssl is weird in the way it returns errors.  Depending on
-// whether SHOW_ENTIRE_CHAIN is defined below (causing it to
-// iterate throught the entire cert chain, ignoring errors) or not
-// it changes the sort of error code we get back from ERR_get_error
-// (further below).  So here we attempt to handle both cases of either
-// direct error codes or the funky error codes that ERR_reason_error_string
-// accepts.
-
-const char* ssl_errors(unsigned long err)
+static const char* ssl_errors(unsigned long err)
 {
   switch (err) {
     case X509_V_OK:                                     return "X509_V_OK";
@@ -302,12 +161,12 @@ const char* ssl_errors(unsigned long err)
   return er ? er : "unknown X509 error";
 }
 
-static void throw_ssl_error(unsigned long err)
+void throw_ssl_error(unsigned long err)
 {
   throw std::runtime_error(ssl_errors(err));
 }
 
-static void throw_ssl_error()
+void throw_ssl_error()
 {
   throw_ssl_error(ERR_get_error());
 }
@@ -328,11 +187,14 @@ static const char* ssl_io_errors(unsigned long err)
   return "unknown SSL io error";
 }
 
-static void throw_ssl_io_error(unsigned long err)
+void throw_ssl_io_error(unsigned long err)
 {
   throw std::runtime_error(ssl_io_errors(err));
 }
 
+///////////////////////////////////////////////////////////////
+
+// simple, strcmp that accepts a cert_name that starts with "*"
 static bool compare_to_host(const unsigned char* cert_name, const char* host_name)
 {
   const char* utf8 = (const char*)cert_name;
@@ -360,7 +222,12 @@ static bool compare_to_host(const unsigned char* cert_name, const char* host_nam
 //#define PRINT_CERT_INFO
 //#define SHOW_ENTIRE_CHAIN
 
-static bool verify_host_name(X509* const cert, const char* host_name)
+// verify that the given 'cert' was intended for the 'host_name' we
+// are trying to connect to.  That is, we don't allow a connection to
+// https://www.companyA.com to return a cert originally signed for
+// https://www.companyB.com
+
+bool verify_host_name(X509* const cert, const char* host_name)
 {
   if (!cert)
     return false;
@@ -369,7 +236,7 @@ static bool verify_host_name(X509* const cert, const char* host_name)
   GENERAL_NAMES* names = NULL;
   unsigned char* utf8 = NULL;
 
-  // first try the "Subject Alternate Names"
+  // first try the list of "Subject Alternate Names"
   do
   {
     names = (GENERAL_NAMES*)X509_get_ext_d2i(cert, NID_subject_alt_name, 0, 0);
@@ -389,8 +256,10 @@ static bool verify_host_name(X509* const cert, const char* host_name)
         if(utf8)
           len2 = (int)strlen((const char*)utf8);
 
+        #if ANON_LOG_NET_TRAFFIC > 1
         if(len1 != len2)
           anon_log("Strlen and ASN1_STRING size do not match (embedded null?): " << len2 << " vs " << len1);
+        #endif
 
         /* If there's a problem with string lengths, then     */
         /* we skip the candidate and move on to the next.     */
@@ -410,8 +279,11 @@ static bool verify_host_name(X509* const cert, const char* host_name)
         if(utf8)
           OPENSSL_free(utf8), utf8 = NULL;
       }
-      else
+      else {
+        #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("Unknown GENERAL_NAME type: " << entry->type);
+        #endif
+      }
     }
 
   } while (0);
@@ -455,7 +327,9 @@ static bool verify_host_name(X509* const cert, const char* host_name)
 
   if(!success)
   {
-    anon_log("unable to verify given cert belongs to " << host_name);
+    #if ANON_LOG_NET_TRAFFIC > 1
+    anon_log("unable to verify given cert belongs to \"" << host_name << "\"");
+    #endif
     return false;
   }
   return true;
@@ -463,6 +337,7 @@ static bool verify_host_name(X509* const cert, const char* host_name)
 
 #ifdef PRINT_CERT_INFO
 
+// helper to stream on a Name field from an X509
 template<typename T>
 T& operator<<(T& str, X509_NAME *xn)
 {
@@ -473,7 +348,7 @@ T& operator<<(T& str, X509_NAME *xn)
 
 static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 {
-  anon_log("  ssl verify certificate chain depth: " << X509_STORE_CTX_get_error_depth(x509_ctx));
+  anon_log("  ssl verify certificate");
 
   X509* cert = X509_STORE_CTX_get_current_cert(x509_ctx);
   if (cert) {
@@ -481,7 +356,6 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
     anon_log("   Subject: " << X509_get_subject_name(cert));
   }
 
-  /* For error codes, see http://www.openssl.org/docs/apps/verify.html  */
   if(preverify == 0)
     anon_log("   Error = " << ssl_errors(X509_STORE_CTX_get_error(x509_ctx)));
 
@@ -493,109 +367,172 @@ static int verify_callback(int preverify, X509_STORE_CTX* x509_ctx)
 }
 #endif
 
-tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client/*vs. server*/, const char* host_name)
+////////////////////////////////////////////////////////////////////
+
+// some resource management helpers to deal with OpenSSL crappiness
+namespace {
+
+struct auto_bio_file
 {
-  ctx_ = SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method());
-  if (ctx_ == 0)
-    throw_ssl_error();
-#ifdef PRINT_CERT_INFO
-  SSL_CTX_set_verify(ctx_, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
-#endif
-  SSL_CTX_set_verify_depth(ctx_, 5);
-
-  const long flags = SSL_OP_ALL /*| SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3*/ | SSL_OP_NO_COMPRESSION;
-  (void)SSL_CTX_set_options(ctx_, flags);
-  
-  if (SSL_CTX_load_verify_locations(ctx_, 0, "/etc/ssl/certs") == 0) {
-    auto ec = ERR_get_error();
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-    
-  BIO* fpb = BIO_new_fp(std::move(pipe));
-  if (!fpb) {
-    auto ec = ERR_get_error();
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-  ssl_bio_ = BIO_new_ssl(ctx_,client);
-  if (!ssl_bio_) {
-    auto ec = ERR_get_error();
-    BIO_free(fpb);
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-  BIO_push(ssl_bio_,fpb);
-
-  BIO_get_ssl(ssl_bio_, &ssl_);
-  
-  if (BIO_do_handshake(ssl_bio_) != 1) {
-    auto ec = ERR_get_error();
-    BIO_free(ssl_bio_);
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-  
-  if (!ssl_) {
-    auto ec = ERR_get_error();
-    BIO_free(ssl_bio_);
-    SSL_CTX_free(ctx_);
-    throw_ssl_error(ec);
-  }
-  
-  if (client) {
-    
-    /* Step 1: verify a server certifcate was presented during negotiation
-              Anonymous Diffie-Hellman (ADH) is not allowed
-    */
-    X509* cert = SSL_get_peer_certificate(ssl_);
-    if(cert && verify_host_name(cert,host_name)) {
-      X509_free(cert); /* Free immediately */
-    } else {
-      if (cert)
-        X509_free(cert);
-      BIO_free(ssl_bio_);
-      SSL_CTX_free(ctx_);
-      throw_ssl_error(X509_V_ERR_APPLICATION_VERIFICATION);
+  auto_bio_file(const char* file_name)
+    :bio_(BIO_new(BIO_s_file()))
+  {
+    if (!bio_)
+      throw_ssl_error();
+    if (BIO_read_filename(bio_, file_name) <= 0) {
+      BIO_free(bio_);
+      throw_ssl_error();
     }
-    
-    auto res = SSL_get_verify_result(ssl_);
-    if (res != X509_V_OK) {
-      BIO_free(ssl_bio_);
-      SSL_CTX_free(ctx_);
-      throw_ssl_error((unsigned long)res);
-    }
-
   }
-
   
+  ~auto_bio_file()
+  {
+    if (bio_)
+      BIO_free(bio_);
+  }
+  
+  operator BIO*() { return bio_; }
+  
+  BIO *bio_;
+};
+
+struct auto_x509
+{
+  auto_x509(X509* x)
+    : x_(x)
+  {
+    if (!x_)
+      throw_ssl_error();
+  }
+  
+  ~auto_x509()
+  {
+    if (x_)
+      X509_free(x_);
+  }
+  
+  X509* release() { auto ret = x_; x_ = 0; return ret; }
+  
+  X509* x_;
+};
+
+struct auto_key
+{
+  auto_key(EVP_PKEY* key)
+    : key_(key)
+  {
+    if (!key_)
+      throw_ssl_error();
+  }
+  
+  ~auto_key()
+  {
+    if (key_)
+      EVP_PKEY_free(key_);
+  }
+  
+  EVP_PKEY* release() { auto ret = key_; key_ = 0; return ret; }
+  
+  EVP_PKEY* key_;
+};
+
+struct auto_ctx
+{
+  auto_ctx(SSL_CTX* ctx)
+    : ctx_(ctx)
+  {
+    if (!ctx_)
+      throw_ssl_error();
+  }
+  
+  ~auto_ctx()
+  {
+    if (ctx_)
+      SSL_CTX_free(ctx_);
+  }
+  
+  operator SSL_CTX*() { return ctx_; }
+  
+  SSL_CTX* release() { auto ctx = ctx_; ctx_ = 0; return ctx; }
+  
+  SSL_CTX* ctx_;
+};
+
 }
 
-tls_pipe::~tls_pipe()
+////////////////////////////////////////////////////////////////////
+
+static int password_callback(char *buf, int bufsiz, int verify, void *data)
 {
-  BIO_free(ssl_bio_);
+  int len = data ? strlen((const char*)data) : 0;
+  if (len > bufsiz)
+    len = bufsiz;
+  memcpy(buf, data, len);
+  return len;
+}
+
+static EVP_PKEY* read_pem_key(const char* key_file_name, const char* password)
+{
+  auto_bio_file key_bio(key_file_name);
+  EVP_PKEY* pkey = PEM_read_bio_PrivateKey(key_bio, NULL, password_callback, (void*)password);
+  if (!pkey)
+    throw_ssl_error();
+  return pkey;
+}
+
+static X509* read_pem_cert(const char* cert_file_name, const char* password)
+{
+  auto_bio_file cert_bio(cert_file_name);
+  X509* x = PEM_read_bio_X509_AUX(cert_bio, NULL, password_callback, (void*)password);
+  if (!x)
+    throw_ssl_error();
+  return x;
+}
+
+tls_context::tls_context(bool client,
+              const char* verify_cert,
+              const char* verify_loc,
+              const char* server_cert,
+              const char* server_key,
+              const char* server_pw,
+              int verify_depth)
+{
+  auto_ctx ctx(SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method()));
+  
+#ifdef PRINT_CERT_INFO
+  if (!client)
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT, verify_callback);
+#endif
+
+  SSL_CTX_set_verify_depth(ctx, verify_depth);
+
+  if (!client) {
+    SSL_CTX_set_quiet_shutdown(ctx,1);
+    
+    auto_key  key(read_pem_key(server_key, server_pw));
+    auto_x509 cert(read_pem_cert(server_cert, server_pw));
+    if ((SSL_CTX_use_certificate(ctx, cert.release()) <= 0)
+        || (SSL_CTX_use_PrivateKey(ctx, key.release()) <= 0)
+        || !SSL_CTX_check_private_key(ctx))
+      throw_ssl_error();
+  }
+  
+  const long flags = SSL_OP_ALL /*| SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION*/;
+  (void)SSL_CTX_set_options(ctx, flags);
+  
+  if (SSL_CTX_load_verify_locations(ctx, verify_cert, verify_loc) == 0)
+    throw_ssl_error();
+    
+  ctx_ = ctx.release();
+}
+
+tls_context::~tls_context()
+{
   SSL_CTX_free(ctx_);
 }
 
-size_t tls_pipe::read(void* buff, size_t len)
-{
-  auto ret = SSL_read(ssl_, buff, len);
-  if (ret <= 0)
-    throw_ssl_io_error(SSL_get_error(ssl_, ret));
-  return ret;
-}
-  
-void tls_pipe::write(const void* buff, size_t len)
-{
-  size_t tot_bytes = 0;
-  const char* buf = (const char*)buff;
-  while (tot_bytes < len) {
-    auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
-    if (written < 0)
-      throw_ssl_io_error(SSL_get_error(ssl_, written));
-    tot_bytes += written;      
-  }
-}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
 

@@ -21,12 +21,13 @@
 */
 
 #include "http_server.h"
+#include "tls_pipe.h"
 
-void http_server::start_(int tcp_port, body_handler* base_handler, int listen_backlog)
+void http_server::start_(int tcp_port, body_handler* base_handler, int listen_backlog, tls_context* tls_ctx)
 {
   auto server = new tcp_server(tcp_port,
   
-    [base_handler, this](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
+    [base_handler, this, tls_ctx](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
     
       // parser callback struct used as "user data"
       // style communcation in the callbacks so we
@@ -147,6 +148,18 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         c->message_complete = true;
         return 0;
       };
+      
+      std::unique_ptr<tls_pipe> tlspipe;
+      ::pipe_t* http_pipe;
+      if (tls_ctx) {
+        tlspipe = std::unique_ptr<tls_pipe>(new tls_pipe(std::move(pipe),
+                                          false/*client - we are a server*/,
+                                          false/*don't verify_peer*/,
+                                          0/*host_name*/,
+                                          *tls_ctx));
+        http_pipe = tlspipe.get();
+      } else
+        http_pipe = pipe.get();
     
       http_parser parser;
       parser.data = &pcallback;
@@ -159,14 +172,14 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
       
         // if there is no un-parsed data in buf then read more
         if (bsp == bep)
-          bep += pipe->read(&buf[bep], sizeof(buf)-bep);
+          bep += http_pipe->read(&buf[bep], sizeof(buf)-bep);
           
         // call the joyent parser
         bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);
         
         if (pcallback.message_complete) {
         
-          pipe_t body_pipe(pipe.get(), buf, bsp, bep);
+          pipe_t body_pipe(http_pipe, buf, bsp, bep);
         
           // did the headers indicate an upgrade?
           // if so, handle that differently

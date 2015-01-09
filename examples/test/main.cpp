@@ -36,7 +36,7 @@
 #include "time_utils.h"
 #include "dns_lookup.h"
 #include "http_server.h"
-#include "tls_fiber.h"
+#include "tls_pipe.h"
 //#include "http2_handler.h"
 //#include "http2_test.h"
 
@@ -65,8 +65,6 @@ extern "C" int main(int argc, char** argv)
     anon_log_error("init_big_id_crypto failed");
     return 1;
   }
-  
-  tls_fiber_init  tfi;
   
   uint8_t id_data[32] = {0, 1, 2, 3, 4, 5, 6, 7,
                          8,  9, 10, 11, 12, 13, 14, 15,
@@ -526,9 +524,14 @@ extern "C" int main(int argc, char** argv)
             
               const char* user_name = "user@domain.com";
               const char* password = "password";
+              
+              tls_context ctx(true/*client*/,
+                              0/*verify_cert*/,
+                              "/etc/ssl/certs"/*verify_loc*/,
+                              0, 0, 0, 5);
 
               anon_log("connected to \"" << host << "\", port " << port << ", now starting tls handshake");
-              tls_pipe  p(std::move(pipe), true/*client*/, host);
+              tls_pipe  p(std::move(pipe), true/*client*/, true/*verify_peer*/, host, ctx);
                          
               std::ostringstream body;
               body << "<ReqBody version=\"1.5\" clientId=\"anon_client\">\n";
