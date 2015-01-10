@@ -34,9 +34,7 @@
 #include <unistd.h>
 
 class   fiber;
-struct  fiber_mutex;
 struct  fiber_lock;
-struct  fiber_cond;
 class   fiber_pipe;
 struct  io_params;
 
@@ -224,6 +222,8 @@ public:
   }
   
   static void* get_current_fiber();
+  
+  static void msleep(int milliseconds);
 
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
@@ -318,10 +318,10 @@ public:
   fiber_pipe(int socket_fd, pipe_sock_t socket_type)
     : fd_(socket_fd),
       socket_type_(socket_type),
-      io_fiber_(0)
-  {
-    io_dispatch::epoll_ctl(EPOLL_CTL_ADD,fd_,0,this);
-  }
+      io_fiber_(0),
+      attached_(false),
+      remote_hangup_(false)
+  {}
   
   virtual ~fiber_pipe()
   {
@@ -350,10 +350,11 @@ public:
   int release()
   {
     int ret = fd_;
-    if (fd_ != -1) {
+    if (fd_ != -1 && attached_) {
       io_dispatch::epoll_ctl(EPOLL_CTL_DEL,fd_,0,this);
-      fd_ = -1;
+      attached_ = false;
     }
+    fd_ = -1;
     return ret;
   }
 
@@ -371,6 +372,8 @@ private:
   int         fd_;
   pipe_sock_t socket_type_;
   fiber*      io_fiber_;
+  bool        attached_;
+  bool        remote_hangup_;
 };
 
 ////////////////////////////////////////////////////////////////
@@ -391,6 +394,7 @@ struct io_params
     oc_write,
     oc_mutex_suspend,
     oc_cond_wait,
+    oc_sleep,
     oc_exit_fiber
   };
 
@@ -403,6 +407,7 @@ struct io_params
   void wake_all(fiber* first);
   void sleep_until_data_available(fiber_pipe* pipe);
   void sleep_until_write_possible(fiber_pipe* pipe);
+  void msleep(int milliseconds);
   void exit_fiber();
   
   static void sleep_cur_until_write_possible(fiber_pipe* pipe);
@@ -415,6 +420,7 @@ struct io_params
   fiber             iod_fiber_;
   std::atomic_int*  mutex_state_;
   fiber_mutex*      cond_mutex_;
+  struct timespec   sleep_dur_;
 };
 
 

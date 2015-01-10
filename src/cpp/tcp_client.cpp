@@ -95,8 +95,8 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
       anon_log("initiating async connect() to " << *addr);
       #endif
       
-      std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
       auto cr = connect(fd, addr, addrlen);
+      std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
       
       if (cr == 0) {
       
@@ -105,7 +105,7 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
       } else if (errno != EINPROGRESS) {
       
         inform(tcpc, errno);
-        do_error("connect(fd, addr, addrlen)");
+        do_error("connect(" << fd << ", addr, addrlen)");
         
       } else {
       
@@ -119,11 +119,11 @@ void do_connect_and_run(const char* host, int port, tcp_caller* tcpc, size_t sta
           inform(tcpc, errno);
           do_error("getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen)");
         }
-        
+                
         if (result != 0) {
         
-          #if defined(ANON_LOG_DNS_LOOKUP)
-          anon_log("async connect() completed with error: " << (result > 0 ? error_string(result) : gai_strerror(result)));
+          #if ANON_LOG_NET_TRAFFIC > 0
+          anon_log("async connect() with fd: " << fd << " completed with error: " << (result > 0 ? error_string(result) : gai_strerror(result)));
           #endif
 
           inform(tcpc, result);

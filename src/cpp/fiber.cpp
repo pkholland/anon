@@ -21,6 +21,7 @@
 */
 
 #include "fiber.h"
+#include "time_utils.h"
 #include <fcntl.h>
 
 thread_local io_params  tls_io_params;
@@ -197,12 +198,23 @@ void* get_current_fiber()
   return fiber::get_current_fiber();
 }
 
+void fiber::msleep(int milliseconds)
+{
+  tls_io_params.msleep(milliseconds);
+}
+
 /////////////////////////////////////////////////
+
+int guess_fd(io_dispatch::handler* ioh)
+{
+  return static_cast<fiber_pipe*>(ioh)->get_fd();
+}
 
 void fiber_pipe::io_avail(const struct epoll_event& event)
 {
-  if (event.events & (EPOLLIN | EPOLLOUT))
-    tls_io_params.wake_all(io_fiber_);
+  if (event.events & EPOLLRDHUP)
+    remote_hangup_ = true;
+  tls_io_params.wake_all(io_fiber_);
 }
 
 size_t fiber_pipe::read(void *buf, size_t count)
@@ -212,16 +224,20 @@ size_t fiber_pipe::read(void *buf, size_t count)
   while (true) {
     num_bytes_read = ::read(fd_, buf, count);
     if (num_bytes_read == -1) {
-      if (errno == EAGAIN)
+      if (remote_hangup_)
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
+        #endif
+        throw std::runtime_error("read(fd_, buf, count) detected remote hangup");
+      else if (errno == EAGAIN)
         tls_io_params.sleep_until_data_available(this);
       else
         do_error("read(" << fd_ << ", <ptr>, " << count << ")");
-    } else if (num_bytes_read == 0 && count != 0) {
+    } else if (num_bytes_read == 0 && count != 0)
       #if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0");
+      anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
       #endif
-      throw std::runtime_error("read returned 0, other end probably closed");
-    }
+      throw std::runtime_error("read(fd_, buf, count) returned 0, other end probably closed");
     else
       break;
   }
@@ -235,6 +251,13 @@ void fiber_pipe::write(const void *buf, size_t count)
   const char* p = (const char*)buf;
 
   while (total_bytes_written < count) {
+    if (remote_hangup_)
+    {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("remote hangup detected on write");
+      #endif
+      throw std::runtime_error("remote hangup detected on write");
+    }
     auto bytes_written = ::send(fd_, &p[total_bytes_written], count - total_bytes_written, MSG_NOSIGNAL);
     if (bytes_written == -1) {
       if (errno == EAGAIN)
@@ -245,7 +268,7 @@ void fiber_pipe::write(const void *buf, size_t count)
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("send(" << fd_ << ", <ptr>, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
       #endif
-      throw std::runtime_error("send returned 0, other end probably closed");
+      do_error("send returned 0, other end probably closed");
     }
     else
       total_bytes_written += bytes_written;
@@ -271,11 +294,17 @@ void io_params::wake_all(fiber* first)
     switch(opcode_) {
 
       case oc_read:
-      case oc_write:
-        io_dispatch::epoll_ctl(EPOLL_CTL_MOD, io_pipe_->fd_,
-                                (opcode_ == oc_read ? EPOLLIN : EPOLLOUT) | EPOLLONESHOT | EPOLLET,
+      case oc_write: {
+        int op;
+        if (!io_pipe_->attached_) {
+          op = EPOLL_CTL_ADD;
+          io_pipe_->attached_ = true;
+        } else
+          op = EPOLL_CTL_MOD;
+        io_dispatch::epoll_ctl(op, io_pipe_->fd_,
+                                (opcode_ == oc_read ? EPOLLIN : EPOLLOUT) | EPOLLONESHOT | EPOLLET | EPOLLRDHUP,
                                 io_pipe_);
-        break;
+      } break;
 
       case oc_mutex_suspend:
         mutex_state_->fetch_add(-1);
@@ -283,6 +312,12 @@ void io_params::wake_all(fiber* first)
 
       case oc_cond_wait:
         cond_mutex_->unlock();
+        break;
+        
+      case oc_sleep:
+        io_dispatch::schedule_task([wake]{
+              tls_io_params.wake_all(wake);
+             }, cur_time()+sleep_dur_);
         break;
           
       case oc_exit_fiber: {
@@ -326,5 +361,12 @@ void io_params::sleep_cur_until_write_possible(fiber_pipe* pipe)
   tls_io_params.sleep_until_write_possible(pipe);
 }
 
+void io_params::msleep(int milliseconds)
+{
+  opcode_ = oc_sleep;
+  sleep_dur_.tv_sec = milliseconds / 1000;
+  sleep_dur_.tv_nsec = (milliseconds - sleep_dur_.tv_sec*1000) * 1000000;
+  current_fiber_->switch_to_fiber(parent_fiber_);
+}
 
 

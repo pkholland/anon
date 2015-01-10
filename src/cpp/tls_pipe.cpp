@@ -82,8 +82,13 @@ static int fp_free(BIO *b)
 static int fp_read(BIO *b, char *out, int outl)
 {
   auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
-  if (p)
-    return (*p)->read(out, outl);
+  if (p) {
+    try {
+      return (*p)->read(out, outl);
+    }
+    catch(...) {
+    }
+  }
   return -1;
 }
 
@@ -91,8 +96,12 @@ static int fp_write(BIO *b, const char *in, int inl)
 {
   auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
   if (p) {
-    (*p)->write(in, inl);
-    return inl;
+     try {
+      (*p)->write(in, inl);
+      return inl;
+    }
+    catch(...) {
+    }
   }
   return -1;
 }
@@ -242,13 +251,20 @@ size_t tls_pipe::read(void* buff, size_t len)
     throw_ssl_io_error(SSL_get_error(ssl_, ret));
   return ret;
 }
+
+//#define ANON_SLOW_TLS_WRITES 50
   
 void tls_pipe::write(const void* buff, size_t len)
 {
   size_t tot_bytes = 0;
   const char* buf = (const char*)buff;
   while (tot_bytes < len) {
-    auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
+    #ifdef ANON_SLOW_TLS_WRITES
+      fiber::msleep(ANON_SLOW_TLS_WRITES);
+      auto written = SSL_write(ssl_, &buf[tot_bytes], 1);
+    #else
+      auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
+    #endif
     if (written < 0)
       throw_ssl_io_error(SSL_get_error(ssl_, written));
     tot_bytes += written;      

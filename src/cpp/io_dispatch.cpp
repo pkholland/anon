@@ -288,6 +288,8 @@ void io_dispatch::wake_next_thread()
     anon_log_error("write of k_wake command failed with errno: " << errno_string());
 }
 
+int guess_fd(io_dispatch::handler* ioh);
+
 void io_dispatch::epoll_loop()
 {
   anon_log("starting io_dispatch::epoll_loop");
@@ -306,22 +308,8 @@ void io_dispatch::epoll_loop()
     int ret;
     if ((ret = epoll_wait(ep_fd_, &event[0], sizeof(event)/sizeof(event[0]), -1)) > 0) {
     
-      for (int i=0; i<ret; i++) {
-        // EPOLLHUP (Hang Up) occurs when the underlying file descript is
-        // closed.  This closing happens when some thread calls 'close'
-        // on the file descriptor.  Although close is documented to remove
-        // the file descriptor in question from any epoll file descriptors
-        // it may have been added to, experimentation shows that certain
-        // race conditions will deliever the HUP event to another thread
-        // calling epoll_wait, and this can imply that the code here may
-        // be executing after the original closing thread has deleted
-        // the handler object.  In this case 'events' is set to EPOLLHUP
-        // with no additional bits (EPOLLIN or EPOLLOUT) set.  When this
-        // happens there is nothing to do and so we can safely ignore the
-        // notification.
-        if (event[i].events != EPOLLHUP)
+      for (int i=0; i<ret; i++)
           ((handler*)event[i].data.ptr)->io_avail(event[i]);
-      }
     
     } else if ((ret != 0) && (errno != EINTR)) {
     

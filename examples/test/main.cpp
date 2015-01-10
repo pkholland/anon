@@ -139,6 +139,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  h  - display this menu");
           anon_log("  t  - install a one second timer, which when it expires prints a message");
           anon_log("  tt - schedule, and then delete a timer before it has a chance to expire");
+          anon_log("  fs - run a fiber which executes the fiber sleep function for 1000 milliseconds");
           anon_log("  e  - execute a print statement once on each io thread");
           anon_log("  o  - execute a print statement once on a single io thread");
           anon_log("  f  - execute a print statement on a fiber");
@@ -186,6 +187,13 @@ extern "C" int main(int argc, char** argv)
             anon_log("removed the task " << t);
           } else
             anon_log("failed to remove the task " << t);
+        } else if (!strcmp(&msgBuff[0], "fs")) {
+          anon_log("run a fiber which executes the fiber sleep function for 1000 milliseconds");
+          fiber::run_in_fiber([]{
+            anon_log("in fiber, calling msleep(1000)");
+            fiber::msleep(1000);
+            anon_log("back from calling msleep(1000)");
+          });
         } else if (!strcmp(&msgBuff[0], "e")) {
           anon_log("executing print statement on each io thread");
           io_dispatch::on_each([]{anon_log("hello from io thread " << syscall(SYS_gettid));});
@@ -515,10 +523,11 @@ extern "C" int main(int argc, char** argv)
           
         } else if (!strcmp(&msgBuff[0], "ss")) {
 
-          const char* host = "na1r.services.adobe.com";
+          const char* host = "na1r-dev1.services.adobe.com";
           int port = 443;
                     
           anon_log("trying to tcp connect to \"" << host << "\", port " << port);
+          for (int i = 0; i<4; i++) {
           tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
             if (err_code == 0) {
             
@@ -530,7 +539,8 @@ extern "C" int main(int argc, char** argv)
                               "/etc/ssl/certs"/*verify_loc*/,
                               0, 0, 0, 5);
 
-              anon_log("connected to \"" << host << "\", port " << port << ", now starting tls handshake");
+              auto fd = pipe->get_fd();
+              anon_log("connected to \"" << host << "\", port " << port << ", (fd: " << fd << ") now starting tls handshake");
               tls_pipe  p(std::move(pipe), true/*client*/, true/*verify_peer*/, host, ctx);
                          
               std::ostringstream body;
@@ -557,21 +567,37 @@ extern "C" int main(int argc, char** argv)
               const char* buf = st.c_str();
               size_t len = st.length();
               
+              #if 0
               anon_log("tls handshake completed, certificates accepted, now sending (encrypted):\n\n" << buf);
+              #endif
               
               p.write(st.c_str(), len);
+              
+              //anon_log("tls send completed, now reading");
               
               char  ret_buf[10250];
               auto ret_len = p.read(&ret_buf[0], sizeof(ret_buf)-1);
               
               ret_buf[ret_len] = 0;
-              anon_log("server return starts with (also encrypted):\n\n" << &ret_buf[0] << "\n");
+              anon_log("server return starts with (encrypted):\n\n" << &ret_buf[0] << "\n");
               
-              anon_log("closing connection to \"" << host << "\"");
+              anon_log("closing connection to \"" << host << "\" (fd: " << fd << ")");
 
             } else
               anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
+          
+          }
+          
+        } else if (!strncmp(&msgBuff[0], "pp ", 3)) {
+        
+          auto sock = atoi(&msgBuff[3]);
+          struct sockaddr_in6 addr6;
+          socklen_t addr_len = sizeof(addr6);
+          if (getpeername(sock, (struct sockaddr*)&addr6, &addr_len) != 0)
+            anon_log("getpeername(" << sock << "...) failed with error " << errno_string());
+          else
+            anon_log("getpeernmame(" << sock << ", ...) reported peer as " << &addr6 );
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
