@@ -537,8 +537,6 @@ extern "C" int main(int argc, char** argv)
           anon_log("making " << total << " api calls to \"" << host << "\", port " << port);
           for (int i = 0; i<total; i++) {
           tcp_client::connect_and_run(host, port, [host, port, total, &num_succeeded, &num_failed, &num_tls, &num_connected, &num_calls](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
-          
-            int t = ++num_calls;
             
             if (err_code == 0) {
             
@@ -615,7 +613,7 @@ extern "C" int main(int argc, char** argv)
               ++num_failed;
             }
             
-            if (t == total)
+            if (++num_calls == total)
               anon_log("finished " << total << " api calls:\n  " << num_succeeded << " succeeded\n  " << num_failed << " failed to connect\n  " << num_connected - num_tls << " failed during tls handshake\n  " << num_tls - num_succeeded << " failed after tls handshake");
 
            });
