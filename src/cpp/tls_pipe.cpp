@@ -241,6 +241,10 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client, bool verify_
 
 tls_pipe::~tls_pipe()
 {
+  // if we get here, and no one has done an SSL shutdown yet,
+  // we _dont_ want to have the BIO_free try to send more data
+  // (that can fail, and throw, etc...)
+  SSL_set_quiet_shutdown(ssl_, 1);
   BIO_free(ssl_bio_);
 }
 
@@ -252,7 +256,12 @@ size_t tls_pipe::read(void* buff, size_t len)
   return ret;
 }
 
-//#define ANON_SLOW_TLS_WRITES 50
+void tls_pipe::shutdown()
+{
+  SSL_shutdown(ssl_);
+}
+
+#define ANON_SLOW_TLS_WRITES 50
   
 void tls_pipe::write(const void* buff, size_t len)
 {

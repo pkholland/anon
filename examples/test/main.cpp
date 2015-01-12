@@ -525,69 +525,101 @@ extern "C" int main(int argc, char** argv)
 
           const char* host = "na1r-dev1.services.adobe.com";
           int port = 443;
+          int total = 4;
+          std::atomic_int num_succeeded(0);
+          std::atomic_int num_failed(0);
+          std::atomic_int num_tls(0);
+          std::atomic_int num_connected(0);
                     
-          anon_log("trying to tcp connect to \"" << host << "\", port " << port);
-          for (int i = 0; i<4; i++) {
-          tcp_client::connect_and_run(host, port, [host, port](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+          anon_log("making " << total << " api calls to \"" << host << "\", port " << port);
+          for (int i = 0; i<total; i++) {
+          tcp_client::connect_and_run(host, port, [host, port, total, &num_succeeded, &num_failed, &num_tls, &num_connected](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+            
             if (err_code == 0) {
             
-              const char* user_name = "user@domain.com";
-              const char* password = "password";
-              
-              tls_context ctx(true/*client*/,
-                              0/*verify_cert*/,
-                              "/etc/ssl/certs"/*verify_loc*/,
-                              0, 0, 0, 5);
+              if ( ++num_connected == 1 )
+                anon_log("first one started...");
+                
+              pipe->limit_io_block_time(120);
+            
+              try {
+                
+                const char* user_name = "user@domain.com";
+                const char* password = "password";
+                
+                tls_context ctx(true/*client*/,
+                                0/*verify_cert*/,
+                                "/etc/ssl/certs"/*verify_loc*/,
+                                0, 0, 0, 5);
 
-              auto fd = pipe->get_fd();
-              anon_log("connected to \"" << host << "\", port " << port << ", (fd: " << fd << ") now starting tls handshake");
-              tls_pipe  p(std::move(pipe), true/*client*/, true/*verify_peer*/, host, ctx);
-                         
-              std::ostringstream body;
-              body << "<ReqBody version=\"1.5\" clientId=\"anon_client\">\n";
-              body << " <req dest=\"UserManagement\" api=\"authUserWithCredentials\">\n";
-              body << "  <string>" << user_name << "</string>\n";
-              body << "  <string>" << password << "</string>\n";
-              body << "  <AuthRequest/>\n";
-              body << " </req>\n";
-              body << "</ReqBody>\n";
-              std::string body_st = body.str();
-             
-              std::ostringstream oss;
-              oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
-              oss << "Host: " << host << "\r\n";
-              oss << "Content-Length: " << body_st.length() << "\r\n";
-              oss << "User-Agent: anon_agent\r\n";
-              oss << "Content-Type: text/xml;charset=utf-8\r\n";
-              oss << "Accept: text/xml;charset=utf-8\r\n";
-              oss << "\r\n";
-              oss << body_st.c_str();
+                //anon_log("connected to \"" << host << "\", port " << port << ", (fd: " << fd << ") now starting tls handshake");
+                tls_pipe  p(std::move(pipe), true/*client*/, true/*verify_peer*/, host, ctx);
+                
+                ++num_tls;
+                           
+                std::ostringstream body;
+                body << "<ReqBody version=\"1.5\" clientId=\"anon_client\">\n";
+                body << " <req dest=\"UserManagement\" api=\"authUserWithCredentials\">\n";
+                body << "  <string>" << user_name << "</string>\n";
+                body << "  <string>" << password << "</string>\n";
+                body << "  <AuthRequest/>\n";
+                body << " </req>\n";
+                body << "</ReqBody>\n";
+                std::string body_st = body.str();
+               
+                std::ostringstream oss;
+                oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
+                oss << "Host: " << host << "\r\n";
+                oss << "Content-Length: " << body_st.length() << "\r\n";
+                oss << "User-Agent: anon_agent\r\n";
+                oss << "Content-Type: text/xml;charset=utf-8\r\n";
+                oss << "Accept: text/xml;charset=utf-8\r\n";
+                oss << "\r\n";
+                oss << body_st.c_str();
 
-              std::string st = oss.str();
-              const char* buf = st.c_str();
-              size_t len = st.length();
-              
-              #if 0
-              anon_log("tls handshake completed, certificates accepted, now sending (encrypted):\n\n" << buf);
-              #endif
-              
-              p.write(st.c_str(), len);
-              
-              //anon_log("tls send completed, now reading");
-              
-              char  ret_buf[10250];
-              auto ret_len = p.read(&ret_buf[0], sizeof(ret_buf)-1);
-              
-              ret_buf[ret_len] = 0;
-              anon_log("server return starts with (encrypted):\n\n" << &ret_buf[0] << "\n");
-              
-              anon_log("closing connection to \"" << host << "\" (fd: " << fd << ")");
+                std::string st = oss.str();
+                const char* buf = st.c_str();
+                size_t len = st.length();
+                
+                #if 0
+                anon_log("tls handshake completed, certificates accepted, now sending (encrypted):\n\n" << buf);
+                #endif
+                
+                p.write(st.c_str(), len);
+                
+                //anon_log("tls send completed, now reading");
+                
+                char  ret_buf[10250];
+                auto ret_len = p.read(&ret_buf[0], sizeof(ret_buf)-1);
+                
+                //ret_buf[ret_len] = 0;
+                //anon_log("server return starts with (encrypted):\n\n" << &ret_buf[0] << "\n");
+                
+                //anon_log("closing connection to \"" << host << "\" (fd: " << fd << ")");
+                
+                p.shutdown();
+                
+                ++num_succeeded;
+              }
+              catch (...)
+              {
+                //anon_log("caught exception");
+              }
 
-            } else
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
-          });
+            } else {
+              //anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+              ++num_failed;
+            }
+
+           });
           
           }
+          
+          while (num_connected == 0) {std::this_thread::sleep_for(std::chrono::milliseconds( 100 ));}
+          
+          fiber::wait_for_zero_fibers();
+          anon_log("finished " << total << " api calls:\n  " << num_succeeded << " succeeded\n  " << num_failed << " failed to connect\n  " << num_connected - num_tls << " failed during tls handshake\n  " << num_tls - num_succeeded << " failed after tls handshake");
+
           
         } else if (!strncmp(&msgBuff[0], "pp ", 3)) {
         

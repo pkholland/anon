@@ -41,6 +41,8 @@ public:
   virtual size_t read(void* buff, size_t len);
   virtual void write(const void* buff, size_t len);
   
+  void shutdown();
+  
 private:
   BIO*      ssl_bio_;
   SSL*      ssl_;

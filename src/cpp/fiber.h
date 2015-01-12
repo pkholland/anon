@@ -135,7 +135,7 @@ public:
   static void terminate();  // must be called _after_ io_dispatch::join()
   
   enum {
-    k_default_stack_size = 64*1024
+    k_default_stack_size = 32*1024
   };
   
   // run the given 'fn' in this fiber.  If you pass 'detached' true
@@ -146,12 +146,24 @@ public:
     : auto_free_(auto_free),
       running_(true),
       stack_(::operator new(stack_size)),
-      fiber_id_(++next_fiber_id_)
+      fiber_id_(++next_fiber_id_),
+      timout_pipe_(0)
+      #if defined(ANON_RUNTIME_CHECKS)
+      ,stack_size_(stack_size)
+      #endif
   {
     if (!auto_free_) {
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
+    #if defined(ANON_RUNTIME_CHECKS)
+    char* stack_end = (char*)stack_;
+    stack_end += stack_size - 4;
+    stack_end[0] = 'b';
+    stack_end[1] = 'a';
+    stack_end[2] = 'd';
+    stack_end[3] = 'f';
+    #endif
     getcontext(&ucontext_);
     ucontext_.uc_stack.ss_sp = stack_;
     ucontext_.uc_stack.ss_size = stack_size;
@@ -165,6 +177,14 @@ public:
   
   ~fiber()
   {
+    #if defined(ANON_RUNTIME_CHECKS)
+    if (stack_) {
+      char* stack_end = (char*)stack_;
+      stack_end += stack_size_ - 4;
+      if ( stack_end[0] != 'b' || stack_end[1] != 'a' || stack_end[2] != 'd' || stack_end[3] != 'f')
+        anon_log_error("fiber stack overwrite!!!");
+    }
+    #endif
     ::operator delete(stack_);
   }
   
@@ -293,6 +313,12 @@ private:
   void*       stack_;
   ucontext_t  ucontext_;
   int         fiber_id_;
+  fiber_pipe  *timout_pipe_;
+  
+  #if defined(ANON_RUNTIME_CHECKS)
+  size_t stack_size_;
+  #endif
+
   
   static int num_running_fibers_;
   static std::mutex zero_fiber_mutex_;
@@ -300,6 +326,9 @@ private:
   static std::atomic<int> next_fiber_id_;
   static fiber_mutex on_one_mutex_;
   static fiber_pipe* on_one_pipe_;
+  
+  friend void sweep_timed_out_pipes();
+  static bool while_paused_;
 };
 
 extern int get_current_fiber_id();
@@ -319,9 +348,18 @@ public:
     : fd_(socket_fd),
       socket_type_(socket_type),
       io_fiber_(0),
+      max_io_block_time_(0),
+      io_timeout_(forever),
       attached_(false),
       remote_hangup_(false)
-  {}
+  {
+    std::lock_guard<std::mutex>  lock(list_mutex_);
+    next_ = first_;
+    if (next_)
+      next_->prev_ = this;
+    prev_ = 0;
+    first_ = this;
+  }
   
   virtual ~fiber_pipe()
   {
@@ -330,9 +368,21 @@ public:
         shutdown(fd_, 2/*both*/);
       close(fd_);
     }
+    std::lock_guard<std::mutex>  lock(list_mutex_);
+    if (next_)
+      next_->prev_ = prev_;
+    if (prev_)
+      prev_->next_ = next_;
+    else
+      first_ = next_;
   }
   
   virtual void io_avail(const struct epoll_event& event);
+  
+  void limit_io_block_time(int seconds)
+  {
+    max_io_block_time_ = seconds;
+  }
 
   //int read_and_receive_fd(char* buff, int len, int& fd);
   //void write_and_send_fd(const char* buff, int len, int fd);
@@ -369,11 +419,20 @@ private:
   
   friend struct io_params;
   
-  int         fd_;
-  pipe_sock_t socket_type_;
-  fiber*      io_fiber_;
-  bool        attached_;
-  bool        remote_hangup_;
+  int                           fd_;
+  pipe_sock_t                   socket_type_;
+  fiber*                        io_fiber_;
+  int                           max_io_block_time_;
+  struct timespec               io_timeout_;
+  bool                          attached_;
+  bool                          remote_hangup_;
+  
+  fiber_pipe*                   next_;
+  fiber_pipe*                   prev_;
+  static fiber_pipe*            first_;
+  static std::mutex             list_mutex_;
+  
+  static const struct timespec  forever;
 };
 
 ////////////////////////////////////////////////////////////////
@@ -401,7 +460,8 @@ struct io_params
   io_params()
     : current_fiber_(0),
       parent_fiber_(&iod_fiber_),
-      wake_head_(0)
+      wake_head_(0),
+      timeout_expired_(0)
   {}
   
   void wake_all(fiber* first);
@@ -421,6 +481,10 @@ struct io_params
   std::atomic_int*  mutex_state_;
   fiber_mutex*      cond_mutex_;
   struct timespec   sleep_dur_;
+  bool              timeout_expired_;
+  
+  static io_dispatch::scheduled_task next_pipe_sweep_;
+  static void sweep_timed_out_pipes();
 };
 
 
