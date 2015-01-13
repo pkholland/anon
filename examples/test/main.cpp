@@ -537,10 +537,12 @@ extern "C" int main(int argc, char** argv)
           anon_log("making " << total << " api calls to \"" << host << "\", port " << port);
           for (int i = 0; i<total; i++) {
           tcp_client::connect_and_run(host, port, [host, port, total, &num_succeeded, &num_failed, &num_tls, &num_connected, &num_calls](int err_code, std::unique_ptr<fiber_pipe>&& pipe){
+          
             
             if (err_code == 0) {
             
-              ++num_connected;
+              if (++num_connected == 1)
+                anon_log("tcp connected...");
                 
               pipe->limit_io_block_time(120);
             

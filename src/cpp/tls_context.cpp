@@ -35,11 +35,14 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 
-// basic mutex locking functions for anon's fibers, in both modern (dynamic) and pre-1.0 OpenSSL format
+// basic mutex locking functions
+// although we can almost use fiber_mutex's here, there is one case
+// where we can have an std::mutex locked at the time we are called
+// to perform these openssl locks.
 
 #if (OPENSSL_VERSION_NUMBER & 0xf0000000) >= 0x10000000
 
-struct CRYPTO_dynlock_value : public fiber_mutex
+struct CRYPTO_dynlock_value : public std::mutex
 {};
 
 static struct CRYPTO_dynlock_value *dyn_create_func(const char *file, int line)
@@ -49,10 +52,17 @@ static struct CRYPTO_dynlock_value *dyn_create_func(const char *file, int line)
 
 static void dyn_lock_func(int mode, struct CRYPTO_dynlock_value *l, const char *file, int line)
 {
-  if (mode & CRYPTO_LOCK)
+  if (mode & CRYPTO_LOCK) {
+    #if defined(ANON_RUNTIME_CHECKS)
+    anon::inc_lock_count();
+    #endif
     l->lock();
-  else
+  } else {
+    #if defined(ANON_RUNTIME_CHECKS)
+    anon::dec_lock_count();
+    #endif
     l->unlock();
+  }
 }
 
 static void dyn_destroy_func(struct CRYPTO_dynlock_value *l, const char *file, int line)
@@ -65,27 +75,34 @@ static void threadid_func(CRYPTO_THREADID *id)
   CRYPTO_THREADID_set_pointer(id,get_current_fiber());
 }
 
-#else
+#endif
 
 #include <vector>
 
-static std::vector<fiber_mutex>  mutex_buff(CRYPTO_num_locks());
+static std::vector<std::mutex>  mutex_buff(CRYPTO_num_locks());
 
-static void locking_func(int mode,int n, const char *file,int line)
+static void locking_func(int mode, int n, const char *file, int line)
 {
   //anon_log("ssl " << (mode & CRYPTO_LOCK ? "locking" : "unlocking") << " \"" << file << "\":" << line << ", with n = " << n);
-  if (mode & CRYPTO_LOCK)
+  if (mode & CRYPTO_LOCK) {
+    #if defined(ANON_RUNTIME_CHECKS)
+    anon::inc_lock_count();
+    #endif
     mutex_buff[n].lock();
-  else
+  } else {
+    #if defined(ANON_RUNTIME_CHECKS)
+    anon::dec_lock_count();
+    #endif
     mutex_buff[n].unlock();
+  }
 }
 
+#if (OPENSSL_VERSION_NUMBER & 0xf0000000) < 0x10000000
 static unsigned long id_func(void)
 {
   //anon_log("id_func returning " << get_current_fiber());
   return (unsigned long)get_current_fiber();
 }
-
 #endif
 
 tls_context::fiber_init tls_context::fiber_init_;
@@ -103,11 +120,12 @@ tls_context::fiber_init::fiber_init()
   CRYPTO_set_dynlock_destroy_callback(dyn_destroy_func);
   CRYPTO_THREADID_set_callback(threadid_func);
   
-  #else
+  #endif
   
   CRYPTO_set_locking_callback(locking_func);
-  CRYPTO_set_id_callback(id_func);
   
+  #if (OPENSSL_VERSION_NUMBER & 0xf0000000) < 0x10000000
+  CRYPTO_set_id_callback(id_func);
   #endif
 }
 
