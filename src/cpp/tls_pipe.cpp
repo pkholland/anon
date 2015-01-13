@@ -261,7 +261,7 @@ void tls_pipe::shutdown()
   SSL_shutdown(ssl_);
 }
 
-#define ANON_SLOW_TLS_WRITES 50
+//#define ANON_SLOW_TLS_WRITES 50
   
 void tls_pipe::write(const void* buff, size_t len)
 {
