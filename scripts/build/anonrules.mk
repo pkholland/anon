@@ -176,12 +176,13 @@ anon.link=gcc
 #
 #	$1 = Souce Name
 #	$2 = (with -I prefix) include directories
+# $3 = additional dependencies (if any)
 #
 define anon.c_compile_rule
 
 -include $(call anon.src_to_dep,$(1))
 
-$(call anon.src_to_obj,$(1)): $(1) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
+$(call anon.src_to_obj,$(1)): $(1) $(3) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
 	$(call anon.CALL_TOOL,$(anon.cc),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$(1)) $(2) $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$(1)),$$@)
 
 endef
@@ -190,7 +191,7 @@ define anon.cxx_compile_rule
 
 -include $(call anon.src_to_dep,$(1))
 
-$(call anon.src_to_obj,$(1)): $(1) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
+$(call anon.src_to_obj,$(1)): $(1) $(3) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
 	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$(1)) $(2) -std=c++11 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$(1)),$$@)
 
 endef
@@ -214,11 +215,12 @@ anon.all_sources:=
 # $2 source files to compile
 # $3 include directories
 # $4 additional libraries to link to
+# $5 additional dependencies for all source files
 #
 define anon.BUILD_RULES
 
-$(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$(2))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$(3),-I$(inc))))
-$(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$(2))),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$(3),-I$(inc))))
+$(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$(2))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$(3),-I$(inc)),$(5)))
+$(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$(2))),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$(3),-I$(inc)),$(5)))
 $(call anon.linker_rule,$(1),$(2),$(4))
 
 all: $(anon.OUT_DIR)/$(CONFIG)/$(1)

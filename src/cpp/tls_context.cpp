@@ -538,8 +538,10 @@ tls_context::tls_context(bool client,
   const long flags = SSL_OP_ALL /*| SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_COMPRESSION*/;
   (void)SSL_CTX_set_options(ctx, flags);
   
-  if (SSL_CTX_load_verify_locations(ctx, verify_cert, verify_loc) == 0)
-    throw_ssl_error();
+  if (verify_cert || verify_loc) {
+    if (SSL_CTX_load_verify_locations(ctx, verify_cert, verify_loc) == 0)
+      throw_ssl_error();
+  }
     
   ctx_ = ctx.release();
 }

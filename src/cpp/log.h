@@ -71,9 +71,9 @@ namespace Log
     else
       fb << ".....";
     loc << fb.str();
-    const int width = 46;
+    const int width = 56;
     #else
-    const int width = 40;
+    const int width = 50;
     #endif
     loc << ", " << file_name << ", " << line_num << ")";
     format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(width) << loc.str();

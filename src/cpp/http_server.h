@@ -80,7 +80,7 @@ struct http_headers
   
   void init()
   {
-    headers.empty();
+    headers = std::map<string_len, string_len>();
   }
   
   std::map<string_len, string_len>  headers;
@@ -112,6 +112,7 @@ struct http_request
   {
     headers.init();
     memset(&p_url,0,sizeof(p_url));
+    url_str = "";
   }
   
   const sockaddr* src_addr;

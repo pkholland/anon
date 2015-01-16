@@ -44,9 +44,15 @@ public:
   
   // 'num_threads' is the total number of threads that will be used
   // to dispatch io events on.  If 'use_this_thread' is true, then
-  // this calling thread will be one of those threads and will not
-  // return until stop is called
+  // this calling thread will be one of those threads.  Regardless,
+  // this call will start all threads other than this one.  If
+  // use_this_thread is true then you must call start_this_thread
+  // after this call to start returns.  This is done to permit
+  // further initialization prior to having the calling thread
+  // join the pool of io threads.
   static void start(int num_threads, bool use_this_thread);
+  
+  static void start_this_thread();
 
   // starts the sequence of stopping all io threads.  To wait
   // until they have all stopped call join -- but, of course

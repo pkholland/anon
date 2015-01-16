@@ -135,7 +135,13 @@ void fiber::initialize()
     do_error("fcntl(pipe, F_SETFL, O_NONBLOCK)");
   on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::unix_domain);
   
-  io_params::sweep_timed_out_pipes();
+  // we don't want to directly call sweep_timed_out_pipes here because
+  // that executes io_dispatch::while_paused, which we don't want to
+  // do here, given this might be called from the main thread, prior to
+  // that thread fully starting the io_dispatch mechanism.  In that
+  // circumstance io_dispatch::while_paused will forever block if
+  // io_dispatch::start was called with "1, true"
+  io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + 10);
 }
 
 void fiber::terminate()

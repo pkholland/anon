@@ -219,9 +219,11 @@ void io_dispatch::start(int num_threads, bool use_this_thread)
     --num_threads;
   for (int i = 0; i < num_threads; i++)
     io_d.io_threads_.push_back(std::thread(std::bind(&io_dispatch::epoll_loop,&io_d)));
-    
-  if (use_this_thread)
-    io_d.epoll_loop();
+}
+
+void io_dispatch::start_this_thread()
+{
+  io_d.epoll_loop();
 }
 
 void io_dispatch::stop()
