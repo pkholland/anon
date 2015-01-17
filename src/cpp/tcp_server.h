@@ -53,7 +53,8 @@ public:
   // address it will lock like a 'tunneled' address
   template<typename Fn>
   tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog, bool port_is_fd = false)
-    : new_conn_(new new_con<Fn>(f))
+    : new_conn_(new new_con<Fn>(f)),
+      stop_(false)
   {
     init_socket(tcp_port, listen_backlog, port_is_fd);
   }
@@ -64,6 +65,8 @@ public:
   }
 
   virtual void io_avail(const struct epoll_event& event);
+  
+  void stop();
 
 private:
 
@@ -101,6 +104,10 @@ private:
   
   std::unique_ptr<new_connection> new_conn_;
   int listen_sock_;
+  bool stop_;
+  struct sockaddr_in6 stop_addr_;
+  fiber_mutex stop_mutex_;
+  fiber_cond  stop_cond_;
 };
 
 

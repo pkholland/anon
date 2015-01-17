@@ -65,7 +65,7 @@ void tcp_server::io_avail(const struct epoll_event& event)
 {
   if (event.events & EPOLLIN) {
   
-    struct sockaddr_storage addr;
+    struct sockaddr_in6 addr;
     socklen_t addr_len = sizeof(addr);
     int conn = accept4(listen_sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
     if (conn == -1) {
@@ -75,6 +75,16 @@ void tcp_server::io_avail(const struct epoll_event& event)
       if (errno != EAGAIN)
         anon_log_error("accept4(sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC)");
     } else {
+    
+      if (stop_ && (addr == stop_addr_)) {
+        io_dispatch::while_paused([this]{
+          io_dispatch::epoll_ctl(EPOLL_CTL_DEL, listen_sock_, 0, this);
+        });
+        fiber_lock lock(stop_mutex_);
+        stop_ = false;
+        stop_cond_.notify_all();
+      }
+    
       #if ANON_LOG_NET_TRAFFIC > 2
       anon_log("new tcp connection from addr: " << addr);
       #endif
@@ -84,4 +94,49 @@ void tcp_server::io_avail(const struct epoll_event& event)
   } else
     anon_log_error("tcp_server::io_avail called with no EPOLLIN. event.events = " << event_bits_to_string(event.events));
 }
+
+void tcp_server::stop()
+{
+  memset(&stop_addr_, 0, sizeof(stop_addr_));
+  stop_addr_.sin6_family = AF_INET6;
+  stop_addr_.sin6_addr = in6addr_loopback;
+  
+  int fd = socket(AF_INET6, SOCK_STREAM | SOCK_CLOEXEC, 0);
+  if (fd == -1)
+    do_error("socket(addr->sa_family, SOCK_STREAM | SOCK_CLOEXEC, 0)");
+
+  if (bind(fd, (struct sockaddr*)&stop_addr_, sizeof(stop_addr_)) != 0) {
+    close(fd);
+    do_error("bind(<AF_INET6 SOCK_STREAM socket>, <" << fd << ", in6addr_any>, sizeof(addr))");
+  }
+  
+  socklen_t addrlen = sizeof(stop_addr_);
+  if (getsockname(fd, (struct sockaddr *)&stop_addr_, &addrlen) != 0) {
+    close(fd);
+    do_error("getsockname(" << fd << ", addr, sizeof(addr))");
+  }
+  
+  // now we have a bound socket in fd, and we have its addr in stop_addr_
+  // so now set stop_ to true and connect to our listening socket.
+
+  struct sockaddr_in6 addr;
+  addrlen = sizeof(addr);
+  if (getsockname(listen_sock_, (struct sockaddr *)&addr, &addrlen) != 0) {
+    close(fd);
+    do_error("getsockname(" << listen_sock_ << ", addr, sizeof(addr))");
+  }
+  
+  stop_ = true;
+  if (connect(fd, (const struct sockaddr *)&addr, addrlen) != 0) {
+    close(fd);
+    do_error("connect(" << fd << ", addr, sizeof(addr))");
+  }
+  
+  close(fd);
+  
+  fiber_lock  lock(stop_mutex_);
+  while (stop_)
+    stop_cond_.wait(lock);
+}
+
 

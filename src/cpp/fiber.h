@@ -353,6 +353,11 @@ public:
       attached_(false),
       remote_hangup_(false)
   {
+    if (socket_type == network) {
+      fiber_lock  lock(zero_net_pipes_mutex_);
+      ++num_net_pipes_;
+    }
+    
     std::lock_guard<std::mutex>  lock(list_mutex_);
     next_ = first_;
     if (next_)
@@ -364,8 +369,12 @@ public:
   virtual ~fiber_pipe()
   {
     if (fd_ != -1) {
-      if (socket_type_ == network)
+      if (socket_type_ == network) {
         shutdown(fd_, 2/*both*/);
+        fiber_lock  lock(zero_net_pipes_mutex_);
+        if (--num_net_pipes_ == 0)
+          zero_net_pipes_cond_.notify_all();
+      }
       close(fd_);
     }
     std::lock_guard<std::mutex>  lock(list_mutex_);
@@ -410,6 +419,13 @@ public:
 
   virtual size_t read(void* buff, size_t len);
   virtual void write(const void* buff, size_t len);
+  
+  static void wait_for_zero_net_pipes()
+  {
+    fiber_lock  lock(zero_net_pipes_mutex_);
+    while (num_net_pipes_)
+      zero_net_pipes_cond_.wait(lock);
+  }
 
 private:
   // fiber_pipe's are neither movable, nor copyable.
@@ -431,6 +447,10 @@ private:
   fiber_pipe*                   prev_;
   static fiber_pipe*            first_;
   static std::mutex             list_mutex_;
+  
+  static int                    num_net_pipes_;
+  static fiber_mutex            zero_net_pipes_mutex_;
+  static fiber_cond             zero_net_pipes_cond_;
   
   static const struct timespec  forever;
 };

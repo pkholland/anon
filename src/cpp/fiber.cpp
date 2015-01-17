@@ -221,6 +221,10 @@ void fiber::msleep(int milliseconds)
 const struct timespec fiber_pipe::forever = { std::numeric_limits<time_t>::max(), 1000000000 - 1};
 fiber_pipe* fiber_pipe::first_ = 0;
 std::mutex  fiber_pipe::list_mutex_;
+int         fiber_pipe::num_net_pipes_;
+fiber_mutex fiber_pipe::zero_net_pipes_mutex_;
+fiber_cond  fiber_pipe::zero_net_pipes_cond_;
+
 
 void fiber_pipe::io_avail(const struct epoll_event& event)
 {

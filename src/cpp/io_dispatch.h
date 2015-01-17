@@ -63,8 +63,8 @@ public:
   // block until all io threads have terminated.  If stop
   // has not already been called, it will be called by join.
   // note that join will _hang_ if called from an io thread
-  // (other than the implicit io thread that called start
-  // if it passed use_this_thread as true).
+  // (other than the implicit io thread that called
+  // start_this_thread if that was called).
   static void join();
   
   // base class associated with the action taken when there

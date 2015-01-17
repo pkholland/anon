@@ -259,6 +259,12 @@ public:
     size_t&     bep;
   };
   
+  void stop()
+  {
+    if (tcp_server_)
+      tcp_server_->stop();
+  }
+  
 private:
 
   struct body_handler
