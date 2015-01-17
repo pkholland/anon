@@ -22,9 +22,9 @@
 
 #pragma once
 
+#include "tcp_utils.h"
 #include "io_dispatch.h"
 #include "fiber.h"
-#include "tcp_utils.h"
 
 class tcp_server : public io_dispatch::handler
 {
@@ -52,10 +52,10 @@ public:
   // in an ipv6 format, so if the client was, in fact, using an ipv4
   // address it will lock like a 'tunneled' address
   template<typename Fn>
-  tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog)
+  tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog, bool port_is_fd = false)
     : new_conn_(new new_con<Fn>(f))
   {
-    init_socket(tcp_port, listen_backlog);
+    init_socket(tcp_port, listen_backlog, port_is_fd);
   }
   
   ~tcp_server()
@@ -67,7 +67,7 @@ public:
 
 private:
 
-  void init_socket(int tcp_port, int backlog);
+  void init_socket(int tcp_port, int backlog, bool port_is_fd);
 
   struct new_connection
   {

@@ -22,29 +22,38 @@
 
 #include "tcp_server.h"
 
-void tcp_server::init_socket(int tcp_port, int listen_backlog)
+void tcp_server::init_socket(int tcp_port, int listen_backlog, bool port_is_fd)
 {
-  // no SOCK_CLOEXEC since we inherit this socket down to the child
-  // when we do a child swap
-  listen_sock_ = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
-  if (listen_sock_ == -1)
-    do_error("socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP)");
+  if (port_is_fd) {
+    listen_sock_ = tcp_port;
+    struct sockaddr_in6 addr = { 0 };
+    socklen_t addrlen = sizeof(addr);
+    if (getsockname(listen_sock_, (struct sockaddr*)&addr, &addrlen) != 0)
+      do_error("getsockname(" << listen_sock_ << ", (struct sockaddr*)&addr, &addrlen)");
+    tcp_port = ntohs(addr.sin6_port);
+  } else {
+    // no SOCK_CLOEXEC since we inherit this socket down to the child
+    // when we do a child swap
+    listen_sock_ = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
+    if (listen_sock_ == -1)
+      do_error("socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP)");
 
-  // bind to any address that will route to this machine
-  struct sockaddr_in6 addr = { 0 };
-  addr.sin6_family = AF_INET6;
-  addr.sin6_port = htons(tcp_port);
-  addr.sin6_addr = in6addr_any;
-  if (bind(listen_sock_, (struct sockaddr*)&addr, sizeof(addr)) != 0)
-  {
-    close(listen_sock_);
-    do_error("bind(<AF_INET6 SOCK_STREAM socket>, <" << tcp_port << ", in6addr_any>, sizeof(addr))");
-  }
-  
-  if (listen(listen_sock_, listen_backlog) != 0)
-  {
-    close(listen_sock_);
-    do_error("listen(sock_, " << listen_backlog << ")");
+    // bind to any address that will route to this machine
+    struct sockaddr_in6 addr = { 0 };
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(tcp_port);
+    addr.sin6_addr = in6addr_any;
+    if (bind(listen_sock_, (struct sockaddr*)&addr, sizeof(addr)) != 0)
+    {
+      close(listen_sock_);
+      do_error("bind(<AF_INET6 SOCK_STREAM socket>, <" << tcp_port << ", in6addr_any>, sizeof(addr))");
+    }
+    
+    if (listen(listen_sock_, listen_backlog) != 0)
+    {
+      close(listen_sock_);
+      do_error("listen(sock_, " << listen_backlog << ")");
+    }
   }
 
   anon_log("listening for tcp connections on port " << tcp_port << ", socket " << listen_sock_);

@@ -274,7 +274,7 @@ void fiber_pipe::write(const void *buf, size_t count)
       #endif
       throw std::runtime_error("remote hangup detected on write");
     }
-    auto bytes_written = ::send(fd_, &p[total_bytes_written], count - total_bytes_written, MSG_NOSIGNAL);
+    auto bytes_written = ::write(fd_,&p[total_bytes_written], count - total_bytes_written);
     if (bytes_written == -1) {
       if (errno == EAGAIN)
         tls_io_params.sleep_until_write_possible(this);
