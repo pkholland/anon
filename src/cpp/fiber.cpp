@@ -131,8 +131,8 @@ void fiber::initialize()
   #endif
   
   int pipe = io_dispatch::new_command_pipe();
-  if (fcntl(pipe, F_SETFL, O_NONBLOCK) != 0)
-    do_error("fcntl(pipe, F_SETFL, O_NONBLOCK)");
+  if (fcntl(pipe, F_SETFL, fcntl(pipe, F_GETFL) | O_NONBLOCK) != 0)
+    do_error("fcntl(pipe, F_SETFL, fnctl(pipe, F_GETFL) | O_NONBLOCK)");
   on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::unix_domain);
   
   // we don't want to directly call sweep_timed_out_pipes here because
@@ -240,12 +240,12 @@ size_t fiber_pipe::read(void *buf, size_t count)
   while (true) {
     num_bytes_read = ::read(fd_, buf, count);
     if (num_bytes_read == -1) {
-      if (remote_hangup_)
+      if (remote_hangup_) {
         #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
         #endif
         throw std::runtime_error("read(fd_, buf, count) detected remote hangup");
-      else if (errno == EAGAIN)
+      } else if (errno == EAGAIN)
         tls_io_params.sleep_until_data_available(this);
       else {
         #if ANON_LOG_NET_TRAFFIC > 1
@@ -253,12 +253,12 @@ size_t fiber_pipe::read(void *buf, size_t count)
         #endif
         throw std::runtime_error("read(fd_, buf, count)");
       }
-    } else if (num_bytes_read == 0 && count != 0)
+    } else if (num_bytes_read == 0 && count != 0) {
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
       #endif
       throw std::runtime_error("read(fd_, buf, count) returned 0, other end probably closed");
-    else
+    } else
       break;
   }
   return (size_t)num_bytes_read;

@@ -149,6 +149,12 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         return 0;
       };
       
+      // require prompt navigation through the
+      // initial tls handshake and http headers.
+      // No stalling a single read for longer
+      // than 4 seconds.
+      pipe->limit_io_block_time(4);
+      
       std::unique_ptr<tls_pipe> tlspipe;
       ::pipe_t* http_pipe;
       if (tls_ctx) {
@@ -178,6 +184,11 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);
         
         if (pcallback.message_complete) {
+        
+          // requirement of prompt send's is a one-time
+          // policy.  If we make it this far, then reset
+          // the io blocking time to something more generous
+          http_pipe->limit_io_block_time(60);
         
           pipe_t body_pipe(http_pipe, buf, bsp, bep);
         

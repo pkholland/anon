@@ -205,6 +205,7 @@ struct auto_bio
 //////////////////////////////////////////////////////////////////////////////////
 
 tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client, bool verify_peer, const char* host_name, const tls_context& context)
+  : fp_(pipe.get())
 {
   auto_bio fp_bio(BIO_new_fp(std::move(pipe)));
   auto_bio ssl_bio(BIO_new_ssl(context,client));
@@ -279,6 +280,12 @@ void tls_pipe::write(const void* buff, size_t len)
     tot_bytes += written;      
   }
 }
+
+void tls_pipe::limit_io_block_time(int seconds)
+{
+  fp_->limit_io_block_time(seconds);
+}
+
 
 
 

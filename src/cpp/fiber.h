@@ -388,7 +388,7 @@ public:
   
   virtual void io_avail(const struct epoll_event& event);
   
-  void limit_io_block_time(int seconds)
+  virtual void limit_io_block_time(int seconds)
   {
     max_io_block_time_ = seconds;
   }

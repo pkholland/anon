@@ -40,11 +40,13 @@ public:
     
   virtual size_t read(void* buff, size_t len);
   virtual void write(const void* buff, size_t len);
+  virtual void limit_io_block_time(int seconds);
   
   void shutdown();
   
 private:
-  BIO*      ssl_bio_;
-  SSL*      ssl_;
+  BIO*        ssl_bio_;
+  SSL*        ssl_;
+  fiber_pipe* fp_;
 };
 
