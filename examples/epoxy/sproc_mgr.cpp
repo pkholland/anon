@@ -88,11 +88,10 @@ struct timeout_helper
 
 static void timeout_handler(union sigval sv)
 {
-anon_log("timeout_handler called");
   timeout_helper *to = (timeout_helper*)sv.sival_ptr;
   if (to->count++ == 0) {
-    const char* failed = "xx\n";
-    if (::write(to->write_fd, failed, 3)) {}
+    char failed = 0;
+    if (::write(to->write_fd, &failed, 1)) {}
   }
 }
 
@@ -106,7 +105,7 @@ bool read_ok(int fd0, int fd1)
   // and this timer go off at essentially the same time.
   timeout_helper to(fd1);
 
-  struct sigevent sev;
+  struct sigevent sev = {0};
   sev.sigev_notify = SIGEV_THREAD;
   sev.sigev_notify_function = timeout_handler;
   sev.sigev_value.sival_ptr = &to;
@@ -123,20 +122,17 @@ bool read_ok(int fd0, int fd1)
   if (timer_settime(timerid, 0, &its, NULL) == -1)
     do_error("timer_settime(timerid, 0, &its, NULL)");
 
-  char    buf[3];
-  size_t  tot_bytes = 0;
-  while (tot_bytes < sizeof(buf)) {
-    auto bytes_read = ::read(fd0, &buf[tot_bytes], sizeof(buf) - tot_bytes);
-    if (bytes_read <= 0)
-      do_error("read(fd0, &buf[tot_bytes], sizeof(buf) - tot_byte)");
-    tot_bytes += bytes_read;
-  }
+  char    reply;
+  if (::read(fd0, &reply, 1) <= 0)
+    do_error("::read(fd0, &reply, 1)");
   
   timer_delete(timerid);
   
-  // if the timer accidentally went off after we finished reading 3 bytes
-  // and before we could delete the timer, then there is extra stuff in the
-  // pipe that we want to get rid of.
+  // in the case where the timer goes off at essentially the same
+  // time as the child process (finally) responded there is the possibility
+  // that both answers will be in the pipe, and we want to clear all
+  // readable data in the pipe in case we are going to try to use this
+  // pipe again.
   if (to.count++ > 0) {
     if (fcntl(fd0, F_SETFL, fcntl(fd0, F_GETFL) | O_NONBLOCK) != 0)
       do_error("fcntl(fd0, F_SETFL, fcntl(pipe, F_GETFL) | O_NONBLOCK)");
@@ -146,9 +142,10 @@ bool read_ok(int fd0, int fd1)
       do_error("::read(fd0, &buf, 1)");
     if (fcntl(fd0, F_SETFL, fcntl(fd0, F_GETFL) & ~O_NONBLOCK) != 0)
       do_error("fcntl(fd0, F_SETFL, fcntl(pipe, F_GETFL) & ~O_NONBLOCK)");
+    reply = 0;
   }
   
-  return (!memcmp(&buf,"ok\n",3));
+  return reply != 0;
 }
 
 bool write_all(int fd, const char* data)
@@ -182,6 +179,7 @@ int start_child(proc_info& pi)
     // stall until the child echo's "ok\n" or it times out for whatever reason
 
     if (!read_ok(pi.cmd_pipe[0], pi.cmd_pipe[1]))  {
+      anon_log("child process " << pid << " started, but did not reply correctly, so was killed");
       kill(pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
@@ -305,7 +303,7 @@ void sproc_mgr_init(int port)
       std::unique_lock<std::mutex> lock(proc_map_mutex);
       auto p = proc_map.find(chld);
       if (p == proc_map.end())
-        anon_log("ignoring unrecognized child process id: " << chld);
+        anon_log("ignoring unregistered child process id: " << chld);
       else {
         auto pi = std::move(p->second);
         proc_map.erase(p);

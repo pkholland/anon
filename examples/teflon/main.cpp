@@ -159,12 +159,12 @@ extern "C" int main(int argc, char** argv)
           char  cmd_buf[1024];
           int   pos = 0;
           
-          auto cmd = "ok\n";
+          char ok = 1;
           
           // tell the caller we are fully initialized and
           // ready to accept commands
           anon_log("ready to start http server");
-          pipe.write(cmd, strlen(cmd));
+          pipe.write(&ok, sizeof(ok));
           
           // continue to parse commands
           // until we get one that tells us to stop
@@ -209,7 +209,7 @@ extern "C" int main(int argc, char** argv)
           // on the listening socket.  They are now free to
           // let some other process start calling it if they
           // wish.
-          pipe.write(cmd, strlen(cmd));
+          pipe.write(&ok, sizeof(ok));
           
           // there may have been active network sessions because
           // of previous calls to accept.  So wait here until
