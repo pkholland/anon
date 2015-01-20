@@ -62,6 +62,8 @@ include examples/teflon/teflon.mk
 teflon_SOURCES:=$(SOURCES)
 SOURCES:=
 
+include secrets.mk
+
 include scripts/build/anonrules.mk
 
 $(eval $(call anon.BUILD_RULES,test,$(test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
@@ -74,7 +76,9 @@ $(eval $(call anon.BUILD_RULES,epoxy,$(epoxy_SOURCES),$(sort $(INC_DIRS)),$(LIBS
 
 $(eval $(call anon.BUILD_RULES,teflon,$(teflon_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
+all: $(SECRET_FILES)
+
 .PHONY: clean
 clean:
-	rm -rf $(anon.INTERMEDIATE_DIR) $(anon.OUT_DIR)
+	rm -rf $(anon.INTERMEDIATE_DIR) $(anon.OUT_DIR) secrets certs
 

@@ -1,0 +1,22 @@
+ RANDFILE               = /dev/urandom
+
+ [ req ]
+ default_bits           = 1024
+ #default_keyfile       = keyfile.pem
+ distinguished_name     = req_distinguished_name
+ attributes             = req_attributes
+ prompt                 = no
+ #output_password       = mypass
+
+ [ req_distinguished_name ]
+ C                      = US
+ ST                     = California
+ L                      = Test Locality
+ O                      = Adobe Systems, Inc.
+ OU                     = Platform Technology and Services
+ CN                     = IMS Test Cert
+ emailAddress           = noone@email.com
+
+ [ req_attributes ]
+ challengePassword      = A challenge password
+ 
