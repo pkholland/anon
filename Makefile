@@ -35,7 +35,7 @@ release: all
 
 anon.INTERMEDIATE_DIR=obj
 anon.OUT_DIR=deploy
-LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl -lglog
+LIBS=-lgcc -lstdc++ -lpthread -lssl -lcrypto -lanl -lglog -lrt
 
 include examples/test/test.mk
 
@@ -52,6 +52,11 @@ include examples/big_client/big_client.mk
 big_client_SOURCES:=$(SOURCES)
 SOURCES:=
 
+include examples/epoxy/epoxy.mk
+
+epoxy_SOURCES:=$(SOURCES)
+SOURCES:=
+
 include scripts/build/anonrules.mk
 
 $(eval $(call anon.BUILD_RULES,test,$(test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
@@ -60,6 +65,9 @@ $(eval $(call anon.BUILD_RULES,echo,$(echo_SOURCES),$(sort $(INC_DIRS)),$(LIBS))
 
 $(eval $(call anon.BUILD_RULES,big_client,$(big_client_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
+$(eval $(call anon.BUILD_RULES,epoxy,$(epoxy_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
 .PHONY: clean
 clean:
 	rm -rf $(anon.INTERMEDIATE_DIR) $(anon.OUT_DIR)
+
