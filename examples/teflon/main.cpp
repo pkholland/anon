@@ -91,6 +91,8 @@ extern "C" int main(int argc, char** argv)
     return 1;
   }
   
+  anon_log("teflon server process starting");
+  
   // initialize the io dispatch and fiber code
   // the last 'true' parameter says that we will be using
   // this calling thread as one of the io threads (after
@@ -122,7 +124,7 @@ extern "C" int main(int argc, char** argv)
                           // temp code - just returns a canned blob of text
                           http_response response;
                           response.add_header("Content-Type", "text/plain");
-                          response << "echo server!\n";
+                          response << "Hello from Teflon!\n";
                           response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
                           response << "server response generated from:\n";
                           response << "    process: " << getpid() << "\n";
@@ -161,6 +163,7 @@ extern "C" int main(int argc, char** argv)
           
           // tell the caller we are fully initialized and
           // ready to accept commands
+          anon_log("ready to start http server");
           pipe.write(cmd, strlen(cmd));
           
           // continue to parse commands
@@ -192,6 +195,7 @@ extern "C" int main(int argc, char** argv)
           // even if a client calls connect.
           if (my_http)
             my_http->stop();
+          anon_log("http server stopped");
           
           // tell the caller we have stopped calling accept
           // on the listening socket.  They are now free to
@@ -234,7 +238,7 @@ extern "C" int main(int argc, char** argv)
     ret = 1;
   }
 
-  anon_log("stopping server and exiting");  
+  anon_log("teflon server process exiting");
   return ret;
 }
 

@@ -207,7 +207,7 @@ extern "C" int main(int argc, char** argv)
   unlink(cmd_path);
   sproc_mgr_term();
   
-  anon_log("epoxy exiting");
+  anon_log("epoxy process exiting");
   return exitcode;
 
 }
