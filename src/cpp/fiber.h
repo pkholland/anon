@@ -328,7 +328,23 @@ private:
   static fiber_pipe* on_one_pipe_;
   
   friend void sweep_timed_out_pipes();
+  
+  // there are a few places where the runtime checks are
+  // too agressive, and the lock checking performed cannot
+  // be warning about something bad.  The primary issue being
+  // reported is that locking a fiber mutex can cause you
+  // to come back from the lock in a different os thread
+  // (although obviously in the same fiber).  So it would
+  // be a disaster if there were an std mutex locked in that
+  // os thread at the time this thread switch occurred.
+  // But this os switch is not possible on the fiber locks
+  // that are protected with this "while_paused_" logic in
+  // the case where "while_paused_" is true.  We test for,
+  // and skip the fiber lock in these cases just to avoid
+  // the runtime assertion.
+  #if defined(ANON_RUNTIME_CHECKS)
   static bool while_paused_;
+  #endif
 };
 
 extern int get_current_fiber_id();
@@ -371,9 +387,17 @@ public:
     if (fd_ != -1) {
       if (socket_type_ == network) {
         shutdown(fd_, 2/*both*/);
-        fiber_lock  lock(zero_net_pipes_mutex_);
-        if (--num_net_pipes_ == 0)
-          zero_net_pipes_cond_.notify_all();
+        #if defined(ANON_RUNTIME_CHECKS)
+        if (fiber::while_paused_) {
+          if (--num_net_pipes_ == 0)
+            zero_net_pipes_cond_.notify_all();
+        } else
+        #endif
+        {
+          fiber_lock  lock(zero_net_pipes_mutex_);
+          if (--num_net_pipes_ == 0)
+            zero_net_pipes_cond_.notify_all();
+        }
       }
       close(fd_);
     }

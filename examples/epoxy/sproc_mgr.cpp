@@ -88,6 +88,7 @@ struct timeout_helper
 
 static void timeout_handler(union sigval sv)
 {
+anon_log("timeout_handler called");
   timeout_helper *to = (timeout_helper*)sv.sival_ptr;
   if (to->count++ == 0) {
     const char* failed = "xx\n";
@@ -152,7 +153,7 @@ bool read_ok(int fd0, int fd1)
 
 bool write_all(int fd, const char* data)
 {
-  size_t written;
+  size_t written = 0;
   size_t len = strlen(data);
   while (written < len) {
     auto byts = ::write(fd, &data[written], len-written);
@@ -357,6 +358,11 @@ void sproc_mgr_term()
   
   close(death_pipe[0]);
   close(death_pipe[1]);
+  
+  std::unique_lock<std::mutex> lock(proc_map_mutex);
+  for (auto chld = proc_map.begin(); chld != proc_map.end(); chld++)
+    kill(chld->first, SIGKILL);
+  proc_map = std::map<int/*pid*/, std::unique_ptr<proc_info>>();
 }
 
 void start_server(const char* exe_name, const std::vector<std::string>& args)

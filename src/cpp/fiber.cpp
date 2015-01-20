@@ -121,7 +121,9 @@ std::condition_variable fiber::zero_fiber_cond_;
 std::atomic<int> fiber::next_fiber_id_;
 fiber_mutex fiber::on_one_mutex_;
 fiber_pipe* fiber::on_one_pipe_;
+#if defined(ANON_RUNTIME_CHECKS)
 bool fiber::while_paused_;
+#endif
 
 void fiber::initialize()
 {
@@ -172,10 +174,13 @@ void fiber::stop_fiber()
 {
   auto params = &tls_io_params;
   auto f = params->current_fiber_;
+  #if defined(ANON_RUNTIME_CHECKS)
   if (while_paused_) {
     f->running_ = false;
     f->stop_condition_.notify_all();
-  } else {
+  } else
+  #endif
+  {
     fiber_lock lock(f->stop_mutex_);
     f->running_ = false;
     f->stop_condition_.notify_all();
@@ -401,8 +406,10 @@ void io_params::sweep_timed_out_pipes()
         pipe = next;
       }
     }
-          
+    
+    #if defined(ANON_RUNTIME_CHECKS)
     fiber::while_paused_ = true;
+    #endif
     auto pipe = timed_out;
     auto params = &tls_io_params;
     while (pipe) {
@@ -412,7 +419,9 @@ void io_params::sweep_timed_out_pipes()
       params->wake_all(pipe->io_fiber_);
       pipe = next;
     }
+    #if defined(ANON_RUNTIME_CHECKS)
     fiber::while_paused_ = false;
+    #endif
       
   });  
   

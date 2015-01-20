@@ -76,43 +76,49 @@ static bool process_command(const std::string& cmd)
   bool                ret = true;
   bool                show_help = false;
   
-  if (cmd == "help") {
-  
-    show_help = true;
+  try {
+    if (cmd == "help") {
     
-  } else if (cmd == "quit") {
-  
-    reply << "\nquitting, bye\n\n";
-    ret = false;
+      show_help = true;
+      
+    } else if (cmd == "quit") {
     
-  } else if (cmd == "list_exes") {
-  
-    list_exes(base_path, exe_name, reply);
+      reply << "\nquitting, bye\n\n";
+      ret = false;
+      
+    } else if (cmd == "list_exes") {
     
-  } else if (cmd.find("start") == 0) {
-  
-    const char* p = &cmd.c_str()[5];
-    while (*p && ((*p == ' ') || (*p == '\t')))
-      ++p;
-    std::string full_path = std::string(base_path) + p;
+      list_exes(base_path, exe_name, reply);
+      
+    } else if (cmd.find("start") == 0) {
     
-    // hard-coded for now...
-    std::vector<std::string> args;
-    args.push_back("-cert_verify_dir");
-    args.push_back("/etc/ssl/certs");
-    args.push_back("-server_cert");
-    args.push_back("./secrets/ims_cert.pem");
-    args.push_back("-server_key");
-    args.push_back("./secrets/ims_key.pem");
+      const char* p = &cmd.c_str()[5];
+      while (*p && ((*p == ' ') || (*p == '\t')))
+        ++p;
+      std::string full_path = std::string(base_path) + p;
+      
+      // hard-coded for now...
+      std::vector<std::string> args;
+      args.push_back("-cert_verify_dir");
+      args.push_back("/etc/ssl/certs");
+      args.push_back("-server_cert");
+      args.push_back("./secrets/ims_cert.pem");
+      args.push_back("-server_key");
+      args.push_back("./secrets/ims_key.pem");
 
-    start_server(full_path.c_str(), args);
-    reply << p << " now running in process " << current_server_pid();
+      start_server(full_path.c_str(), args);
+      reply << p << " now running in process " << current_server_pid();
+      
+    } else {
     
-  } else {
-  
-    reply << "ignoring unknown command, you sent:\n" << cmd << "\n\n";
-    show_help = true;
-    
+      reply << "ignoring unknown command, you sent:\n" << cmd << "\n\n";
+      show_help = true;
+      
+    }
+  } catch (const std::exception& err) {
+    reply << "\n\nerror: " << err.what() << "\n\n";
+  } catch (...) {
+    reply << "\n\nunknown error\n\n";
   }
   
   if (show_help) {
@@ -130,6 +136,7 @@ static bool process_command(const std::string& cmd)
     reply << "  older one and replacing it with the newer one\n\n";
   }
 
+  validate_command_file();
   int fd = open(cmd_path, O_WRONLY | O_CLOEXEC);
   if (fd != -1) {
     write_all(fd, reply.str().c_str());

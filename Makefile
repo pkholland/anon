@@ -25,7 +25,7 @@ endif
 #   1 - log errors from sys calls like 'socket' and 'recv'
 #   2 - 1) plus, log errors in html,etc... formatting sent from clients
 #   3 - 2) plus, general logging of what ips are connecting
-CFLAGS=$(cflags) -DANON_LOG_FIBER_IDS -DANON_LOG_NET_TRAFFIC=0 -DANON_RUNTIME_CHECKS
+CFLAGS=$(cflags) -DANON_LOG_FIBER_IDS -DANON_LOG_NET_TRAFFIC=0 -DxANON_RUNTIME_CHECKS
 
 #
 # these two phony targets depend on (and so build) 'all'

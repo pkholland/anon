@@ -170,7 +170,15 @@ extern "C" int main(int argc, char** argv)
           // until we get one that tells us to stop
           while (true) {
           
-            pos += pipe.read(&cmd_buf[pos], sizeof(cmd_buf)-pos);
+            try {
+              pos += pipe.read(&cmd_buf[pos], sizeof(cmd_buf)-pos);
+            } catch (const std::exception& err) {
+              anon_log("command pipe unexpectedly failed: " << err.what());
+              exit(1);
+            } catch (...) {
+              anon_log("command pipe unexpectedly failed");
+              exit(1);
+            }
             if (cmd_buf[pos-1] == '\n') {
               cmd_buf[pos-1] = 0;
               pos = 0;
