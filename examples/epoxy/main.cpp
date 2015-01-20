@@ -31,7 +31,7 @@ char  base_path[4096];
 char  cmd_path[4096];
 
 // hard-coded for now
-#define SERVER_BASE_NAME "teflon"
+const char* exe_name;
 
 static void validate_command_file()
 {
@@ -39,10 +39,15 @@ static void validate_command_file()
   if (stat(cmd_path, &st) != 0) {
     if (errno == ENOENT) {
       if (mkfifo(cmd_path, 0666) != 0)
-        do_error("mkfifo(\"" << &cmd_path[0] << "\", 0666"); 
+        do_error("mkfifo(\"" << &cmd_path[0] << "\", 0666");
+      else
+        return;
     } else
       do_error("stat(\"" << &cmd_path[0] << "\", &st)");
   }
+  
+  if (S_ISFIFO(st.st_mode))
+    return;
   
   if (S_ISREG(st.st_mode)) {
     if (unlink(cmd_path) != 0)
@@ -53,10 +58,8 @@ static void validate_command_file()
     exit(1);
   }
   
-  if (!S_ISFIFO(st.st_mode)) {
-    anon_log("\"" << &cmd_path[0] << "\" is an unknown file type and must be manually deleted for this program to run");
-    exit(1);
-  }
+  anon_log("\"" << &cmd_path[0] << "\" is an unknown file type and must be manually deleted for this program to run");
+  exit(1);
 }
 
 static void write_all(int fd, const char* data)
@@ -84,7 +87,7 @@ static bool process_command(const std::string& cmd)
     
   } else if (cmd == "list_exes") {
   
-    list_exes(base_path, SERVER_BASE_NAME, reply);
+    list_exes(base_path, exe_name, reply);
     
   } else if (cmd.find("start") == 0) {
   
@@ -139,8 +142,8 @@ static bool process_command(const std::string& cmd)
 
 extern "C" int main(int argc, char** argv)
 {
-  if (argc != 2) {
-    fprintf(stderr,"usage: epoxy <port>\n");
+  if (argc != 3) {
+    fprintf(stderr,"usage: epoxy <port> <exe_name>\n");
     return 1;
   }
   
@@ -162,6 +165,7 @@ extern "C" int main(int argc, char** argv)
   strcat(cmd_path, cmd_file_name);
   
   int port = atoi(argv[1]);
+  exe_name = argv[2];
   
   sproc_mgr_init(port);
     

@@ -57,6 +57,11 @@ include examples/epoxy/epoxy.mk
 epoxy_SOURCES:=$(SOURCES)
 SOURCES:=
 
+include examples/teflon/teflon.mk
+
+teflon_SOURCES:=$(SOURCES)
+SOURCES:=
+
 include scripts/build/anonrules.mk
 
 $(eval $(call anon.BUILD_RULES,test,$(test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
@@ -66,6 +71,8 @@ $(eval $(call anon.BUILD_RULES,echo,$(echo_SOURCES),$(sort $(INC_DIRS)),$(LIBS))
 $(eval $(call anon.BUILD_RULES,big_client,$(big_client_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 $(eval $(call anon.BUILD_RULES,epoxy,$(epoxy_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
+$(eval $(call anon.BUILD_RULES,teflon,$(teflon_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 .PHONY: clean
 clean:
