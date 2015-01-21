@@ -31,5 +31,6 @@ void start_server(const char* exe_name, const std::vector<std::string>& args);
 void stop_server();
 int current_server_pid();
 void list_exes(const char* base_path, const char* name_match, std::ostringstream& reply);
+std::string current_exe_name();
 
 

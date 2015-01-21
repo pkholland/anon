@@ -107,7 +107,14 @@ static bool process_command(const std::string& cmd)
       args.push_back("./secrets/ims_key.pem");
 
       start_server(full_path.c_str(), args);
-      reply << p << " now running in process " << current_server_pid();
+      reply << "\n" << p << " now running in process " << current_server_pid() << "\n\n";
+      
+    } else if (cmd == "current_exe") {
+    
+      if (current_server_pid())
+        reply << "\ncurrent executable: " << current_exe_name() << ", in process id: " << current_server_pid() << "\n\n";
+      else
+        reply << "\nno executable currently running\n\n";
       
     } else {
     
@@ -134,6 +141,9 @@ static bool process_command(const std::string& cmd)
     reply << "  starts the specified process running.  If there is already a process\n";
     reply << "  running it will perform a \"hot-swap\" of the process, stopping the\n";
     reply << "  older one and replacing it with the newer one\n\n";
+    reply << "current_exe\n";
+    reply << "  returns the file name and process id of the currently running executable\n";
+    reply << "  if there is one, otherwise tells you that no process is currently running\n\n";
   }
 
   validate_command_file();

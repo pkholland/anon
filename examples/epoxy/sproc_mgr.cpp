@@ -90,8 +90,8 @@ static void timeout_handler(union sigval sv)
 {
   timeout_helper *to = (timeout_helper*)sv.sival_ptr;
   if (to->count++ == 0) {
-    char failed = 0;
-    if (::write(to->write_fd, &failed, 1)) {}
+    char reply = 0;
+    if (::write(to->write_fd, &reply, 1)) {}
   }
 }
 
@@ -111,7 +111,7 @@ bool read_ok(int fd0, int fd1)
   sev.sigev_value.sival_ptr = &to;
     
   struct itimerspec its;
-  its.it_value.tv_sec = 1;
+  its.it_value.tv_sec = 10000;
   its.it_value.tv_nsec = 0;
   its.it_interval.tv_sec = 0;
   its.it_interval.tv_nsec = 0;
@@ -122,7 +122,7 @@ bool read_ok(int fd0, int fd1)
   if (timer_settime(timerid, 0, &its, NULL) == -1)
     do_error("timer_settime(timerid, 0, &its, NULL)");
 
-  char    reply;
+  char reply;
   if (::read(fd0, &reply, 1) <= 0)
     do_error("::read(fd0, &reply, 1)");
   
@@ -136,8 +136,8 @@ bool read_ok(int fd0, int fd1)
   if (to.count++ > 0) {
     if (fcntl(fd0, F_SETFL, fcntl(fd0, F_GETFL) | O_NONBLOCK) != 0)
       do_error("fcntl(fd0, F_SETFL, fcntl(pipe, F_GETFL) | O_NONBLOCK)");
-    char  buf;
-    while (::read(fd0, &buf, 1) > 0) {}
+    char  buf[10];
+    while (::read(fd0, &buf[0], sizeof(buf)) > 0) {}
     if (errno != EAGAIN)
       do_error("::read(fd0, &buf, 1)");
     if (fcntl(fd0, F_SETFL, fcntl(fd0, F_GETFL) & ~O_NONBLOCK) != 0)
@@ -198,9 +198,19 @@ int start_child(proc_info& pi)
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
     
+    // although these are going to be closed when we execute fexecve below,
+    // we go ahead and close them here because they are low-numbered file
+    // descriptors and that allows us to call dup on pi.cmd_pipe[1] causing
+    // it to have a consistent, low number in the exec'ed process, letting us
+    // reveal a little less about the state of this calling process.
+    close(death_pipe[0]);
+    close(death_pipe[1]);
+    
     args2.push_back(const_cast<char*>("-cmd_fd"));
+    int new_pipe = dup(pi.cmd_pipe[1]);
+    close(pi.cmd_pipe[1]);
     char cmd_pipe_buf[10];
-    sprintf(&cmd_pipe_buf[0], "%d", pi.cmd_pipe[1]);
+    sprintf(&cmd_pipe_buf[0], "%d", new_pipe);
     args2.push_back(&cmd_pipe_buf[0]);
     
     for (int i = 0; i < pi.args_.size(); i++)
@@ -453,5 +463,13 @@ void list_exes(const char* base_path, const char* name_match, std::ostringstream
   closedir(d);
 }
 
+std::string current_exe_name()
+{
+  std::unique_lock<std::mutex> lock(proc_map_mutex);
+  auto p = proc_map.find(current_srv_pid);
+  if (p != proc_map.end())
+    return p->second->exe_name_;
+  return "";
+}
 
 
