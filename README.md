@@ -20,4 +20,4 @@ Basic Build Instructions:<br>
 Running the test code:<br>
 ./deploy/release/test<br>
 
--- Currently the proxygen-releated pieces are not being used and you don't need to follow those steps to get anon building and running.
+-- Currently the proxygen-releated pieces are not being used and you don't need to follow those steps (6-9) to get anon building and running.
