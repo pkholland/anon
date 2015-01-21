@@ -53,7 +53,6 @@ extern "C" int main(int argc, char** argv)
   const char* cert_verify_dir = 0;
   const char* cert = 0;
   const char* key = 0;
-  const char* pwd = 0;
   
   // all options are pairs for us, so there must
   // be an odd number of arguments (the first
@@ -75,8 +74,6 @@ extern "C" int main(int argc, char** argv)
       cert = argv[++i];
     } else if (!strcmp("-server_key",argv[i])) {
       key = argv[++i];
-    } else if (!strcmp("-server_pw",argv[i])) {
-      pwd = argv[++i];
     } else if (!strcmp("-cmd_fd",argv[i])) {
       cmd_pipe = atoi(argv[++i]);
     } else {
@@ -110,7 +107,6 @@ extern "C" int main(int argc, char** argv)
                           cert_verify_dir,
                           cert,
                           key,
-                          pwd,
                           5/*verify_depth*/);
   
     // capture a closure which can be executed later

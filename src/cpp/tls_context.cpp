@@ -22,6 +22,7 @@
 
 #include "tls_context.h"
 #include "fiber.h"
+#include "passwords.h"
 
 #define OPENSSL_THREAD_DEFINES
 #include <openssl/opensslconf.h>
@@ -512,7 +513,6 @@ tls_context::tls_context(bool client,
               const char* verify_loc,
               const char* server_cert,
               const char* server_key,
-              const char* server_pw,
               int verify_depth)
 {
   auto_ctx ctx(SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method()));
@@ -527,11 +527,11 @@ tls_context::tls_context(bool client,
   if (!client) {
     SSL_CTX_set_quiet_shutdown(ctx,1);
     
-    auto_key  key(read_pem_key(server_key, server_pw));
-    auto_x509 cert(read_pem_cert(server_cert, server_pw));
+    auto_key  key(read_pem_key(server_key, ANON_SRV_KEY_PASSWORD));
+    auto_x509 cert(read_pem_cert(server_cert, ANON_SRV_CERT_PASSWORD));
     if ((SSL_CTX_use_certificate(ctx, cert.release()) <= 0)
         || (SSL_CTX_use_PrivateKey(ctx, key.release()) <= 0)
-        || !SSL_CTX_check_private_key(ctx))
+        /*|| !SSL_CTX_check_private_key(ctx)*/)
       throw_ssl_error();
   }
   

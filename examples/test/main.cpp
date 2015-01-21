@@ -554,7 +554,7 @@ extern "C" int main(int argc, char** argv)
                 tls_context ctx(true/*client*/,
                                 0/*verify_cert*/,
                                 "/etc/ssl/certs"/*verify_loc*/,
-                                0, 0, 0, 5);
+                                0, 0, 5);
 
                 //anon_log("connected to \"" << host << "\", port " << port << ", (fd: " << fd << ") now starting tls handshake");
                 tls_pipe  p(std::move(pipe), true/*client*/, true/*verify_peer*/, host, ctx);

@@ -102,9 +102,9 @@ static bool process_command(const std::string& cmd)
       args.push_back("-cert_verify_dir");
       args.push_back("/etc/ssl/certs");
       args.push_back("-server_cert");
-      args.push_back("./secrets/anon_cert.pem");
+      args.push_back("./secrets/srv_cert.pem");
       args.push_back("-server_key");
-      args.push_back("./secrets/anon_key.pem");
+      args.push_back("./secrets/srv_key.pem");
 
       start_server(full_path.c_str(), args);
       reply << "\n" << p << " now running in process " << current_server_pid() << "\n\n";

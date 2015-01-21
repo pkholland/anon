@@ -41,7 +41,6 @@ extern "C" int main(int argc, char** argv)
                         "/etc/ssl/certs"/*verify_loc*/,
                         "./certs/server.pem"/*server_cert*/,
                         "./certs/server.pem"/*server_key*/,
-                        0/*server_pw*/,
                         5/*verify_depth*/);
   
   int http_port = atoi(argv[1]);

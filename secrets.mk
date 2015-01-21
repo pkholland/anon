@@ -65,42 +65,47 @@ secrets:
 certs:
 	@mkdir certs
 	
-secrets/raw_ca_password: | secrets
-	$(call print_secrets,"random ca password",$@)
-	@od --read-bytes 12 -vt x1 -An /dev/urandom | tr -d ' ' | tr -d '\n' > secrets/raw_ca_password
+secrets/raw_ca_key_password: | secrets
+	$(call print_secrets,"random ca key password",$@)
+	@od --read-bytes 12 -vt x1 -An /dev/urandom | tr -d ' ' | tr -d '\n' > secrets/raw_ca_key_password
 
-secrets/ca_key.pem: secrets/raw_ca_password
+secrets/ca_key.pem: secrets/raw_ca_key_password
 	$(call print_secrets,"ca private key",$@)
-	@openssl genrsa -passout pass:`cat secrets/raw_ca_password` -out secrets/ca_key.pem 2048 2> /dev/null
+	@openssl genrsa -des3 -passout file:secrets/raw_ca_key_password -out secrets/ca_key.pem 2048 2> /dev/null
 
 secrets/ca_cert.pem: secrets/ca_key.pem
 	$(call print_secrets,"self-signed root ca cert",$@)
-	@openssl req -new -x509 -key secrets/ca_key.pem -out secrets/ca_cert.pem -days 1095 -config cert_info/cert_config -batch
+	@openssl req -new -x509 -key secrets/ca_key.pem -passin file:secrets/raw_ca_key_password -out secrets/ca_cert.pem -days 1095 -config cert_info/cert_config -batch
 	
 
 
-secrets/raw_anon_password: | secrets
-	$(call print_secrets,"random anon password",$@)
-	@od --read-bytes 12 -vt x1 -An /dev/urandom | tr -d ' ' | tr -d '\n' > secrets/raw_anon_password
+secrets/raw_srv_key_password: | secrets
+	$(call print_secrets,"random srv key password",$@)
+	@od --read-bytes 12 -vt x1 -An /dev/urandom | tr -d ' ' | tr -d '\n' > secrets/raw_srv_key_password
 
-secrets/anon_key.pem: secrets/raw_anon_password
-	$(call print_secrets,"anon private key",$@)
-	@openssl genrsa -passout pass:`cat secrets/raw_anon_password` -out secrets/anon_key.pem 2048 2> /dev/null
+secrets/srv_key.pem: secrets/raw_srv_key_password
+	$(call print_secrets,"srv private key",$@)
+	@openssl genrsa -des3 -passout file:secrets/raw_srv_key_password -out secrets/srv_key.pem 2048 2> /dev/null
+	
+secrets/raw_srv_cert_password: | secrets
+	$(call print_secrets,"random srv cert password",$@)
+	@od --read-bytes 12 -vt x1 -An /dev/urandom | tr -d ' ' | tr -d '\n' > secrets/raw_srv_cert_password
+
 
 # generate the request (openssl req) and then sign it with our root
 # (openssl ca) but, because the ca tool is intended to maintain a database
 # of previously signed requests, we blow away any accidentally left over
 # dirs and files from that.
-secrets/anon_cert.pem: secrets/ca_cert.pem secrets/anon_key.pem
-	$(call print_secrets,"anon cert request",$@)
-	@rm -f secrets/anon_cert.csr
+secrets/srv_cert.pem: secrets/ca_cert.pem secrets/srv_key.pem secrets/raw_srv_cert_password
+	$(call print_secrets,"srv cert request",$@)
+	@rm -f secrets/srv_cert.csr
 	@rm -rf obj/auto_gen/certs
-	@openssl req -new -key secrets/anon_key.pem -out secrets/anon_cert.csr -config cert_info/cert_config -batch
+	@openssl req -new -key secrets/srv_key.pem -passin file:secrets/raw_srv_key_password -passout file:secrets/raw_srv_cert_password -out secrets/srv_cert.csr -config cert_info/cert_config -batch
 	@mkdir -p obj/auto_gen/certs/newcerts
 	@bash -c "printf \"%x\n\" \$$((\$$RANDOM%256))" > obj/auto_gen/certs/serial
 	@touch obj/auto_gen/certs/index.txt
-	@openssl ca -in secrets/anon_cert.csr -out secrets/anon_cert.pem -config cert_info/ca_config -notext -batch 2> /dev/null
-	@rm secrets/anon_cert.csr
+	@openssl ca -in secrets/srv_cert.csr -passin file:secrets/raw_ca_key_password -out secrets/srv_cert.pem -config cert_info/ca_config -notext -batch 2> /dev/null
+	@rm secrets/srv_cert.csr
 	@rm -rf obj/auto_gen/certs
 	
 	
@@ -109,22 +114,26 @@ certs/trusted_roots.pem: secrets/ca_cert.pem | certs
 	@cp -f secrets/ca_cert.pem certs/trusted_roots.pem
 	
 
-secrets/passwords.h: secrets/raw_anon_password secrets/raw_anon_password
+secrets/passwords.h: secrets/raw_srv_cert_password secrets/raw_srv_key_password
 	$(call print_secrets,"c++ password .h file",$@)
 	@echo "#pragma once" > secrets/passwords.h
-	@printf "#define ANON_ROOT_CERT_PASSWORD \"" >> secrets/passwords.h
-	@cat secrets/raw_anon_password >> secrets/passwords.h
+	@printf "#define ANON_SRV_KEY_PASSWORD \"" >> secrets/passwords.h
+	@cat secrets/raw_srv_key_password >> secrets/passwords.h
 	@printf "\"\n" >> secrets/passwords.h
-	@printf "#define ANON_CA_PASSWORD \"" >> secrets/passwords.h
-	@cat secrets/raw_anon_password >> secrets/passwords.h
+	@printf "#define ANON_SRV_CERT_PASSWORD \"" >> secrets/passwords.h
+	@cat secrets/raw_srv_cert_password >> secrets/passwords.h
 	@printf "\"\n" >> secrets/passwords.h
 	
 SECRET_FILES=\
 secrets/passwords.h\
-secrets/anon_cert.pem\
+secrets/srv_cert.pem\
 secrets/ca_cert.pem\
 certs/trusted_roots.pem
 
 .PHONY: all_certs
 all_certs: $(SECRET_FILES)
+
+INC_DIRS+=secrets
+
+src/cpp/tls_context.cpp: secrets/passwords.h
 

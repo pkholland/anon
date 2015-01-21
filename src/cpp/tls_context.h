@@ -36,7 +36,6 @@ public:
               const char* verify_loc,   // path to c_rehash dir of trusted certs (or NULL)
               const char* server_cert,  // if !client then path to server's cert (in PEM format)
               const char* server_key,   // if !client then path to server's key (in PEM format)
-              const char* server_pw,    // if !client then password to decrypt cert and key
               int verify_depth);        // maximum length cert chain that is allowed
               
   ~tls_context();
