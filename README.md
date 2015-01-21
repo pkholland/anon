@@ -14,7 +14,7 @@ Basic Build Instructions:<br>
 --8)  ./deps.sh<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it<br>
 --9)  ./reinstall.sh<br>
-10) cd ../../anon<br>
+10) cd <working dir>/anon<br>
 11) make<br>
 
 Running the test code:<br>
