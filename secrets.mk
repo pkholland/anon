@@ -53,8 +53,8 @@ secrets/ims_cert.pem: secrets/ca_cert.pem secrets/ims_key.pem
 	
 	
 certs/trusted_roots.pem: secrets/ca_cert.pem | certs
-	$(call print_secrets,"\"trusted\" public key",$@)
-	@openssl rsa -in secrets/ca_key.pem -pubout > certs/trusted_roots.pem 2> /dev/null
+	$(call print_secrets,"\"trusted\" public cert",$@)
+	@cp -f secrets/ca_cert.pem certs/trusted_roots.pem
 	
 
 secrets/passwords.h: secrets/raw_ims_password secrets/raw_ims_password

@@ -12,10 +12,10 @@
  C                      = US
  ST                     = California
  L                      = Test Locality
- O                      = Adobe Systems, Inc.
- OU                     = Platform Technology and Services
- CN                     = IMS Test Cert
- emailAddress           = noone@email.com
+ O                      = ANON Open Development
+ OU                     = ANON Dev Team
+ CN                     = localhost
+ #emailAddress           = noone@email.com
 
  [ req_attributes ]
  challengePassword      = A challenge password

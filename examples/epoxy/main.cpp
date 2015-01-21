@@ -184,7 +184,15 @@ extern "C" int main(int argc, char** argv)
   int port = atoi(argv[1]);
   exe_name = argv[2];
   
-  sproc_mgr_init(port);
+  try {
+    sproc_mgr_init(port);
+  } catch (const std::exception& err) {
+    anon_log("unable to initialize: " << err.what());
+    return 1;
+  } catch (...) {
+    anon_log("unable to initialize");
+    return 1;
+  }
     
   anon_log("epoxy bound to network port " << port << ", listening for commands on file " << &cmd_path[0]);
   
