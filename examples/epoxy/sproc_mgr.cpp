@@ -148,23 +148,18 @@ bool read_ok(int fd0, int fd1)
   return reply != 0;
 }
 
-bool write_all(int fd, const char* data)
+#define k_start 0
+#define k_stop  1
+
+bool write_cmd(int fd, char cmd)
 {
-  size_t written = 0;
-  size_t len = strlen(data);
-  while (written < len) {
-    auto byts = ::write(fd, &data[written], len-written);
-    if (byts <= 0)
-      return false;
-    written += byts;
-  }
-  return true;
+  return ::write(fd, &cmd, 1) == 1;
 }
 
 void write_stop(int fd0, int fd1)
 {
-  if (write_all(fd0, "stop\n") && read_ok(fd0, fd1))
-  {}
+  if (write_cmd(fd0, k_stop))
+    read_ok(fd0, fd1);
 }
 
 int start_child(proc_info& pi)
@@ -321,7 +316,7 @@ void sproc_mgr_init(int port)
           try {
             current_srv_pid = 0;
             auto new_chld = start_child(*pi);
-            write_all(pi->cmd_pipe[0],"start\n");
+            if (write_cmd(pi->cmd_pipe[0], k_start)) {}
             proc_map.insert(std::make_pair(new_chld,std::move(pi)));
             current_srv_pid = new_chld;
           } catch (const std::exception& err) {
@@ -383,7 +378,7 @@ void start_server(const char* exe_name, const std::vector<std::string>& args)
   if (p != proc_map.end())
     write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
   current_srv_pid = chld;
-  if (write_all(pi->cmd_pipe[0], "start\n")) {}
+  if (write_cmd(pi->cmd_pipe[0], k_start)) {}
   proc_map.insert(std::make_pair(chld,std::move(pi)));
 }
 

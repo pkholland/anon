@@ -3,6 +3,7 @@ parent_dir=$(patsubst %/,%,$(dir $(patsubst %.,%../foo,$(patsubst %..,%../../foo
 
 THIS_MAKE := $(lastword $(MAKEFILE_LIST))
 ANON_ROOT := $(call parent_dir,$(call parent_dir,$(call parent_dir,$(THIS_MAKE))))
+ANON_PARENT := $(patsubst ./..%,..%,$(ANON_ROOT)/..)
 
 SOURCES+=\
 $(ANON_ROOT)/examples/teflon/main.cpp\
@@ -13,10 +14,10 @@ $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_ROOT)/src/cpp/http_server.cpp\
 $(ANON_ROOT)/src/cpp/tls_context.cpp\
 $(ANON_ROOT)/src/cpp/tls_pipe.cpp\
-$(ANON_ROOT)/../http-parser/http_parser.c
+$(ANON_PARENT)/http-parser/http_parser.c
 
 INC_DIRS+=\
 $(ANON_ROOT)/src/cpp\
-$(ANON_ROOT)/../http-parser\
+$(ANON_PARENT)/http-parser\
 
 

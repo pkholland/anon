@@ -446,7 +446,7 @@ extern "C" int main(int argc, char** argv)
             if (err_code == 0)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
             else
-              anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
+              anon_log("connection to \"" << host << "\", port " << port << " failed with error: (" << err_code << ") " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
           });
           
         } else if (!strcmp(&msgBuff[0], "d")) {

@@ -62,6 +62,11 @@ include examples/teflon/teflon.mk
 teflon_SOURCES:=$(SOURCES)
 SOURCES:=
 
+include examples/srv_test/srv_test.mk
+
+srv_test_SOURCES:=$(SOURCES)
+SOURCES:=
+
 include secrets.mk
 
 include scripts/build/anonrules.mk
@@ -75,6 +80,8 @@ $(eval $(call anon.BUILD_RULES,big_client,$(big_client_SOURCES),$(sort $(INC_DIR
 $(eval $(call anon.BUILD_RULES,epoxy,$(epoxy_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 $(eval $(call anon.BUILD_RULES,teflon,$(teflon_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
+$(eval $(call anon.BUILD_RULES,srv_test,$(srv_test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 all: $(SECRET_FILES)
 

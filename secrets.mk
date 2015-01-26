@@ -57,6 +57,10 @@
 # certificate view window for "ANON Open Development" and Delete its
 # "localhost" certificate.
 
+parent_dir=$(patsubst %/,%,$(dir $(patsubst %.,%../foo,$(patsubst %..,%../../foo,$(1)))))
+THIS_MAKE := $(lastword $(MAKEFILE_LIST))
+ANON_ROOT := $(call parent_dir,$(THIS_MAKE))
+
 print_secrets=@printf "%-10s %-25s %s\n" "creating" $(1): $(2)
 
 secrets:
@@ -75,7 +79,7 @@ secrets/ca_key.pem: secrets/raw_ca_key_password
 
 secrets/ca_cert.pem: secrets/ca_key.pem
 	$(call print_secrets,"self-signed root ca cert",$@)
-	@openssl req -new -x509 -key secrets/ca_key.pem -passin file:secrets/raw_ca_key_password -out secrets/ca_cert.pem -days 1095 -config cert_info/cert_config -batch
+	@openssl req -new -x509 -key secrets/ca_key.pem -passin file:secrets/raw_ca_key_password -out secrets/ca_cert.pem -days 1095 -config $(ANON_ROOT)/cert_info/cert_config -batch
 	
 
 
@@ -100,11 +104,11 @@ secrets/srv_cert.pem: secrets/ca_cert.pem secrets/srv_key.pem secrets/raw_srv_ce
 	$(call print_secrets,"srv cert request",$@)
 	@rm -f secrets/srv_cert.csr
 	@rm -rf obj/auto_gen/certs
-	@openssl req -new -key secrets/srv_key.pem -passin file:secrets/raw_srv_key_password -passout file:secrets/raw_srv_cert_password -out secrets/srv_cert.csr -config cert_info/cert_config -batch
+	@openssl req -new -key secrets/srv_key.pem -passin file:secrets/raw_srv_key_password -passout file:secrets/raw_srv_cert_password -out secrets/srv_cert.csr -config $(ANON_ROOT)/cert_info/cert_config -batch
 	@mkdir -p obj/auto_gen/certs/newcerts
 	@bash -c "printf \"%x\n\" \$$((\$$RANDOM%256))" > obj/auto_gen/certs/serial
 	@touch obj/auto_gen/certs/index.txt
-	@openssl ca -in secrets/srv_cert.csr -passin file:secrets/raw_ca_key_password -out secrets/srv_cert.pem -config cert_info/ca_config -notext -batch 2> /dev/null
+	@openssl ca -in secrets/srv_cert.csr -passin file:secrets/raw_ca_key_password -out secrets/srv_cert.pem -config $(ANON_ROOT)/cert_info/ca_config -notext -batch 2> /dev/null
 	@rm secrets/srv_cert.csr
 	@rm -rf obj/auto_gen/certs
 	
@@ -135,5 +139,5 @@ all_certs: $(SECRET_FILES)
 
 INC_DIRS+=secrets
 
-src/cpp/tls_context.cpp: secrets/passwords.h
+$(ANON_ROOT)/src/cpp/tls_context.cpp: secrets/passwords.h
 

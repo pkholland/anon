@@ -28,6 +28,13 @@
 #include <dirent.h>
 #include <fcntl.h>
 
+#if defined(TEFLON_SERVER_APP)
+void server_init();
+void server_respond(http_server::pipe_t& pipe, const http_request& request);
+void server_term();
+#endif
+
+
 static void show_help()
 {
   printf("usage: teflon -listen_fd <socket file descript number to use for listening for tls tcp connections>\n");
@@ -41,12 +48,8 @@ static void show_help()
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
 }
 
-bool keep_looping = false;
-
 extern "C" int main(int argc, char** argv)
 {
-  while (keep_looping) {}
-
   bool        port_is_fd = false;
   int         http_port = -1;
   int         cmd_pipe = -1;
@@ -96,9 +99,16 @@ extern "C" int main(int argc, char** argv)
   // we are done completing our initialization)
   io_dispatch::start(std::thread::hardware_concurrency(), true);
   fiber::initialize();
-  
+    
   int ret = 0;
   try {
+  
+    #if defined(TEFLON_SERVER_APP)
+    server_init();
+    #endif
+    
+anon_log("cert: \"" << cert << "\"");
+anon_log("key:  \"" << key << "\"");
   
     // construct the server's ssl/tls context
     tls_context server_ctx(
@@ -117,18 +127,30 @@ extern "C" int main(int argc, char** argv)
       my_http = std::unique_ptr<http_server>(new http_server(http_port,
                         [](http_server::pipe_t& pipe, const http_request& request){
                         
-                          // temp code - just returns a canned blob of text
-                          http_response response;
-                          response.add_header("Content-Type", "text/plain");
-                          response << "Hello from Teflon!\n";
-                          response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
-                          response << "server response generated from:\n";
-                          response << "    process: " << getpid() << "\n";
-                          response << "    thread:  " << syscall(SYS_gettid) << "\n";
-                          #if defined(ANON_LOG_FIBER_IDS)
-                          response << "    fiber:   " << get_current_fiber_id() << "\n";
+                          #if defined(TEFLON_SERVER_APP)
+                          
+                            // When this is compiled with TEFLON_SERVER_APP
+                            // you have to supply an implementation of server_respond.
+                            // It gets called here every time there is a GET/POST/etc...
+                            // http message sent to this server.
+                            server_respond(pipe, request);
+                          
+                          #else
+                          
+                            // example code - just returns a canned blob of text
+                            http_response response;
+                            response.add_header("Content-Type", "text/plain");
+                            response << "Hello from Teflon!\n";
+                            response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+                            response << "server response generated from:\n";
+                            response << "    process: " << getpid() << "\n";
+                            response << "    thread:  " << syscall(SYS_gettid) << "\n";
+                            #if defined(ANON_LOG_FIBER_IDS)
+                            response << "    fiber:   " << get_current_fiber_id() << "\n";
+                            #endif
+                            pipe.respond(response);
+                          
                           #endif
-                          pipe.respond(response);
                           
                         },
                         tcp_server::k_default_backlog, &server_ctx, port_is_fd));
@@ -150,12 +172,10 @@ extern "C" int main(int argc, char** argv)
           // the command parser itself
           if (fcntl(cmd_pipe, F_SETFL, fcntl(cmd_pipe, F_GETFL) | O_NONBLOCK) != 0)
             do_error("fcntl(cmd_pipe, F_SETFL, O_NONBLOCK)");
-
+            
           fiber_pipe pipe(cmd_pipe,fiber_pipe::unix_domain);
-          char  cmd_buf[1024];
-          int   pos = 0;
-          
-          char ok = 1;
+          char  cmd;
+          char  ok = 1;
           
           // tell the caller we are fully initialized and
           // ready to accept commands
@@ -167,7 +187,7 @@ extern "C" int main(int argc, char** argv)
           while (true) {
           
             try {
-              pos += pipe.read(&cmd_buf[pos], sizeof(cmd_buf)-pos);
+              pipe.read(&cmd, 1);
             } catch (const std::exception& err) {
               anon_log("command pipe unexpectedly failed: " << err.what());
               exit(1);
@@ -175,19 +195,15 @@ extern "C" int main(int argc, char** argv)
               anon_log("command pipe unexpectedly failed");
               exit(1);
             }
-            if (cmd_buf[pos-1] == '\n') {
-              cmd_buf[pos-1] = 0;
-              pos = 0;
-              if (!strcmp(cmd_buf,"start")) {
-                if (!my_http)
-                  create_srv_proc();
-                else
-                  anon_log("start command already processed");
-              } else if (!strcmp(cmd_buf,"stop")) {
-                break;
-              } else
-                anon_log("unknown command: " << &cmd_buf[0]);
-            }
+            if (cmd == 0) {
+              if (!my_http)
+                create_srv_proc();
+              else
+                anon_log("start command already processed");
+            } else if (cmd == 1)
+              break;
+            else
+              anon_log("unknown command: " << (int)cmd);
             
           }
           
@@ -225,6 +241,15 @@ extern "C" int main(int argc, char** argv)
     // this call returns after the above call to io_dispatch::stop() has been
     // called -- meaning that some external command has told us to stop.
     io_dispatch::start_this_thread();
+    
+    #if defined(TEFLON_SERVER_APP)
+    // Whatever the app wants to do at termination time.
+    //
+    // At this point in time all network that sockets were
+    // created as a consequence of computers calling calling
+    // 'connect' to this server, been closed
+    server_term();
+    #endif
 
     // wait for all io threads to terminate (other than this one)
     io_dispatch::join();
