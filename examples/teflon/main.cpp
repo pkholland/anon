@@ -106,9 +106,6 @@ extern "C" int main(int argc, char** argv)
     #if defined(TEFLON_SERVER_APP)
     server_init();
     #endif
-    
-anon_log("cert: \"" << cert << "\"");
-anon_log("key:  \"" << key << "\"");
   
     // construct the server's ssl/tls context
     tls_context server_ctx(
