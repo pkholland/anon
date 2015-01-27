@@ -108,6 +108,31 @@ struct http_request
     return "";
   }
   
+  std::string get_query_val(const char* field, const char* dflt = "", bool required = false) const
+  {
+    auto len = strlen(field);
+    if (p_url.field_set & (1 << UF_QUERY)) {
+      const char* qs = &url_str.c_str()[p_url.field_data[UF_QUERY].off];
+      const char* qse = &qs[p_url.field_data[UF_QUERY].len];
+      while (qs+len+1 < qse) {
+        if (!memcmp(qs, field, len) && qs[len] == '=') {
+          auto vs = qs+len+1;
+          const char* ampr = (char*)memchr(vs, '&', qse-vs);
+          if (!ampr)
+            ampr = qse;
+          return std::string(vs, ampr-vs);
+        }
+        const char* ampr = (char*)memchr(qs, '&', qse-qs);
+        if (!ampr)
+          ampr = qse;
+        qs = ampr + 1;
+      }
+    }
+    if (required)
+      throw std::runtime_error("missing, required querystring field");
+    return dflt;
+  }
+  
   void init()
   {
     headers.init();
