@@ -32,14 +32,41 @@
 void server_init();
 void server_respond(http_server::pipe_t& pipe, const http_request& request);
 void server_term();
+#else
+
+// When this is compiled with TEFLON_SERVER_APP
+// you have to supply an implementation of server_respond.
+// It gets called here every time there is a GET/POST/etc...
+// http message sent to this server.
+void server_respond(http_server::pipe_t& pipe, const http_request& request)
+{
+  // example code - just returns a canned blob of text
+  http_response response;
+  response.add_header("Content-Type", "text/plain");
+  response << "Hello from Teflon!\n";
+  response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+  response << "server response generated from:\n";
+  response << "    process: " << getpid() << "\n";
+  response << "    thread:  " << syscall(SYS_gettid) << "\n";
+  #if defined(ANON_LOG_FIBER_IDS)
+  response << "    fiber:   " << get_current_fiber_id() << "\n";
+  #endif
+  pipe.respond(response);
+}
+
 #endif
+
 
 
 static void show_help()
 {
-  printf("usage: teflon -listen_fd <socket file descript number to use for listening for tls tcp connections>\n");
+  printf("usage: teflon -http_fd <socket file descript number to use for listening for plain tcp connections>\n");
   printf("              or\n");
-  printf("              -listen_port <port number to listen on>\n");
+  printf("              -http_port <port number to listen on unencrypted>\n");
+  printf("              and\n");
+  printf("              -https_fd <socket file descript number to use for listening for tls tcp connections\n");
+  printf("              or\n");
+  printf("              -https_port <port number to listen on encrypted\n");
   printf("              plus...\n");
   printf("              -cert_verify_dir <directory of trusted root certificates in c_rehash form>\n");
   printf("              -server_cert <certificate file for the server>\n");
@@ -51,7 +78,9 @@ static void show_help()
 extern "C" int main(int argc, char** argv)
 {
   bool        port_is_fd = false;
+  bool        sport_is_fd = false;
   int         http_port = -1;
+  int         https_port = -1;
   int         cmd_pipe = -1;
   const char* cert_verify_dir = 0;
   const char* cert = 0;
@@ -66,11 +95,16 @@ extern "C" int main(int argc, char** argv)
   }    
   
   for (int i = 1; i < argc - 1; i++) {
-    if (!strcmp("-listen_fd",argv[i]))  {
+    if (!strcmp("-http_fd",argv[i]))  {
       http_port = atoi(argv[++i]);
       port_is_fd = true;
-    } else if (!strcmp("-listen_port",argv[i])) {
+    } else if (!strcmp("-http_port",argv[i])) {
       http_port = atoi(argv[++i]);
+    } else if (!strcmp("-https_fd",argv[i])) {
+      https_port = atoi(argv[++i]);
+      sport_is_fd = true;
+    } else if (!strcmp("-https_port",argv[i])) {
+      https_port = atoi(argv[++i]);
     } else if (!strcmp("-cert_verify_dir",argv[i])) {
       cert_verify_dir = argv[++i];
     } else if (!strcmp("-server_cert",argv[i])) {
@@ -86,7 +120,12 @@ extern "C" int main(int argc, char** argv)
   }
   
   // did we get all the arguments we need?
-  if (http_port <= 0 || !cert_verify_dir || !cert || !key) {
+  if (http_port <= 0 && https_port <= 0) {
+    show_help();
+    return 1;
+  }
+  
+  if (https_port > 0 && (!cert_verify_dir || !cert || !key)) {
     show_help();
     return 1;
   }
@@ -108,49 +147,35 @@ extern "C" int main(int argc, char** argv)
     #endif
   
     // construct the server's ssl/tls context
-    tls_context server_ctx(
-                          false/*client*/,
-                          0/*verify_cert*/,
-                          cert_verify_dir,
-                          cert,
-                          key,
-                          5/*verify_depth*/);
+    std::unique_ptr<tls_context> server_ctx;
+    if (https_port > 0)
+      server_ctx = std::unique_ptr<tls_context>(new tls_context(
+                            false/*client*/,
+                            0/*verify_cert*/,
+                            cert_verify_dir,
+                            cert,
+                            key,
+                            5/*verify_depth*/));
   
     // capture a closure which can be executed later
     // to create the http_server and set 'my_http'
     std::unique_ptr<http_server> my_http;
-    auto create_srv_proc = [&my_http, &server_ctx, http_port, port_is_fd]{
+    std::unique_ptr<http_server> my_https;
+    auto create_srvs_proc = [&my_http, &my_https, &server_ctx, http_port, https_port, port_is_fd, sport_is_fd]{
       
-      my_http = std::unique_ptr<http_server>(new http_server(http_port,
-                        [](http_server::pipe_t& pipe, const http_request& request){
-                        
-                          #if defined(TEFLON_SERVER_APP)
+      if (https_port > 0)
+        my_https = std::unique_ptr<http_server>(new http_server(https_port,
+                          [](http_server::pipe_t& pipe, const http_request& request){
+                              server_respond(pipe, request);
+                           },
+                          tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd));
                           
-                            // When this is compiled with TEFLON_SERVER_APP
-                            // you have to supply an implementation of server_respond.
-                            // It gets called here every time there is a GET/POST/etc...
-                            // http message sent to this server.
-                            server_respond(pipe, request);
-                          
-                          #else
-                          
-                            // example code - just returns a canned blob of text
-                            http_response response;
-                            response.add_header("Content-Type", "text/plain");
-                            response << "Hello from Teflon!\n";
-                            response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
-                            response << "server response generated from:\n";
-                            response << "    process: " << getpid() << "\n";
-                            response << "    thread:  " << syscall(SYS_gettid) << "\n";
-                            #if defined(ANON_LOG_FIBER_IDS)
-                            response << "    fiber:   " << get_current_fiber_id() << "\n";
-                            #endif
-                            pipe.respond(response);
-                          
-                          #endif
-                          
-                        },
-                        tcp_server::k_default_backlog, &server_ctx, port_is_fd));
+      if (http_port > 0)
+        my_http = std::unique_ptr<http_server>(new http_server(http_port,
+                          [](http_server::pipe_t& pipe, const http_request& request){
+                              server_respond(pipe, request);
+                           },
+                          tcp_server::k_default_backlog, 0, port_is_fd));
                         
     };
     
@@ -162,9 +187,9 @@ extern "C" int main(int argc, char** argv)
     std::unique_ptr<fiber> cmd_fiber;   
     if (cmd_pipe != -1) {
       
-      fiber::run_in_fiber([cmd_pipe, &my_http, &cmd_fiber, &create_srv_proc]{
+      fiber::run_in_fiber([cmd_pipe, &my_http, &my_https, &cmd_fiber, &create_srvs_proc]{
             
-        cmd_fiber = std::unique_ptr<fiber>(new fiber([cmd_pipe, &my_http, &create_srv_proc]{
+        cmd_fiber = std::unique_ptr<fiber>(new fiber([cmd_pipe, &my_http, &my_https, &create_srvs_proc]{
         
           // the command parser itself
           if (fcntl(cmd_pipe, F_SETFL, fcntl(cmd_pipe, F_GETFL) | O_NONBLOCK) != 0)
@@ -193,8 +218,8 @@ extern "C" int main(int argc, char** argv)
               exit(1);
             }
             if (cmd == 0) {
-              if (!my_http)
-                create_srv_proc();
+              if (!my_http && !my_https)
+                create_srvs_proc();
               else
                 anon_log("start command already processed");
             } else if (cmd == 1)
@@ -212,6 +237,8 @@ extern "C" int main(int argc, char** argv)
           // even if a client calls connect.
           if (my_http)
             my_http->stop();
+          if (my_https)
+            my_https->stop();
           anon_log("http server stopped");
           
           // tell the caller we have stopped calling accept

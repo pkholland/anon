@@ -188,7 +188,7 @@ int start_child(proc_info& pi)
     
     args2.push_back(const_cast<char*>(pi.exe_name_.c_str()));
 
-    args2.push_back(const_cast<char*>("-listen_fd"));
+    args2.push_back(const_cast<char*>("-http_fd"));
     char lsock_buf[10];
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
