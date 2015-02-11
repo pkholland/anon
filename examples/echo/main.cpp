@@ -35,13 +35,15 @@ extern "C" int main(int argc, char** argv)
   
   bool do_tls = (argc == 3 && strcmp(argv[2], "-tls") == 0);
   
-  tls_context server_ctx(
+  std::unique_ptr<tls_context> server_ctx;
+  if (do_tls)
+    server_ctx = std::unique_ptr<tls_context>( new tls_context(
                         false/*client*/,
                         0/*verify_cert*/,
                         "/etc/ssl/certs"/*verify_loc*/,
                         "./certs/server.pem"/*server_cert*/,
                         "./certs/server.pem"/*server_key*/,
-                        5/*verify_depth*/);
+                        5/*verify_depth*/));
   
   int http_port = atoi(argv[1]);
   anon_log("starting http server on port " << http_port << ", " << (do_tls ? "":"not ") << "using tls");
@@ -53,11 +55,11 @@ extern "C" int main(int argc, char** argv)
                     [](http_server::pipe_t& pipe, const http_request& request){
                       http_response response;
                       response.add_header("Content-Type", "text/plain");
-                      response << "echo server!\n";
-                      response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
+                      response << "\n\n   Hello World!\n";
+                      //response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
                       pipe.respond(response);
                     },
-                    tcp_server::k_default_backlog, do_tls ? &server_ctx : 0);
+                    tcp_server::k_default_backlog, do_tls ? server_ctx.get() : 0);
 
   while (true) {
     // read a command from stdin

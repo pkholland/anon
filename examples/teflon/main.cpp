@@ -28,19 +28,23 @@
 #include <dirent.h>
 #include <fcntl.h>
 
+// When this is compiled with TEFLON_SERVER_APP
+// you have to supply an implementation of server_respond.
+// (and server_init, server_term).  server_respond gets
+// called every time there is a GET/POST/etc...
+// http message sent to this server.
+
 #if defined(TEFLON_SERVER_APP)
+
 void server_init();
 void server_respond(http_server::pipe_t& pipe, const http_request& request);
 void server_term();
+
 #else
 
-// When this is compiled with TEFLON_SERVER_APP
-// you have to supply an implementation of server_respond.
-// It gets called here every time there is a GET/POST/etc...
-// http message sent to this server.
+// example code - just returns a canned blob of text
 void server_respond(http_server::pipe_t& pipe, const http_request& request)
 {
-  // example code - just returns a canned blob of text
   http_response response;
   response.add_header("Content-Type", "text/plain");
   response << "Hello from Teflon!\n";
@@ -51,12 +55,14 @@ void server_respond(http_server::pipe_t& pipe, const http_request& request)
   #if defined(ANON_LOG_FIBER_IDS)
   response << "    fiber:   " << get_current_fiber_id() << "\n";
   #endif
+  response << "\n\nyou sent:\n";
+  response << request.method_str() << " " << request.url_str << " HTTP/" << request.http_major << "." << request.http_minor << "\n";
+  for (auto it = request.headers.headers.begin(); it != request.headers.headers.end(); it++)
+    response << it->first.str() << ": " << it->second.str() << "\n";
   pipe.respond(response);
 }
 
 #endif
-
-
 
 static void show_help()
 {
@@ -146,7 +152,8 @@ extern "C" int main(int argc, char** argv)
     server_init();
     #endif
   
-    // construct the server's ssl/tls context
+    // construct the server's ssl/tls context if we are
+    // asked to use a tls port
     std::unique_ptr<tls_context> server_ctx;
     if (https_port > 0)
       server_ctx = std::unique_ptr<tls_context>(new tls_context(
@@ -158,7 +165,8 @@ extern "C" int main(int argc, char** argv)
                             5/*verify_depth*/));
   
     // capture a closure which can be executed later
-    // to create the http_server and set 'my_http'
+    // to create the http_servers, setting my_http
+    // and/or my_https
     std::unique_ptr<http_server> my_http;
     std::unique_ptr<http_server> my_https;
     auto create_srvs_proc = [&my_http, &my_https, &server_ctx, http_port, https_port, port_is_fd, sport_is_fd]{
@@ -229,8 +237,8 @@ extern "C" int main(int argc, char** argv)
             
           }
           
-          // tell the tcp server to stop calling 'accept'
-          // this function returns once the it is in a
+          // tell the tcp server(s) to stop calling 'accept'
+          // these functions return once it is in a
           // state of no longer calling accept on any thread
           // and the listening socket is disconnected from the
           // io dispatch mechanism, so no new thread will respond
@@ -242,9 +250,9 @@ extern "C" int main(int argc, char** argv)
           anon_log("http server stopped");
           
           // tell the caller we have stopped calling accept
-          // on the listening socket.  They are now free to
-          // let some other process start calling it if they
-          // wish.
+          // on the listening socket(s).  It is now free to
+          // let some other process start calling it if it
+          // wishes.
           pipe.write(&ok, sizeof(ok));
           
           // there may have been active network sessions because
@@ -269,9 +277,9 @@ extern "C" int main(int argc, char** argv)
     #if defined(TEFLON_SERVER_APP)
     // Whatever the app wants to do at termination time.
     //
-    // At this point in time all network that sockets were
-    // created as a consequence of computers calling calling
-    // 'connect' to this server, been closed
+    // At this point in time all network sockets that were
+    // created as a consequence of clients calling calling
+    // 'connect' to this server, have been closed
     server_term();
     #endif
 

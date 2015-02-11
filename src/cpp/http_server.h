@@ -158,8 +158,8 @@ T& operator<<(T& str, const http_headers::string_len& sl)
 class http_response
 {
 public:
-  http_response()
-    : status_code_("200 OK")
+  http_response(const std::string& status_code = "200 OK")
+    : status_code_(status_code)
   {}
   
   void set_status_code(const std::string& code) { status_code_ = code; }
