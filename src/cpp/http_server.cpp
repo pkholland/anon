@@ -270,10 +270,9 @@ void http_server::pipe_t::respond(const http_response& response)
   rp << "HTTP/1.1 " << response.get_status_code() << "\r\n";
   for (auto it = response.get_headers().begin(); it != response.get_headers().end(); it++)
     rp << it->first << ": " << it->second << "\r\n";
-  if (response.get_body().length()) {
-    rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
+  rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
+  if (response.get_body().length())
     rp << response.get_body() << "\r\n";
-  }
   rp << "\r\n";
    
   pipe->write(rp.str().c_str(), rp.tellp());
