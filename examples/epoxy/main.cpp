@@ -194,7 +194,8 @@ extern "C" int main(int argc, char** argv)
     return 1;
   }
     
-  anon_log("epoxy bound to network port " << port << ", listening for commands on file " << &cmd_path[0]);
+  anon_log("epoxy bound to network port " << port);
+  anon_log("listening for commands on file " << &cmd_path[0]);
   
   int   exitcode = 0;
   char  cmd_buf[4096];
