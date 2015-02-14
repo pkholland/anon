@@ -53,6 +53,7 @@ static void validate_command_file()
     if (unlink(cmd_path) != 0)
       do_error("unlink(\"" << &cmd_path[0] << "\")");
     validate_command_file();
+    return;
   } else if (S_ISDIR(st.st_mode)) {
     anon_log("\"" << &cmd_path[0] << "\" is a directory and must be manually deleted for this program to run");
     exit(1);
