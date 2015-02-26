@@ -59,6 +59,7 @@ struct http_headers
     
     std::string str() const { return std::string(str_,len_); }
     const char* ptr() const { return str_; }
+    size_t      len() const { return len_; }
           
   private:
     const char* str_;
@@ -131,6 +132,67 @@ struct http_request
     if (required)
       throw std::runtime_error("missing, required querystring field");
     return dflt;
+  }
+  
+  static void remove_query_field(std::string& uri, const char* field)
+  {
+    auto qs = strchr(uri.c_str(), '?');
+    if (!qs)
+      return;
+      
+    ++qs;
+    auto qse = uri.c_str() + uri.length();
+    auto len = strlen(field);
+    
+    while (qs+len+1 < qse) {
+      if (!memcmp(qs, field, len) && (qs[len] == '=' || qs[len] == '&')) {
+        std::string stripped(uri.c_str(), qs - uri.c_str());
+        const char* ampr = (char*)strchr(qs+len, '&');
+        if (ampr)
+          stripped += std::string(ampr+1);                               // skip this & since ret already ends in either & or ?
+        else
+          stripped = std::string(stripped.c_str(), stripped.length()-1); // strip off the trailing & or ?
+        uri = stripped;
+        return;
+      }
+      qs = strchrnul(qs, '&') + 1;
+    }
+      }
+  
+  std::string get_cookie_val(const char* name) const
+  {
+    auto slen = strlen(name);
+    auto cs = headers.get_header("Cookie");
+    auto ptr = cs.ptr();
+    auto end = ptr + cs.len();
+    while (ptr < end) {
+      auto e = ptr;
+      while (e < end && *e != '=' && *e != ';')
+        ++e;
+      if (((e-ptr) == slen) && !memcmp(ptr, name, slen)) {
+        if (e < end-1 && *e == '=') {
+          ptr = ++e;
+          while (e < end && *e != ';')
+            ++e;
+          return std::string(ptr, e-ptr);
+        } else
+          return "";
+      }
+      ptr = e;
+      if (ptr < end) {
+        ++ptr;  // skip '=' or ';', whichever it is
+        if (ptr[-1] == '=') {
+          // set ptr to end or the first char after the ';' (generally a ' ')
+          while (ptr < end && *ptr != ';')
+            ++ptr;
+          if (ptr < end)
+            ++ptr;
+        }
+        while (ptr < end && *ptr == ' ')
+          ++ptr;
+      }
+    }
+    return "";
   }
   
   void init()
