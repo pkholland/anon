@@ -283,7 +283,7 @@ $(call anon.resrc_to_auto_gen,$(1)): $(1) | $(dir $(call anon.resrc_to_auto_gen,
 endef
 
 define anon.rez_path
-$(if $($(1)_REZ_ROOT),$(patsubst $($(1)_REZ_ROOT)/%,/%,$(1)),$(1))
+$(if $($(1)_REZ_SRV_ROOT),$(patsubst $($(1)_REZ_HOST_ROOT)/%,$($(1)_REZ_SRV_ROOT)/%,$(1)),$(1))
 endef
 
 define anon.content_type
@@ -340,12 +340,56 @@ endef
 #
 anon.resource_files=$(foreach file,$(RESOURCES_$(1)),$(call anon.resrc_to_auto_gen,$(file)))
 
+#
+# the list of additional files an app, $1, will need to compile
+#
 anon.all_resource_files=$(if $(RESOURCES_$(1)),$(call anon.resrc_to_auto_gen,$(1)) $(call anon.resource_files,$(1)))
 
+#
+# C++ snippets to declare, and call all of the resource initialzation functions
+#
 anon.decl_initializers=$(foreach file,$(RESOURCES_$(1)),void $(call anon.sanitize_rez_name,$(file))(std::map<std::string, const rez_file_ent*>& mp);)
 anon.call_initializers=$(foreach file,$(RESOURCES_$(1)),$(call anon.sanitize_rez_name,$(file))(mp);)
 
+#
+# instantiate a build dependency rule for each of the main resource source files
+# this file will implement the get_resource (and do_for_each_rez) functions for 
+# the particular app.
+#
 $(foreach app,$(RESOURCE_APPS),$(eval $(call anon.resources_rule,$(app),$(call anon.resource_files,$(app)),$(call anon.decl_initializers,$(app)),$(call anon.call_initializers,$(app)))))
+
+#####################################
+
+
+define anon.display_resources
+
+.PHONY: display_rez_$(1)
+display_rez_$(1):
+	@echo ""
+	@echo "resource list for application \"$(1)\""
+	@printf "  %-30s   %-30s   %s\n" $(2)
+	
+endef
+
+anon.rez_display="src file:" "server resource path:" "mime type:" $(foreach rez,$(RESOURCES_$(1)),$(rez) $(call anon.rez_path,$(rez)) "$(call anon.content_type,$(rez))")
+
+$(foreach app,$(RESOURCE_APPS),$(eval $(call anon.display_resources,$(app),$(call anon.rez_display,$(app)))))
+
+.PHONY: rez_explain
+rez_explain:
+	@echo ""
+	@echo "For each \"application\" listed below you will see all"
+	@echo "resources contained in that application.  Each resource"
+	@echo "shows the source file of that resource under \"src file\","
+	@echo "the path/location that this file will be available on the"
+	@echo "server under \"server resource path\", and the mime type that"
+	@echo "will be reported for that resource.  These files, their server"
+	@echo "paths, and mime types are all controled by setting make"
+	@echo "variables.  See anon's examples/rez project for details."
+
+.PHONY: display_rez
+display_rez: rez_explain $(foreach app,$(RESOURCE_APPS),display_rez_$(app))
+	@echo ""
 
 endif
 
