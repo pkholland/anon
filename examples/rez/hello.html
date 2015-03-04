@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" class="client-nojs">
+<head>
+<meta charset="UTF-8" />
+<title>HTTP ETag - Wikipedia, the free encyclopedia</title>
+<meta name="generator" content="MediaWiki 1.25wmf18" />
+<link rel="alternate" href="android-app://org.wikipedia/http/en.m.wikipedia.org/wiki/HTTP_ETag" />
+<link rel="alternate" type="application/x-wiki" title="Edit this page" href="/w/index.php?title=HTTP_ETag&amp;action=edit" />
+<link rel="edit" title="Edit this page" href="/w/index.php?title=HTTP_ETag&amp;action=edit" />
+<link rel="apple-touch-icon" href="//bits.wikimedia.org/apple-touch/wikipedia.png" />
+<link rel="shortcut icon" href="//bits.wikimedia.org/favicon/wikipedia.ico" />
+<link rel="search" type="application/opensearchdescription+xml" href="/w/opensearch_desc.php" title="Wikipedia (en)" />
+<link rel="EditURI" type="application/rsd+xml" href="//en.wikipedia.org/w/api.php?action=rsd" />
+<link rel="alternate" hreflang="x-default" href="/wiki/HTTP_ETag" />
+<link rel="copyright" href="//creativecommons.org/licenses/by-sa/3.0/" />
+<link rel="alternate" type="application/atom+xml" title="Wikipedia Atom feed" href="/w/index.php?title=Special:RecentChanges&amp;feed=atom" />
+<link rel="canonical" href="http://en.wikipedia.org/wiki/HTTP_ETag" />
+<link rel="stylesheet" href="//bits.wikimedia.org/en.wikipedia.org/load.php?debug=false&amp;lang=en&amp;modules=ext.gadget.DRN-wizard%2CReferenceTooltips%2Ccharinsert%2Cfeatured-articles-links%2CrefToolbar%2Cswitcher%2Cteahouse%7Cext.rtlcite%2Cwikihiero%2CwikimediaBadges%7Cext.uls.nojs%7Cext.visualEditor.viewPageTarget.noscript%7Cmediawiki.legacy.commonPrint%2Cshared%7Cmediawiki.skinning.interface%7Cmediawiki.ui.button%7Cskins.vector.styles%7Cwikibase.client.init&amp;only=styles&amp;skin=vector&amp;*" />
+<meta name="ResourceLoaderDynamicStyles" content="" />
+<link rel="stylesheet" href="//bits.wikimedia.org/en.wikipedia.org/load.php?debug=false&amp;lang=en&amp;modules=site&amp;only=styles&amp;skin=vector&amp;*" />
+<style>a:lang(ar),a:lang(kk-arab),a:lang(mzn),a:lang(ps),a:lang(ur){text-decoration:none}
+/* cache key: enwiki:resourceloader:filter:minify-css:7:3904d24a08aa08f6a68dc338f9be277e */</style>
+<script src="//bits.wikimedia.org/en.wikipedia.org/load.php?debug=false&amp;lang=en&amp;modules=startup&amp;only=scripts&amp;skin=vector&amp;*"></script>
+<script>if(window.mw){
+mw.config.set({"wgCanonicalNamespace":"","wgCanonicalSpecialPageName":false,"wgNamespaceNumber":0,"wgPageName":"HTTP_ETag","wgTitle":"HTTP ETag","wgCurRevisionId":649333346,"wgRevisionId":649333346,"wgArticleId":6376769,"wgIsArticle":true,"wgIsRedirect":false,"wgAction":"view","wgUserName":null,"wgUserGroups":["*"],"wgCategories":["Use dmy dates from April 2012","Hypertext Transfer Protocol headers","Internet privacy","Cache (computing)","Proxy servers"],"wgBreakFrames":false,"wgPageContentLanguage":"en","wgPageContentModel":"wikitext","wgSeparatorTransformTable":["",""],"wgDigitTransformTable":["",""],"wgDefaultDateFormat":"dmy","wgMonthNames":["","January","February","March","April","May","June","July","August","September","October","November","December"],"wgMonthNamesShort":["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],"wgRelevantPageName":"HTTP_ETag","wgRelevantArticleId":6376769,"wgIsProbablyEditable":true,"wgRestrictionEdit":[],"wgRestrictionMove":[],"wgWikiEditorEnabledModules":{"toolbar":true,"dialogs":true,"hidesig":true,"preview":false,"publish":false},"wgBetaFeaturesFeatures":[],"wgMediaViewerOnClick":true,"wgMediaViewerEnabledByDefault":true,"wgVisualEditor":{"pageLanguageCode":"en","pageLanguageDir":"ltr"},"wikilove-recipient":"","wikilove-anon":0,"wgPoweredByHHVM":true,"wgULSAcceptLanguageList":[],"wgULSCurrentAutonym":"English","wgFlaggedRevsParams":{"tags":{"status":{"levels":1,"quality":2,"pristine":3}}},"wgStableRevisionId":null,"wgCategoryTreePageCategoryOptions":"{\"mode\":0,\"hideprefix\":20,\"showcount\":true,\"namespaces\":false}","wgNoticeProject":"wikipedia","wgWikibaseItemId":"Q282558"});
+}</script><script>if(window.mw){
+mw.loader.implement("user.options",function($,jQuery){mw.user.options.set({"variant":"en"});},{},{},{});mw.loader.implement("user.tokens",function($,jQuery){mw.user.tokens.set({"editToken":"+\\","patrolToken":"+\\","watchToken":"+\\"});},{},{},{});
+/* cache key: enwiki:resourceloader:filter:minify-js:7:94007ea073e20ad4a3cdce36b2f2e369 */
+}</script>
+<script>if(window.mw){
+mw.loader.load(["mediawiki.page.startup","mediawiki.legacy.wikibits","mediawiki.legacy.ajax","ext.centralauth.centralautologin","ext.imageMetrics.head","ext.visualEditor.viewPageTarget.init","ext.uls.init","ext.uls.interface","ext.centralNotice.bannerController","skins.vector.js"]);
+}</script>
+<link rel="dns-prefetch" href="//meta.wikimedia.org" />
+<!--[if lt IE 7]><style type="text/css">body{behavior:url("/w/static-1.25wmf18/skins/Vector/csshover.min.htc")}</style><![endif]-->
+</head>
+<body class="mediawiki ltr sitedir-ltr ns-0 ns-subject page-HTTP_ETag skin-vector action-view">
+		<div id="mw-page-base" class="noprint"></div>
+		<div id="mw-head-base" class="noprint"></div>
+		<div id="content" class="mw-body" role="main">
+			<a id="top"></a>
+
+							<div id="siteNotice"><!-- CentralNotice --></div>
+						<div class="mw-indicators">
+</div>
+			<h1 id="firstHeading" class="firstHeading" lang="en">HTTP ETag</h1>
+						<div id="bodyContent" class="mw-body-content">
+									<div id="siteSub">From Wikipedia, the free encyclopedia</div>
+								<div id="contentSub"></div>
+												<div id="jump-to-nav" class="mw-jump">
+					Jump to:					<a href="#mw-head">navigation</a>, 					<a href="#p-search">search</a>
+				</div>
+				<div id="mw-content-text" lang="en" dir="ltr" class="mw-content-ltr"><table class="vertical-navbox nowraplinks hlist" style="float:right;clear:right;width:22.0em;margin:0 0 1.0em 1.0em;background:#f9f9f9;border:1px solid #aaa;padding:0.2em;border-spacing:0.4em 0;text-align:center;line-height:1.4em;font-size:88%">
+<tr>
+<th style="padding:0.2em 0.4em 0.2em;font-size:145%;line-height:1.2em"><a href="/wiki/Hypertext_Transfer_Protocol" title="Hypertext Transfer Protocol">HTTP</a></th>
+</tr>
+<tr>
+<td style="padding:0 0.1em 0.4em">
+<ul>
+<li><a href="/wiki/HTTP_persistent_connection" title="HTTP persistent connection">Persistence</a></li>
+<li><a href="/wiki/HTTP_compression" title="HTTP compression">Compression</a></li>
+<li><a href="/wiki/HTTPS" title="HTTPS">HTTPS</a></li>
+</ul>
+</td>
+</tr>
+<tr>
+<th style="padding:0.1em"><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">Request methods</a></th>
+</tr>
+<tr>
+<td style="padding:0 0.1em 0.4em">
+<ul>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">OPTIONS</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">GET</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">HEAD</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">POST</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">PUT</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">DELETE</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">TRACE</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">CONNECT</a></li>
+<li><a href="/wiki/Hypertext_Transfer_Protocol#Request_methods" title="Hypertext Transfer Protocol">PATCH</a></li>
+</ul>
+</td>
+</tr>
+<tr>
+<th style="padding:0.1em"><a href="/wiki/List_of_HTTP_header_fields" title="List of HTTP header fields">Header fields</a></th>
+</tr>
+<tr>
+<td style="padding:0 0.1em 0.4em">
+<ul>
+<li><a href="/wiki/HTTP_cookie" title="HTTP cookie">Cookie</a></li>
+<li><strong class="selflink">ETag</strong></li>
+<li><a href="/wiki/HTTP_location" title="HTTP location">Location</a></li>
+<li><a href="/wiki/HTTP_referer" title="HTTP referer">HTTP referer</a></li>
+<li><a href="/wiki/Do_Not_Track" title="Do Not Track">DNT</a></li>
+<li><a href="/wiki/X-Forwarded-For" title="X-Forwarded-For">X-Forwarded-For</a></li>
+</ul>
+</td>
+</tr>
+<tr>
+<th style="padding:0.1em"><a href="/wiki/List_of_HTTP_status_codes" title="List of HTTP status codes">Status codes</a></th>
+</tr>
+<tr>
+<td style="padding:0 0.1em 0.4em">
+<ul>
+<li><a href="/wiki/HTTP_301" title="HTTP 301">301 Moved Permanently</a></li>
+<li><a href="/wiki/HTTP_302" title="HTTP 302">302 Found</a></li>
+<li><a href="/wiki/HTTP_303" title="HTTP 303">303 See Other</a></li>
+<li><a href="/wiki/HTTP_403" title="HTTP 403">403 Forbidden</a></li>
+<li><a href="/wiki/HTTP_404" title="HTTP 404">404 Not Found</a></li>
+</ul>
+</td>
+</tr>
+<tr>
+<td style="text-align:right;font-size:115%">
+<div class="plainlinks hlist navbar mini">
+<ul>
+<li class="nv-view"><a href="/wiki/Template:HTTP" title="Template:HTTP"><span title="View this template">v</span></a></li>
+<li class="nv-talk"><a href="/wiki/Template_talk:HTTP" title="Template talk:HTTP"><span title="Discuss this template">t</span></a></li>
+<li class="nv-edit"><a class="external text" href="//en.wikipedia.org/w/index.php?title=Template:HTTP&amp;action=edit"><span title="Edit this template">e</span></a></li>
+</ul>
+</div>
+</td>
+</tr>
+</table>
+<p>The <b>ETag</b> or <b>entity tag</b> is part of <a href="/wiki/Hypertext_Transfer_Protocol" title="Hypertext Transfer Protocol">HTTP</a>, the protocol for the <a href="/wiki/World_Wide_Web" title="World Wide Web">World Wide Web</a>. It is one of several mechanisms that HTTP provides for <a href="/wiki/Web_cache" title="Web cache">web cache</a> validation, and which allows a client to make conditional requests. This allows caches to be more efficient, and saves bandwidth, as a web server does not need to send a full response if the content has not changed. ETags can also be used for <a href="/wiki/Optimistic_concurrency_control" title="Optimistic concurrency control">optimistic concurrency control</a>,<sup id="cite_ref-1" class="reference"><a href="#cite_note-1"><span>[</span>1<span>]</span></a></sup> as a way to help prevent simultaneous updates of a resource from overwriting each other.</p>
+<p>An ETag is an opaque identifier assigned by a web server to a specific version of a resource found at a <a href="/wiki/Uniform_Resource_Locator" title="Uniform Resource Locator" class="mw-redirect">URL</a>. If the resource content at that URL ever changes, a new and different ETag is assigned. Used in this manner ETags are similar to <a href="/wiki/Fingerprint_(computing)" title="Fingerprint (computing)">fingerprints</a>, and they can be quickly compared to determine whether two versions of a resource are the same. Comparing ETags only makes sense with respect to one URL—ETags for resources obtained from different URLs may or may not be equal, so no meaning can be inferred from their comparison.</p>
+<p></p>
+<div id="toc" class="toc">
+<div id="toctitle">
+<h2>Contents</h2>
+</div>
+<ul>
+<li class="toclevel-1 tocsection-1"><a href="#Deployment_risks"><span class="tocnumber">1</span> <span class="toctext">Deployment risks</span></a></li>
+<li class="toclevel-1 tocsection-2"><a href="#Strong_and_weak_validation"><span class="tocnumber">2</span> <span class="toctext">Strong and weak validation</span></a></li>
+<li class="toclevel-1 tocsection-3"><a href="#Typical_usage"><span class="tocnumber">3</span> <span class="toctext">Typical usage</span></a></li>
+<li class="toclevel-1 tocsection-4"><a href="#Tracking_using_ETags"><span class="tocnumber">4</span> <span class="toctext">Tracking using ETags</span></a></li>
+<li class="toclevel-1 tocsection-5"><a href="#References"><span class="tocnumber">5</span> <span class="toctext">References</span></a></li>
+<li class="toclevel-1 tocsection-6"><a href="#External_links"><span class="tocnumber">6</span> <span class="toctext">External links</span></a></li>
+</ul>
+</div>
+<p></p>
+<h2><span class="mw-headline" id="Deployment_risks">Deployment risks</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=1" title="Edit section: Deployment risks">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<p>The use of ETags in the HTTP header is optional (not mandatory as with some other fields of the HTTP 1.1 header). The method by which ETags are generated has never been specified in the HTTP specification.</p>
+<p>Common methods of ETag generation include using a <a href="/wiki/Collision_resistance" title="Collision resistance">collision-resistant</a> <a href="/wiki/Hash_function" title="Hash function">hash function</a> of the resource's content, a hash of the last modification timestamp, or even just a <a href="/wiki/Revision_control" title="Revision control">revision number</a>.</p>
+<p>In order to avoid the use of stale cache data, methods used to generate ETags should guarantee (as much as is practical) that each ETag is unique. However, an ETag-generation function could be judged to be "usable" if it can be proven (mathematically) that duplication of ETags would be "acceptably rare", even if it could or would occur.</p>
+<p>Some earlier <a href="/wiki/Checksum" title="Checksum">checksum</a> functions, such as <a href="/wiki/Cyclic_redundancy_check" title="Cyclic redundancy check">CRC32</a> and CRC64, are known to suffer from this hash collision problem. Because of this they are not good candidates for use in ETag generation.</p>
+<h2><span class="mw-headline" id="Strong_and_weak_validation">Strong and weak validation</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=2" title="Edit section: Strong and weak validation">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<p>The ETag mechanism supports both <i>strong validation</i> and <i>weak validation</i>. They are distinguished by the presence of an initial "W/" in the ETag identifier, as:</p>
+<pre>
+"123456789"    – A strong ETag validator
+W/"123456789"  – A weak ETag validator
+</pre>
+<p>A strongly validating ETag match indicates that the content of the two resources is byte-for-byte identical and that all other entity fields (such as Content-Language) are also unchanged. Strong ETags permit the caching and reassembly of partial responses, as with <a href="/wiki/Byte_serving" title="Byte serving">byte-range requests</a>.</p>
+<p>A weakly validating ETag match only indicates that the two resources are <a href="/wiki/Semantic_equivalence" title="Semantic equivalence">semantically equivalent</a>, meaning that for practical purposes they are interchangeable and that cached copies can be used. However the resources are not necessarily byte-for-byte identical, and thus weak ETags are not suitable for byte-range requests. Weak ETags may be useful for cases in which strong ETags are impractical for a web server to generate, such as with <a href="/wiki/Dynamic_web_page" title="Dynamic web page">dynamically-generated content</a>.</p>
+<h2><span class="mw-headline" id="Typical_usage">Typical usage</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=3" title="Edit section: Typical usage">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<p>In typical usage, when a URL is retrieved the web server will return the resource along with its corresponding ETag value, which is placed in an HTTP "ETag" field:</p>
+<pre>
+ETag: "686897696a7c876b7e"
+</pre>
+<p>The client may then decide to cache the resource, along with its ETag. Later, if the client wants to retrieve the same URL again, it will send its previously saved copy of the ETag along with the request in a "If-None-Match" field.</p>
+<pre>
+If-None-Match: "686897696a7c876b7e"
+</pre>
+<p>On this subsequent request, the server may now compare the client's ETag with the ETag for the current version of the resource. If the ETag values match, meaning that the resource has not changed, then the server may send back a very short response with a <b><a href="/wiki/HTTP_304" title="HTTP 304" class="mw-redirect">HTTP 304 Not Modified</a></b> status. The 304 status tells the client that its cached version is still good and that it should use that.</p>
+<p>However, if the ETag values do not match, meaning the resource has likely changed, then a full response including the resource's content is returned, just as if ETags were not being used. In this case the client may decide to replace its previously cached version with the newly returned resource and the new ETag.</p>
+<p>ETag values can be used in <a href="/wiki/Change_detection_and_notification" title="Change detection and notification">web page monitoring</a> systems. Efficient web page monitoring is hindered by the fact that most websites do not set the ETag headers for web pages. When a web monitor has no hints whether web content has been changed all content has to be retrieved, and analyzed, using computing resources for both the publisher and subscriber.</p>
+<h2><span class="mw-headline" id="Tracking_using_ETags">Tracking using ETags</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=4" title="Edit section: Tracking using ETags">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<p>ETags can be used to track unique users,<sup id="cite_ref-2" class="reference"><a href="#cite_note-2"><span>[</span>2<span>]</span></a></sup> as <a href="/wiki/HTTP_cookie" title="HTTP cookie">HTTP cookies</a> are increasingly being deleted by privacy-aware users. In July 2011, <a href="/wiki/Ashkan_Soltani" title="Ashkan Soltani">Ashkan Soltani</a> and a team of researchers at <a href="/wiki/UC_Berkeley" title="UC Berkeley" class="mw-redirect">UC Berkeley</a> reported that a number of websites, including <a href="/wiki/Hulu.com" title="Hulu.com" class="mw-redirect">Hulu.com</a>, were using ETags for tracking purposes.<sup id="cite_ref-3" class="reference"><a href="#cite_note-3"><span>[</span>3<span>]</span></a></sup> Hulu and KISSmetrics have both ceased "respawning" as of 29 July 2011,<sup id="cite_ref-4" class="reference"><a href="#cite_note-4"><span>[</span>4<span>]</span></a></sup> as KISSmetrics and over 20 of its clients are facing a class-action lawsuit over the use of "undeletable" <a href="/wiki/Tracking_cookies" title="Tracking cookies" class="mw-redirect">tracking cookies</a> partially involving the use of ETags.<sup id="cite_ref-5" class="reference"><a href="#cite_note-5"><span>[</span>5<span>]</span></a></sup></p>
+<p>Because ETags are cached by the browser, and returned with subsequent requests for the same resource, a tracking server can simply repeat any ETag received from the browser to ensure an assigned ETag persists indefinitely (in a similar way to persistent cookies). Additional caching headers can also enhance the preservation of ETag data.<sup id="cite_ref-6" class="reference"><a href="#cite_note-6"><span>[</span>6<span>]</span></a></sup></p>
+<p>ETags may be flushable by clearing the <a href="/wiki/Browser_cache" title="Browser cache" class="mw-redirect">browser cache</a> (implementations vary).</p>
+<h2><span class="mw-headline" id="References">References</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=5" title="Edit section: References">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<div class="reflist" style="list-style-type: decimal;">
+<ol class="references">
+<li id="cite_note-1"><span class="mw-cite-backlink"><b><a href="#cite_ref-1">^</a></b></span> <span class="reference-text"><span class="citation web"><a rel="nofollow" class="external text" href="http://www.w3.org/1999/04/Editing/">"Editing the Web – Detecting the Lost Update Problem Using Unreserved Checkout"</a>. <i>W3C Note</i>. 10 May 1999.</span><span title="ctx_ver=Z39.88-2004&amp;rfr_id=info%3Asid%2Fen.wikipedia.org%3AHTTP+ETag&amp;rft.atitle=Editing+the+Web+%E2%80%93+Detecting+the+Lost+Update+Problem+Using+Unreserved+Checkout&amp;rft.date=10+May+1999&amp;rft.genre=article&amp;rft_id=http%3A%2F%2Fwww.w3.org%2F1999%2F04%2FEditing%2F&amp;rft.jtitle=W3C+Note&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Ajournal" class="Z3988"><span style="display:none;">&#160;</span></span></span></li>
+<li id="cite_note-2"><span class="mw-cite-backlink"><b><a href="#cite_ref-2">^</a></b></span> <span class="reference-text"><span class="citation web"><a rel="nofollow" class="external text" href="http://www.arctic.org/~dean/tracking-without-cookies.html">"tracking without cookies"</a>. 17 February 2003.</span><span title="ctx_ver=Z39.88-2004&amp;rfr_id=info%3Asid%2Fen.wikipedia.org%3AHTTP+ETag&amp;rft.btitle=tracking+without+cookies&amp;rft.date=17+February+2003&amp;rft.genre=book&amp;rft_id=http%3A%2F%2Fwww.arctic.org%2F~dean%2Ftracking-without-cookies.html&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook" class="Z3988"><span style="display:none;">&#160;</span></span></span></li>
+<li id="cite_note-3"><span class="mw-cite-backlink"><b><a href="#cite_ref-3">^</a></b></span> <span class="reference-text"><span class="citation web"><a rel="nofollow" class="external text" href="http://papers.ssrn.com/sol3/papers.cfm?abstract_id=1898390">"Flash Cookies and Privacy II: Now with HTML5 and ETag Respawning"</a>. 29 July 2011.</span><span title="ctx_ver=Z39.88-2004&amp;rfr_id=info%3Asid%2Fen.wikipedia.org%3AHTTP+ETag&amp;rft.btitle=Flash+Cookies+and+Privacy+II%3A+Now+with+HTML5+and+ETag+Respawning&amp;rft.date=29+July+2011&amp;rft.genre=book&amp;rft_id=http%3A%2F%2Fpapers.ssrn.com%2Fsol3%2Fpapers.cfm%3Fabstract_id%3D1898390&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook" class="Z3988"><span style="display:none;">&#160;</span></span></span></li>
+<li id="cite_note-4"><span class="mw-cite-backlink"><b><a href="#cite_ref-4">^</a></b></span> <span class="reference-text"><span class="citation web"><a rel="nofollow" class="external text" href="http://ashkansoltani.org/docs/respawn_redux.html">"Respawn Redux"</a>. 11 August 2011.</span><span title="ctx_ver=Z39.88-2004&amp;rfr_id=info%3Asid%2Fen.wikipedia.org%3AHTTP+ETag&amp;rft.btitle=Respawn+Redux&amp;rft.date=11+August+2011&amp;rft.genre=book&amp;rft_id=http%3A%2F%2Fashkansoltani.org%2Fdocs%2Frespawn_redux.html&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook" class="Z3988"><span style="display:none;">&#160;</span></span></span></li>
+<li id="cite_note-5"><span class="mw-cite-backlink"><b><a href="#cite_ref-5">^</a></b></span> <span class="reference-text"><a rel="nofollow" class="external text" href="http://www.extremetech.com/internet/91966-aol-spotify-gigaom-etsy-kissmetrics-sued-over-undeletable-tracking-cookies">AOL, Spotify, GigaOm, Etsy, KISSmetrics sued over undeletable tracking cookies</a></span></li>
+<li id="cite_note-6"><span class="mw-cite-backlink"><b><a href="#cite_ref-6">^</a></b></span> <span class="reference-text"><a rel="nofollow" class="external text" href="https://github.com/lucb1e/cookielesscookies">Cookieless cookies (using ETags as cookies)</a></span></li>
+</ol>
+</div>
+<div class="refbegin" style="">
+<ul>
+<li><a rel="nofollow" class="external text" href="http://tools.ietf.org/html/rfc7232#section-2.3">ETag in HTTP/1.1 specification</a></li>
+<li><a rel="nofollow" class="external text" href="http://iwaw.europarchive.org/04/Clausen.pdf">Concerning Etags and Datestamps</a> by Lars R. Clausen (2004)</li>
+</ul>
+</div>
+<h2><span class="mw-headline" id="External_links">External links</span><span class="mw-editsection"><span class="mw-editsection-bracket">[</span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit&amp;section=6" title="Edit section: External links">edit</a><span class="mw-editsection-bracket">]</span></span></h2>
+<ul>
+<li><a rel="nofollow" class="external text" href="http://httpd.apache.org/docs/2.2/mod/core.html#fileetag">Apache HTTP Server Documentation – FileETag Directive</a></li>
+<li><i><a rel="nofollow" class="external text" href="http://www.w3.org/1999/04/Editing/">Editing the Web: Detecting the Lost Update Problem Using Unreserved Checkout</a>,</i> W3C Note, 10 May 1999.</li>
+<li><a rel="nofollow" class="external text" href="http://devel.squid-cache.org/old_projects.html#etag">Old SQUID Development projects – ETag support</a> (completed in 2001)</li>
+<li><a rel="nofollow" class="external text" href="http://www.infoq.com/articles/etags">Using ETags to Reduce Bandwidth &amp; Workload with Spring &amp; Hibernate</a></li>
+<li><a rel="nofollow" class="external text" href="http://noc.to">Live demo of zombie cookie using ETags</a></li>
+</ul>
+
+
+<!-- 
+NewPP limit report
+Parsed by mw1102
+CPU time usage: 0.158 seconds
+Real time usage: 0.191 seconds
+Preprocessor visited node count: 423/1000000
+Preprocessor generated node count: 0/1500000
+Post‐expand include size: 11306/2097152 bytes
+Template argument size: 104/2097152 bytes
+Highest expansion depth: 12/40
+Expensive parser function count: 1/500
+Lua time usage: 0.041/10.000 seconds
+Lua memory usage: 1.53 MB/50 MB
+-->
+
+<!-- 
+Transclusion expansion time report (%,ms,calls,template)
+100.00%  125.428      1 - -total
+ 45.11%   56.583      1 - Template:Reflist
+ 34.70%   43.521      4 - Template:Cite_web
+ 29.50%   36.995      1 - Template:Use_dmy_dates
+ 15.25%   19.131      1 - Template:HTTP
+ 12.88%   16.151      1 - Template:Sidebar
+ 11.88%   14.906      1 - Template:DMCA
+ 10.16%   12.745      1 - Template:Dated_maintenance_category
+  6.53%    8.189      1 - Template:FULLROOTPAGENAME
+  4.44%    5.565      1 - Template:Ns_has_subpages
+-->
+
+<!-- Saved in parser cache with key enwiki:pcache:idhash:6376769-0!*!0!!en!*!* and timestamp 20150302172622 and revision id 649333346
+ -->
+<noscript><img src="//en.wikipedia.org/wiki/Special:CentralAutoLogin/start?type=1x1" alt="" title="" width="1" height="1" style="border: none; position: absolute;" /></noscript></div>									<div class="printfooter">
+						Retrieved from "<a dir="ltr" href="http://en.wikipedia.org/w/index.php?title=HTTP_ETag&amp;oldid=649333346">http://en.wikipedia.org/w/index.php?title=HTTP_ETag&amp;oldid=649333346</a>"					</div>
+													<div id='catlinks' class='catlinks'><div id="mw-normal-catlinks" class="mw-normal-catlinks"><a href="/wiki/Help:Category" title="Help:Category">Categories</a>: <ul><li><a href="/wiki/Category:Hypertext_Transfer_Protocol_headers" title="Category:Hypertext Transfer Protocol headers">Hypertext Transfer Protocol headers</a></li><li><a href="/wiki/Category:Internet_privacy" title="Category:Internet privacy">Internet privacy</a></li><li><a href="/wiki/Category:Cache_(computing)" title="Category:Cache (computing)">Cache (computing)</a></li><li><a href="/wiki/Category:Proxy_servers" title="Category:Proxy servers">Proxy servers</a></li></ul></div><div id="mw-hidden-catlinks" class="mw-hidden-catlinks mw-hidden-cats-hidden">Hidden categories: <ul><li><a href="/wiki/Category:Use_dmy_dates_from_April_2012" title="Category:Use dmy dates from April 2012">Use dmy dates from April 2012</a></li></ul></div></div>												<div class="visualClear"></div>
+							</div>
+		</div>
+		<div id="mw-navigation">
+			<h2>Navigation menu</h2>
+
+			<div id="mw-head">
+									<div id="p-personal" role="navigation" class="" aria-labelledby="p-personal-label">
+						<h3 id="p-personal-label">Personal tools</h3>
+						<ul>
+							<li id="pt-createaccount"><a href="/w/index.php?title=Special:UserLogin&amp;returnto=HTTP+ETag&amp;type=signup" title="You are encouraged to create an account and log in; however, it is not mandatory">Create account</a></li><li id="pt-login"><a href="/w/index.php?title=Special:UserLogin&amp;returnto=HTTP+ETag" title="You&#039;re encouraged to log in; however, it&#039;s not mandatory. [o]" accesskey="o">Log in</a></li>						</ul>
+					</div>
+									<div id="left-navigation">
+										<div id="p-namespaces" role="navigation" class="vectorTabs" aria-labelledby="p-namespaces-label">
+						<h3 id="p-namespaces-label">Namespaces</h3>
+						<ul>
+															<li  id="ca-nstab-main" class="selected"><span><a href="/wiki/HTTP_ETag"  title="View the content page [c]" accesskey="c">Article</a></span></li>
+															<li  id="ca-talk"><span><a href="/wiki/Talk:HTTP_ETag"  title="Discussion about the content page [t]" accesskey="t">Talk</a></span></li>
+													</ul>
+					</div>
+										<div id="p-variants" role="navigation" class="vectorMenu emptyPortlet" aria-labelledby="p-variants-label">
+												<h3 id="p-variants-label"><span>Variants</span><a href="#"></a></h3>
+
+						<div class="menu">
+							<ul>
+															</ul>
+						</div>
+					</div>
+									</div>
+				<div id="right-navigation">
+										<div id="p-views" role="navigation" class="vectorTabs" aria-labelledby="p-views-label">
+						<h3 id="p-views-label">Views</h3>
+						<ul>
+															<li id="ca-view" class="selected"><span><a href="/wiki/HTTP_ETag" >Read</a></span></li>
+															<li id="ca-edit"><span><a href="/w/index.php?title=HTTP_ETag&amp;action=edit"  title="You can edit this page. Please use the preview button before saving [e]" accesskey="e">Edit</a></span></li>
+															<li id="ca-history" class="collapsible"><span><a href="/w/index.php?title=HTTP_ETag&amp;action=history"  title="Past versions of this page [h]" accesskey="h" rel="archives">View history</a></span></li>
+													</ul>
+					</div>
+										<div id="p-cactions" role="navigation" class="vectorMenu emptyPortlet" aria-labelledby="p-cactions-label">
+						<h3 id="p-cactions-label"><span>More</span><a href="#"></a></h3>
+
+						<div class="menu">
+							<ul>
+															</ul>
+						</div>
+					</div>
+										<div id="p-search" role="search">
+						<h3>
+							<label for="searchInput">Search</label>
+						</h3>
+
+						<form action="/w/index.php" id="searchform">
+														<div id="simpleSearch">
+															<input type="search" name="search" placeholder="Search" title="Search Wikipedia [f]" accesskey="f" id="searchInput" /><input type="hidden" value="Special:Search" name="title" /><input type="submit" name="fulltext" value="Search" title="Search Wikipedia for this text" id="mw-searchButton" class="searchButton mw-fallbackSearchButton" /><input type="submit" name="go" value="Go" title="Go to a page with this exact name if one exists" id="searchButton" class="searchButton" />								</div>
+						</form>
+					</div>
+									</div>
+			</div>
+			<div id="mw-panel">
+				<div id="p-logo" role="banner"><a class="mw-wiki-logo" href="/wiki/Main_Page"  title="Visit the main page"></a></div>
+						<div class="portal" role="navigation" id='p-navigation' aria-labelledby='p-navigation-label'>
+			<h3 id='p-navigation-label'>Navigation</h3>
+
+			<div class="body">
+									<ul>
+													<li id="n-mainpage-description"><a href="/wiki/Main_Page" title="Visit the main page [z]" accesskey="z">Main page</a></li>
+													<li id="n-contents"><a href="/wiki/Portal:Contents" title="Guides to browsing Wikipedia">Contents</a></li>
+													<li id="n-featuredcontent"><a href="/wiki/Portal:Featured_content" title="Featured content – the best of Wikipedia">Featured content</a></li>
+													<li id="n-currentevents"><a href="/wiki/Portal:Current_events" title="Find background information on current events">Current events</a></li>
+													<li id="n-randompage"><a href="/wiki/Special:Random" title="Load a random article [x]" accesskey="x">Random article</a></li>
+													<li id="n-sitesupport"><a href="https://donate.wikimedia.org/wiki/Special:FundraiserRedirector?utm_source=donate&amp;utm_medium=sidebar&amp;utm_campaign=C13_en.wikipedia.org&amp;uselang=en" title="Support us">Donate to Wikipedia</a></li>
+													<li id="n-shoplink"><a href="//shop.wikimedia.org" title="Visit the Wikimedia Shop">Wikimedia Shop</a></li>
+											</ul>
+							</div>
+		</div>
+			<div class="portal" role="navigation" id='p-interaction' aria-labelledby='p-interaction-label'>
+			<h3 id='p-interaction-label'>Interaction</h3>
+
+			<div class="body">
+									<ul>
+													<li id="n-help"><a href="/wiki/Help:Contents" title="Guidance on how to use and edit Wikipedia">Help</a></li>
+													<li id="n-aboutsite"><a href="/wiki/Wikipedia:About" title="Find out about Wikipedia">About Wikipedia</a></li>
+													<li id="n-portal"><a href="/wiki/Wikipedia:Community_portal" title="About the project, what you can do, where to find things">Community portal</a></li>
+													<li id="n-recentchanges"><a href="/wiki/Special:RecentChanges" title="A list of recent changes in the wiki [r]" accesskey="r">Recent changes</a></li>
+													<li id="n-contactpage"><a href="//en.wikipedia.org/wiki/Wikipedia:Contact_us">Contact page</a></li>
+											</ul>
+							</div>
+		</div>
+			<div class="portal" role="navigation" id='p-tb' aria-labelledby='p-tb-label'>
+			<h3 id='p-tb-label'>Tools</h3>
+
+			<div class="body">
+									<ul>
+													<li id="t-whatlinkshere"><a href="/wiki/Special:WhatLinksHere/HTTP_ETag" title="List of all English Wikipedia pages containing links to this page [j]" accesskey="j">What links here</a></li>
+													<li id="t-recentchangeslinked"><a href="/wiki/Special:RecentChangesLinked/HTTP_ETag" title="Recent changes in pages linked from this page [k]" accesskey="k">Related changes</a></li>
+													<li id="t-upload"><a href="/wiki/Wikipedia:File_Upload_Wizard" title="Upload files [u]" accesskey="u">Upload file</a></li>
+													<li id="t-specialpages"><a href="/wiki/Special:SpecialPages" title="A list of all special pages [q]" accesskey="q">Special pages</a></li>
+													<li id="t-permalink"><a href="/w/index.php?title=HTTP_ETag&amp;oldid=649333346" title="Permanent link to this revision of the page">Permanent link</a></li>
+													<li id="t-info"><a href="/w/index.php?title=HTTP_ETag&amp;action=info" title="More information about this page">Page information</a></li>
+													<li id="t-wikibase"><a href="//www.wikidata.org/wiki/Q282558" title="Link to connected data repository item [g]" accesskey="g">Wikidata item</a></li>
+						<li id="t-cite"><a href="/w/index.php?title=Special:CiteThisPage&amp;page=HTTP_ETag&amp;id=649333346" title="Information on how to cite this page">Cite this page</a></li>					</ul>
+							</div>
+		</div>
+			<div class="portal" role="navigation" id='p-coll-print_export' aria-labelledby='p-coll-print_export-label'>
+			<h3 id='p-coll-print_export-label'>Print/export</h3>
+
+			<div class="body">
+									<ul>
+													<li id="coll-create_a_book"><a href="/w/index.php?title=Special:Book&amp;bookcmd=book_creator&amp;referer=HTTP+ETag">Create a book</a></li>
+													<li id="coll-download-as-rdf2latex"><a href="/w/index.php?title=Special:Book&amp;bookcmd=render_article&amp;arttitle=HTTP+ETag&amp;oldid=649333346&amp;writer=rdf2latex">Download as PDF</a></li>
+													<li id="t-print"><a href="/w/index.php?title=HTTP_ETag&amp;printable=yes" title="Printable version of this page [p]" accesskey="p">Printable version</a></li>
+											</ul>
+							</div>
+		</div>
+			<div class="portal" role="navigation" id='p-lang' aria-labelledby='p-lang-label'>
+			<h3 id='p-lang-label'>Languages</h3>
+
+			<div class="body">
+									<ul>
+													<li class="interlanguage-link interwiki-de"><a href="//de.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – German" lang="de" hreflang="de">Deutsch</a></li>
+													<li class="interlanguage-link interwiki-es"><a href="//es.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Spanish" lang="es" hreflang="es">Español</a></li>
+													<li class="interlanguage-link interwiki-eo"><a href="//eo.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Esperanto" lang="eo" hreflang="eo">Esperanto</a></li>
+													<li class="interlanguage-link interwiki-fr"><a href="//fr.wikipedia.org/wiki/Balise-entit%C3%A9_ETag_HTTP" title="Balise-entité ETag HTTP – French" lang="fr" hreflang="fr">Français</a></li>
+													<li class="interlanguage-link interwiki-ja"><a href="//ja.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Japanese" lang="ja" hreflang="ja">日本語</a></li>
+													<li class="interlanguage-link interwiki-ru"><a href="//ru.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Russian" lang="ru" hreflang="ru">Русский</a></li>
+													<li class="interlanguage-link interwiki-sr"><a href="//sr.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Serbian" lang="sr" hreflang="sr">Српски / srpski</a></li>
+													<li class="interlanguage-link interwiki-zh"><a href="//zh.wikipedia.org/wiki/HTTP_ETag" title="HTTP ETag – Chinese" lang="zh" hreflang="zh">中文</a></li>
+													<li class="uls-p-lang-dummy"><a href="#"></a></li>
+											</ul>
+				<div class='after-portlet after-portlet-lang'><span class="wb-langlinks-edit wb-langlinks-link"><a action="edit" href="//www.wikidata.org/wiki/Q282558#sitelinks-wikipedia" text="Edit links" title="Edit interlanguage links" class="wbc-editpage">Edit links</a></span></div>			</div>
+		</div>
+				</div>
+		</div>
+		<div id="footer" role="contentinfo">
+							<ul id="footer-info">
+											<li id="footer-info-lastmod"> This page was last modified on 1 March 2015, at 05:15.</li>
+											<li id="footer-info-copyright">Text is available under the <a rel="license" href="//en.wikipedia.org/wiki/Wikipedia:Text_of_Creative_Commons_Attribution-ShareAlike_3.0_Unported_License">Creative Commons Attribution-ShareAlike License</a><a rel="license" href="//creativecommons.org/licenses/by-sa/3.0/" style="display:none;"></a>;
+additional terms may apply.  By using this site, you agree to the <a href="//wikimediafoundation.org/wiki/Terms_of_Use">Terms of Use</a> and <a href="//wikimediafoundation.org/wiki/Privacy_policy">Privacy Policy</a>. Wikipedia® is a registered trademark of the <a href="//www.wikimediafoundation.org/">Wikimedia Foundation, Inc.</a>, a non-profit organization.</li>
+									</ul>
+							<ul id="footer-places">
+											<li id="footer-places-privacy"><a href="//wikimediafoundation.org/wiki/Privacy_policy" title="wikimedia:Privacy policy">Privacy policy</a></li>
+											<li id="footer-places-about"><a href="/wiki/Wikipedia:About" title="Wikipedia:About">About Wikipedia</a></li>
+											<li id="footer-places-disclaimer"><a href="/wiki/Wikipedia:General_disclaimer" title="Wikipedia:General disclaimer">Disclaimers</a></li>
+											<li id="footer-places-contact"><a href="//en.wikipedia.org/wiki/Wikipedia:Contact_us">Contact Wikipedia</a></li>
+											<li id="footer-places-developers"><a href="https://www.mediawiki.org/wiki/Special:MyLanguage/How_to_contribute">Developers</a></li>
+											<li id="footer-places-mobileview"><a href="//en.m.wikipedia.org/w/index.php?title=HTTP_ETag&amp;mobileaction=toggle_view_mobile" class="noprint stopMobileRedirectToggle">Mobile view</a></li>
+									</ul>
+										<ul id="footer-icons" class="noprint">
+											<li id="footer-copyrightico">
+															<a href="//wikimediafoundation.org/"><img src="//bits.wikimedia.org/images/wikimedia-button.png" srcset="//bits.wikimedia.org/images/wikimedia-button-1.5x.png 1.5x, //bits.wikimedia.org/images/wikimedia-button-2x.png 2x" width="88" height="31" alt="Wikimedia Foundation"/></a>
+													</li>
+											<li id="footer-poweredbyico">
+															<a href="//www.mediawiki.org/"><img src="//bits.wikimedia.org/static-1.25wmf18/resources/assets/poweredby_mediawiki_88x31.png" alt="Powered by MediaWiki" srcset="//bits.wikimedia.org/static-1.25wmf18/resources/assets/poweredby_mediawiki_132x47.png 1.5x, //bits.wikimedia.org/static-1.25wmf18/resources/assets/poweredby_mediawiki_176x62.png 2x" width="88" height="31" /></a>
+													</li>
+									</ul>
+						<div style="clear:both"></div>
+		</div>
+		<script>/*<![CDATA[*/window.jQuery && jQuery.ready();/*]]>*/</script><script>if(window.mw){
+mw.loader.state({"ext.globalCssJs.site":"ready","ext.globalCssJs.user":"ready","site":"loading","user":"ready","user.groups":"ready"});
+}</script>
+<script>if(window.mw){
+mw.loader.load(["ext.cite","mediawiki.toc","mediawiki.action.view.postEdit","mediawiki.user","mediawiki.hidpi","mediawiki.page.ready","mediawiki.searchSuggest","ext.gadget.teahouse","ext.gadget.ReferenceTooltips","ext.gadget.DRN-wizard","ext.gadget.charinsert","ext.gadget.refToolbar","ext.gadget.switcher","ext.gadget.featured-articles-links","ext.imageMetrics.loader","ext.eventLogging.subscriber","ext.wikimediaEvents.statsd","ext.navigationTiming","schema.UniversalLanguageSelector","ext.uls.eventlogger","ext.uls.interlanguage"],null,true);
+}</script>
+<script>if(window.mw){
+document.write("\u003Cscript src=\"//bits.wikimedia.org/en.wikipedia.org/load.php?debug=false\u0026amp;lang=en\u0026amp;modules=site\u0026amp;only=scripts\u0026amp;skin=vector\u0026amp;*\"\u003E\u003C/script\u003E");
+}</script>
+<script>if(window.mw){
+mw.config.set({"wgBackendResponseTime":89,"wgHostname":"mw1209"});
+}</script>
+	</body>
+</html>
+

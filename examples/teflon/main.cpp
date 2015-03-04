@@ -28,41 +28,14 @@
 #include <dirent.h>
 #include <fcntl.h>
 
-// When this is compiled with TEFLON_SERVER_APP
 // you have to supply an implementation of server_respond.
 // (and server_init, server_term).  server_respond gets
 // called every time there is a GET/POST/etc...
 // http message sent to this server.
 
-#if defined(TEFLON_SERVER_APP)
-
 void server_init();
 void server_respond(http_server::pipe_t& pipe, const http_request& request);
 void server_term();
-
-#else
-
-// example code - just returns a canned blob of text
-void server_respond(http_server::pipe_t& pipe, const http_request& request)
-{
-  http_response response;
-  response.add_header("Content-Type", "text/plain");
-  response << "Hello from Teflon!\n";
-  response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
-  response << "server response generated from:\n";
-  response << "    process: " << getpid() << "\n";
-  response << "    thread:  " << syscall(SYS_gettid) << "\n";
-  #if defined(ANON_LOG_FIBER_IDS)
-  response << "    fiber:   " << get_current_fiber_id() << "\n";
-  #endif
-  response << "\n\nyou sent:\n";
-  response << request.method_str() << " " << request.url_str << " HTTP/" << request.http_major << "." << request.http_minor << "\n";
-  for (auto it = request.headers.headers.begin(); it != request.headers.headers.end(); it++)
-    response << it->first.str() << ": " << it->second.str() << "\n";
-  pipe.respond(response);
-}
-
-#endif
 
 static void show_help()
 {
@@ -148,9 +121,7 @@ extern "C" int main(int argc, char** argv)
   int ret = 0;
   try {
   
-    #if defined(TEFLON_SERVER_APP)
     server_init();
-    #endif
   
     // construct the server's ssl/tls context if we are
     // asked to use a tls port
@@ -274,14 +245,12 @@ extern "C" int main(int argc, char** argv)
     // called -- meaning that some external command has told us to stop.
     io_dispatch::start_this_thread();
     
-    #if defined(TEFLON_SERVER_APP)
     // Whatever the app wants to do at termination time.
     //
     // At this point in time all network sockets that were
     // created as a consequence of clients calling calling
     // 'connect' to this server, have been closed
     server_term();
-    #endif
 
     // wait for all io threads to terminate (other than this one)
     io_dispatch::join();
