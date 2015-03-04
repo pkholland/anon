@@ -27,6 +27,7 @@
 class c_helper
 {
 public:
+  virtual ~c_helper() {}
   virtual void call(http_server::pipe_t& pipe, const http_request& request) = 0;
 };
 
@@ -141,6 +142,10 @@ void server_respond(http_server::pipe_t& pipe, const http_request& request)
 
 void server_term()
 {
+  for (auto mit = response_map.begin(); mit != response_map.end(); mit++) {
+    for (auto it = mit->second.begin(); it != mit->second.end(); it++)
+      delete it->second;
+  }
 }
 
 
