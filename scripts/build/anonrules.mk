@@ -59,18 +59,18 @@ endif
 #
 # $1 = Source Name
 #
-anon.src_to_obj=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$(subst ..,__,$(1)))).o
+anon.src_to_obj=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$(subst ..,__,$1))).o
 
 #
 # Convert a source path to a dependency file path.
 #
 # $1 = Source Name
 #
-anon.src_to_dep=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$(subst ..,__,$(1)))).d
+anon.src_to_dep=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$(subst ..,__,$1))).d
 #
 # Convert a (re)source path to it's equivalent auto_gen file
 #
-anon.resrc_to_auto_gen=$(anon.INTERMEDIATE_DIR)/auto_gen/rez/$(patsubst ./%,%,$(subst ..,__,$(1))).cpp
+anon.resrc_to_auto_gen=$(anon.INTERMEDIATE_DIR)/auto_gen/rez/$(patsubst ./%,%,$(subst ..,__,$1)).cpp
 
 #
 # Tool to either display short-form (when verbose is off) or
@@ -82,9 +82,9 @@ anon.resrc_to_auto_gen=$(anon.INTERMEDIATE_DIR)/auto_gen/rez/$(patsubst ./%,%,$(
 # $3 = short display-form of the arguments -- frequently just the target file name
 #
 ifneq (0,$(V))
- anon.CALL_TOOL=$(1) $(2)
+ anon.CALL_TOOL=$1 $2
 else
- anon.CALL_TOOL=@printf "%-10s %s\n" $(notdir $(1)) $(3) && $(1) $(2)
+ anon.CALL_TOOL=@printf "%-10s %s\n" $(notdir $1) $3 && $1 $2
 endif
 
 #
@@ -100,26 +100,26 @@ ifneq (clean,$(MAKECMDGOALS))
 #	$1 file name
 #	$2 options
 #
-# Basic idea is to echo the current options, $(2), into the file $(1).  Then compare
-# the contents of $(1) with the existing $(1).opts file.  If $(1).opts is missing or is
-# not the same as $(1) then replace $(1).opts with $(1).  This has the effect of updating
-# the time stamp on $(1).opts whenever the options change, making $(1).opts suitable for a
+# Basic idea is to echo the current options, $2, into the file $1.  Then compare
+# the contents of $1 with the existing $1.opts file.  If $1.opts is missing or is
+# not the same as $1 then replace $1.opts with $1.  This has the effect of updating
+# the time stamp on $1.opts whenever the options change, making $1.opts suitable for a
 # prerequisite file to something that uses the options in $2
 #
 anon.d:=$(anon.INTERMEDIATE_DIR)/$(CONFIG)
 anon.options_check=\
 mkdir -p $(anon.d);\
-echo \"$(subst ",\",$(2))\" > $(anon.d)/$(1);\
-if [ -a $(anon.d)/$(1).opts ]; then\
-	if [ \"\`diff $(anon.d)/$(1).opts $(anon.d)/$(1)\`\" != \"\" ]; then\
-		echo \"updating   $(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(1).opts\";\
-		mv $(anon.d)/$(1) $(anon.d)/$(1).opts;\
+echo \"$(subst ",\",$2)\" > $(anon.d)/$1;\
+if [ -a $(anon.d)/$1.opts ]; then\
+	if [ \"\`diff $(anon.d)/$1.opts $(anon.d)/$1\`\" != \"\" ]; then\
+		echo \"updating   $(anon.INTERMEDIATE_DIR)/$(CONFIG)/$1.opts\";\
+		mv $(anon.d)/$1 $(anon.d)/$1.opts;\
 	else\
-		rm $(anon.d)/$(1);\
+		rm $(anon.d)/$1;\
 	fi;\
 else\
-	echo \"creating   $(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(1).opts\";\
-	mv $(anon.d)/$(1) $(anon.d)/$(1).opts;\
+	echo \"creating   $(anon.INTERMEDIATE_DIR)/$(CONFIG)/$1.opts\";\
+	mv $(anon.d)/$1 $(anon.d)/$1.opts;\
 fi
 
 
@@ -180,35 +180,35 @@ anon.link=gcc
 #
 define anon.c_compile_rule
 
--include $(call anon.src_to_dep,$(1))
+-include $(call anon.src_to_dep,$1)
 
-$(call anon.src_to_obj,$(1)): $(1) $(3) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
-	$(call anon.CALL_TOOL,$(anon.cc),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$(1)) $(2) $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$(1)),$$@)
+$(call anon.src_to_obj,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$1))dir.stamp
+	$(call anon.CALL_TOOL,$(anon.cc),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
 
 endef
 
 define anon.cxx_compile_rule
 
--include $(call anon.src_to_dep,$(1))
+-include $(call anon.src_to_dep,$1)
 
-$(call anon.src_to_obj,$(1)): $(1) $(3) $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$(1)))dir.stamp
-	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$(1)) $(2) -std=c++11 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$(1)),$$@)
+$(call anon.src_to_obj,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$1))dir.stamp
+	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 -std=c++11 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
 
 endef
 
 define anon.linker_rule
 
-$(anon.OUT_DIR)/$(CONFIG)/$(1): $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $(foreach src,$(2),$(call anon.src_to_obj,$(src)))
+$(anon.OUT_DIR)/$(CONFIG)/$1: $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $(foreach src,$2,$(call anon.src_to_obj,$(src)))
 	$(anon.mkdir) -p $$(@D)
-	$(call anon.CALL_TOOL,$(anon.link),$(LDFLAGS) $(LDFLAGS_$(CONFIG)) $$(filter-out %.opts,$$^) -o $$@ $(3),$$@)
+	$(call anon.CALL_TOOL,$(anon.link),$(LDFLAGS) $(LDFLAGS_$(CONFIG)) $$(filter-out %.opts,$$^) -o $$@ $3,$$@)
 
 endef
 
 anon.all_sources:=
 
-#$(info $(filter-out $(anon.all_sources),$(2)))
-#anon.new_sources:=$(filter-out $(anon.all_sources),$(2))
-#anon.all_sources+=$(filter-out $(anon.all_sources),$(2))
+#$(info $(filter-out $(anon.all_sources),$2))
+#anon.new_sources:=$(filter-out $(anon.all_sources),$2)
+#anon.all_sources+=$(filter-out $(anon.all_sources),$2)
 
 #
 # $1 build name
@@ -219,13 +219,13 @@ anon.all_sources:=
 #
 define anon.BUILD_RULES
 
-$(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$(2) $(call anon.all_resource_files,$(1)))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$(3),-I$(inc)),$(5)))
-$(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$(2))),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$(3),-I$(inc)),$(5)))
-$(call anon.linker_rule,$(1),$(2) $(call anon.all_resource_files,$(1)),$(4))
+$(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$2 $(call anon.all_resource_files,$1))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$3,-I$(inc)),$5))
+$(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$2)),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$3,-I$(inc)),$5))
+$(call anon.linker_rule,$1,$2 $(call anon.all_resource_files,$1),$4)
 
-all: $(anon.OUT_DIR)/$(CONFIG)/$(1)
+all: $(anon.OUT_DIR)/$(CONFIG)/$1
 
-anon.all_sources+=$(filter-out $(anon.all_sources),$(2) $(call anon.all_resource_files,$(1)))
+anon.all_sources+=$(filter-out $(anon.all_sources),$2 $(call anon.all_resource_files,$1))
 
 endef
 
@@ -249,20 +249,20 @@ ifneq (,$(RESOURCES))
 #     / -> XS
 #     - -> XD
 # 
-anon.sanitize_rez_name=rezRec_$(subst -,XD,$(subst /,XS,$(subst .,X_,$(subst X,XX,$(1)))))
+anon.sanitize_rez_name=rezRec_$(subst -,XD,$(subst /,XS,$(subst .,X_,$(subst X,XX,$1))))
 
 
 #
 # $1 file name of path/file to be treated as a resource.  The recipe for this
-# runs the contents of the file, $(1), through od (and then sed) to generate
+# runs the contents of the file, $1, through od (and then sed) to generate
 # a text file that contains a C-like array of hex values -- as in "0x54, 0x2f, ..."
 # with the contents of the file.
 #
 define anon.resource_rule
 
-$(call anon.resrc_to_auto_gen,$(1)): $(1) | $(dir $(call anon.resrc_to_auto_gen,$(1)))dir.stamp
+$(call anon.resrc_to_auto_gen,$1): $1 | $(dir $(call anon.resrc_to_auto_gen,$1))dir.stamp
 	@echo "converting $$@"
-	@echo "// AUTO-GENERATED by anonrules.mk, based on the contents of $(1)" > $$@
+	@echo "// AUTO-GENERATED by anonrules.mk, based on the contents of $1" > $$@
 	@echo "// DO NOT EDIT" >> $$@
 	@echo "" >> $$@
 	@echo "#include \"resources.h\"" >> $$@
@@ -275,21 +275,21 @@ $(call anon.resrc_to_auto_gen,$(1)): $(1) | $(dir $(call anon.resrc_to_auto_gen,
 	@echo "const unsigned char compressed[] = {" >> $$@
 	@cat $$< | gzip - | od -vt x1 -An | sed 's/\(\ \)\([0-9a-f][0-9a-f]\)/0x\2,/g' >> $$@
 	@echo "};" >> $$@
-	@printf "const char* etag = \"\\\"%s\\\"\";\n" `sha1sum $(1) | sed -r 's/([^ ]+).*/\1/g'` >> $$@
-	@printf "const rez_file_ent ent = { &uncompressed[0], %d, &compressed[0], %d, etag, $(3) };\n" `cat $$< | wc -c` `cat $$< | gzip - | wc -c` >> $$@
+	@printf "const char* etag = \"\\\"%s\\\"\";\n" `sha1sum $1 | sed -r 's/([^ ]+).*/\1/g'` >> $$@
+	@printf "const rez_file_ent ent = { &uncompressed[0], %d, &compressed[0], %d, etag, $3 };\n" `cat $$< | wc -c` `cat $$< | gzip - | wc -c` >> $$@
 	@echo "}" >> $$@
-	@echo "void $(call anon.sanitize_rez_name,$(1))(std::map<std::string, const rez_file_ent*>& mp);" >> $$@
-	@echo "void $(call anon.sanitize_rez_name,$(1))(std::map<std::string, const rez_file_ent*>& mp) { mp[\"$(2)\"] = &ent; }" >> $$@
+	@echo "void $(call anon.sanitize_rez_name,$1)(std::map<std::string, const rez_file_ent*>& mp);" >> $$@
+	@echo "void $(call anon.sanitize_rez_name,$1)(std::map<std::string, const rez_file_ent*>& mp) { mp[\"$2\"] = &ent; }" >> $$@
 	@echo "" >> $$@
 
 endef
 
 define anon.rez_path
-$(if $($(1)_REZ_SRV_ROOT),$(patsubst $($(1)_REZ_HOST_ROOT)/%,$($(1)_REZ_SRV_ROOT)/%,$(1)),$(1))
+$(if $($1_REZ_SRV_ROOT),$(patsubst $($1_REZ_HOST_ROOT)/%,$($1_REZ_SRV_ROOT)/%,$1),$1)
 endef
 
 define anon.content_type
-$(if $($(1)_REZ_TYPE),\"$($(1)_REZ_TYPE)\",\"text/plain; charset=UTF-8\")
+$(if $($1_REZ_TYPE),\"$($1_REZ_TYPE)\",\"text/plain; charset=UTF-8\")
 endef
 
 #
@@ -300,21 +300,21 @@ $(foreach rez,$(RESOURCES),$(eval $(call anon.resource_rule,$(rez),$(call anon.r
 
 define anon.resources_rule
 
-$(call anon.resrc_to_auto_gen,$(1)): $(2)
+$(call anon.resrc_to_auto_gen,$1): $2
 	@echo "// AUTO-GENERATED by anonrules.mk" > $$@
 	@echo "// DO NOT EDIT" >> $$@
 	@echo "" >> $$@
 	@echo "#include \"resources.h\"" >> $$@
 	@echo "#include <map>" >> $$@
 	@echo "" >> $$@
-	@echo "$(3)" | sed 's/; /;\n/g' >> $$@
+	@echo "$3" | sed 's/; /;\n/g' >> $$@
 	@echo "namespace {" >> $$@
 	@echo "class Rez" >> $$@
 	@echo "{" >> $$@
 	@echo "public:" >> $$@
 	@echo "  Rez()" >> $$@
 	@echo "  {" >> $$@
-	@echo "    $(4)" | sed 's/; /;\n    /g' >> $$@
+	@echo "    $4" | sed 's/; /;\n    /g' >> $$@
 	@echo "  }" >> $$@
 	@echo "  std::map<std::string, const rez_file_ent*> mp;" >> $$@
 	@echo "};" >> $$@
@@ -340,18 +340,18 @@ endef
 # given a list of resource files in $1, compute the equivalent list
 # of resrc_to_auto_gen files
 #
-anon.resource_files=$(foreach file,$(RESOURCES_$(1)),$(call anon.resrc_to_auto_gen,$(file)))
+anon.resource_files=$(foreach file,$(RESOURCES_$1),$(call anon.resrc_to_auto_gen,$(file)))
 
 #
 # the list of additional files an app, $1, will need to compile
 #
-anon.all_resource_files=$(if $(RESOURCES_$(1)),$(call anon.resrc_to_auto_gen,$(1)) $(call anon.resource_files,$(1)))
+anon.all_resource_files=$(if $(RESOURCES_$1),$(call anon.resrc_to_auto_gen,$1) $(call anon.resource_files,$1))
 
 #
 # C++ snippets to declare, and call all of the resource initialzation functions
 #
-anon.decl_initializers=$(foreach file,$(RESOURCES_$(1)),void $(call anon.sanitize_rez_name,$(file))(std::map<std::string, const rez_file_ent*>& mp);)
-anon.call_initializers=$(foreach file,$(RESOURCES_$(1)),$(call anon.sanitize_rez_name,$(file))(mp);)
+anon.decl_initializers=$(foreach file,$(RESOURCES_$1),void $(call anon.sanitize_rez_name,$(file))(std::map<std::string, const rez_file_ent*>& mp);)
+anon.call_initializers=$(foreach file,$(RESOURCES_$1),$(call anon.sanitize_rez_name,$(file))(mp);)
 
 #
 # instantiate a build dependency rule for each of the main resource source files
@@ -365,15 +365,15 @@ $(foreach app,$(RESOURCE_APPS),$(eval $(call anon.resources_rule,$(app),$(call a
 
 define anon.display_resources
 
-.PHONY: display_rez_$(1)
-display_rez_$(1):
+.PHONY: display_rez_$1
+display_rez_$1:
 	@echo ""
-	@echo "resource list for application \"$(1)\""
-	@printf "  %-50s   %-50s   %s\n" $(2)
+	@echo "resource list for application \"$1\""
+	@printf "  %-50s   %-50s   %s\n" $2
 	
 endef
 
-anon.rez_display="src file:" "server resource path:" "mime type:" $(foreach rez,$(RESOURCES_$(1)),$(rez) $(call anon.rez_path,$(rez)) "$(call anon.content_type,$(rez))")
+anon.rez_display="src file:" "server resource path:" "mime type:" $(foreach rez,$(RESOURCES_$1),$(rez) $(call anon.rez_path,$(rez)) "$(call anon.content_type,$(rez))")
 
 $(foreach app,$(RESOURCE_APPS),$(eval $(call anon.display_resources,$(app),$(call anon.rez_display,$(app)))))
 

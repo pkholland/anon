@@ -57,11 +57,11 @@
 # certificate view window for "ANON Open Development" and Delete its
 # "localhost" certificate.
 
-parent_dir=$(patsubst %/,%,$(dir $(patsubst %.,%../foo,$(patsubst %..,%../../foo,$(1)))))
+parent_dir=$(patsubst %/,%,$(dir $(patsubst %.,%../foo,$(patsubst %..,%../../foo,$1))))
 THIS_MAKE := $(lastword $(MAKEFILE_LIST))
 ANON_ROOT := $(call parent_dir,$(THIS_MAKE))
 
-print_secrets=@printf "%-10s %-25s %s\n" "creating" $(1): $(2)
+print_secrets=@printf "%-10s %-25s %s\n" "creating" $1: $2
 
 secrets:
 	@mkdir secrets
