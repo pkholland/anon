@@ -247,8 +247,9 @@ ifneq (,$(RESOURCES))
 #     X	-> XX
 #     .	-> X_
 #     / -> XS
+#     - -> XD
 # 
-anon.sanitize_rez_name=rezRec_$(subst /,XS,$(subst .,X_,$(subst X,XX,$(1))))
+anon.sanitize_rez_name=rezRec_$(subst -,XD,$(subst /,XS,$(subst .,X_,$(subst X,XX,$(1)))))
 
 
 #

@@ -41,6 +41,7 @@ public:
   virtual size_t read(void* buff, size_t len);
   virtual void write(const void* buff, size_t len);
   virtual void limit_io_block_time(int seconds);
+  virtual int get_fd() const { return fp_->get_fd(); }
   
   void shutdown();
   

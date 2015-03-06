@@ -337,6 +337,11 @@ public:
     }
     
     void respond(const http_response& response);
+    
+    int get_fd() const
+    {
+      return pipe->get_fd();
+    }
 
   private:
     fiber_mutex mutex;
