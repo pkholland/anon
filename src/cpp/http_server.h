@@ -26,46 +26,10 @@
 #include "http_parser.h"  // github.com/joyent/http-parser
 #include "tcp_utils.h"
 #include "tls_context.h"
+#include "string_len.h"
 
 struct http_headers
-{
-  struct string_len {
-    string_len()
-      : str_(""),
-        len_(0)
-    {}
-   
-    string_len(const char* str, size_t len)
-      : str_(str),
-        len_(len)
-    {}
-    
-    // warning! can only be called with a literal
-    // or some other str whose lifespan exceeds
-    // the lifespan of this string_len.
-    explicit string_len(const char* str)
-      : str_(str),
-        len_(strlen(str))
-    {}
-    
-    bool operator<(const string_len& sl) const
-    {
-      size_t l = len_ < sl.len_ ? len_ : sl.len_;
-      auto ret = memcmp(str_,sl.str_,l);
-      if (ret != 0)
-        return ret < 0;
-      return len_ < sl.len_;
-    }
-    
-    std::string str() const { return std::string(str_,len_); }
-    const char* ptr() const { return str_; }
-    size_t      len() const { return len_; }
-          
-  private:
-    const char* str_;
-    size_t      len_;
-  };
-  
+{  
   string_len get_header(const char* field) const
   {
     auto it = headers.find(string_len(field));
@@ -109,29 +73,36 @@ struct http_request
     return "";
   }
   
-  std::string get_query_val(const char* field, const char* dflt = "", bool required = false) const
+  static std::string get_query_val_s(const string_len& query, const char* field, const char* dflt = "", bool required = false)
   {
     auto len = strlen(field);
-    if (p_url.field_set & (1 << UF_QUERY)) {
-      const char* qs = &url_str.c_str()[p_url.field_data[UF_QUERY].off];
-      const char* qse = &qs[p_url.field_data[UF_QUERY].len];
-      while (qs+len+1 < qse) {
-        if (!memcmp(qs, field, len) && qs[len] == '=') {
-          auto vs = qs+len+1;
-          const char* ampr = (char*)memchr(vs, '&', qse-vs);
-          if (!ampr)
-            ampr = qse;
-          return std::string(vs, ampr-vs);
-        }
-        const char* ampr = (char*)memchr(qs, '&', qse-qs);
+    const char* qs = query.ptr();
+    const char* qse = &qs[query.len()];
+    while (qs+len+1 < qse) {
+      if (!memcmp(qs, field, len) && qs[len] == '=') {
+        auto vs = qs+len+1;
+        const char* ampr = (char*)memchr(vs, '&', qse-vs);
         if (!ampr)
           ampr = qse;
-        qs = ampr + 1;
+        return std::string(vs, ampr-vs);
       }
+      const char* ampr = (char*)memchr(qs, '&', qse-qs);
+      if (!ampr)
+        ampr = qse;
+      qs = ampr + 1;
     }
-    if (required)
+    if (required) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("missing, required querystring field: \"" << field << "\"");
+      #endif
       throw std::runtime_error("missing, required querystring field");
+    }
     return dflt;
+  }
+  
+  std::string get_query_val(const char* field, const char* dflt = "", bool required = false) const
+  {
+    return get_query_val_s((p_url.field_set & (1 << UF_QUERY)) ? string_len(&url_str.c_str()[p_url.field_data[UF_QUERY].off], p_url.field_data[UF_QUERY].len) : string_len(), field, dflt, required);
   }
   
   static void remove_query_field(std::string& uri, const char* field)
@@ -157,7 +128,7 @@ struct http_request
       }
       qs = strchrnul(qs, '&') + 1;
     }
-      }
+  }
   
   std::string get_cookie_val(const char* name) const
   {
@@ -209,13 +180,6 @@ struct http_request
   int             http_minor;
   int             method;
 };
-
-// helper
-template<typename T>
-T& operator<<(T& str, const http_headers::string_len& sl)
-{
-  return str << sl.str();
-}
 
 class http_response
 {

@@ -94,8 +94,8 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         pc* c = (pc*)p->data;
         if (c->header_state == pc::k_value) {
           // <field,value> complete, add new pair
-          http_headers::string_len fld(c->last_field_start,c->last_field_len);
-          http_headers::string_len val(c->last_value_start,c->last_value_len);
+          string_len fld(c->last_field_start,c->last_field_len);
+          string_len val(c->last_value_start,c->last_value_len);
           c->request.headers.headers[fld] = val;
           
           c->last_field_start = at;
@@ -126,8 +126,8 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         c->request.http_minor = p->http_minor;
         c->request.method = p->method;
         if (c->header_state == pc::k_value) {
-          http_headers::string_len fld(c->last_field_start,c->last_field_len);
-          http_headers::string_len val(c->last_value_start,c->last_value_len);
+          string_len fld(c->last_field_start,c->last_field_len);
+          string_len val(c->last_value_start,c->last_value_len);
           c->request.headers.headers[fld] = val;
         }
         
