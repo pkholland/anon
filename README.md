@@ -14,7 +14,7 @@ Basic Build Instructions:<br>
 <b>skip</b> 7)  cd proxygen/proxygen<br>
 <b>skip</b> 8)  ./deps.sh<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it<br>
---9)  ./reinstall.sh<br>
+<b>skip</b> 9)  ./reinstall.sh<br>
 10) cd &lt;working dir&gt;/anon<br>
 11) make<br>
 
