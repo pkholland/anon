@@ -20,5 +20,6 @@ Basic Build Instructions:<br>
 
 Running the test code:<br>
 ./deploy/release/test<br>
+&nbsp;&nbsp;then type "h"&lt;return&gt; for a list of available tests
 
 -- Currently the proxygen-related pieces are not being used and you don't need to follow those steps (6-9) to get anon building and running.
