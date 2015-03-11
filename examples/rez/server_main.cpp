@@ -56,7 +56,7 @@ void add_mapping(const std::string& method, const std::string& path, T t)
 }
 
 // simple hack
-static bool permits_gzip(const http_headers::string_len& s)
+static bool permits_gzip(const string_len& s)
 {
   if (s.len() == 0)
     return false;
