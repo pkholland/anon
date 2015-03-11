@@ -6,12 +6,13 @@ Basic Build Instructions:<br>
 2)  if not already:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install git<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install g++<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install libssl-dev<br>
 3)  create a working directory and cd into it<br>
 4)  git clone https://github.com/pkholland/anon.git<br>
 5)  git clone https://github.com/joyent/http-parser.git<br>
---6)  git clone https://github.com/facebook/proxygen.git<br>
---7)  cd proxygen/proxygen<br>
---8)  ./deps.sh<br>
+<b>skip</b> 6)  git clone https://github.com/facebook/proxygen.git<br>
+<b>skip</b> 7)  cd proxygen/proxygen<br>
+<b>skip</b> 8)  ./deps.sh<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it<br>
 --9)  ./reinstall.sh<br>
 10) cd &lt;working dir&gt;/anon<br>
