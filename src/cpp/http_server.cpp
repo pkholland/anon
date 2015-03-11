@@ -218,6 +218,9 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
           base_handler->exec(body_pipe, pcallback.request);
           
           keep_alive = http_should_keep_alive(&parser);
+          #if defined(ANON_FORCE_NO_KEEP_ALIVE)
+          keep_alive = false;
+          #endif
           if (keep_alive) {
             http_parser_init(&parser, HTTP_REQUEST);
             memmove(&buf[0], &buf[bsp], bep-bsp);
