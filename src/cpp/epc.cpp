@@ -31,7 +31,9 @@ void endpoint_cluster::update_endpoints()
   int err = endpoints.first;
   if (err != 0) {
   
-    anon_log_error("lookup failed with: " << (err > 0 ? error_string(err) : gai_strerror(err)));
+    #if ANON_LOG_NET_TRAFFIC > 1
+    anon_log("lookup failed with: " << (err > 0 ? error_string(err) : gai_strerror(err)));
+    #endif
     ++failed_lookup_attempts_;
     
   } else {

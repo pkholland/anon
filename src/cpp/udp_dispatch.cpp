@@ -57,13 +57,17 @@ void udp_dispatch::io_avail(const struct epoll_event& event)
       socklen_t host_addr_size = sizeof(struct sockaddr_storage);
       auto dlen = recvfrom(sock_, &msgBuff[0], sizeof(msgBuff), 0, (struct sockaddr*)&host, &host_addr_size);
       if (dlen == -1) {
+        #if ANON_LOG_NET_TRAFFIC > 1
         if (errno != EAGAIN)
-          anon_log_error("recvfrom failed with errno: " << errno_string());
+          anon_log("recvfrom failed with errno: " << errno_string());
+        #endif
         return;
       }
-      else if (dlen == sizeof(msgBuff))
-        anon_log_error("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
-      else
+      else if (dlen == sizeof(msgBuff)) {
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
+        #endif
+      } else
         recv_msg(&msgBuff[0], dlen, &host, host_addr_size);
     }
     
