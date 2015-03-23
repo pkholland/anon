@@ -249,7 +249,7 @@ tls_pipe::~tls_pipe()
   BIO_free(ssl_bio_);
 }
 
-size_t tls_pipe::read(void* buff, size_t len)
+size_t tls_pipe::read(void* buff, size_t len) const
 {
   auto ret = SSL_read(ssl_, buff, len);
   if (ret <= 0)
@@ -264,7 +264,7 @@ void tls_pipe::shutdown()
 
 //#define ANON_SLOW_TLS_WRITES 50
   
-void tls_pipe::write(const void* buff, size_t len)
+void tls_pipe::write(const void* buff, size_t len) const
 {
   size_t tot_bytes = 0;
   const char* buf = (const char*)buff;

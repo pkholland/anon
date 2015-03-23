@@ -22,8 +22,8 @@
 
 #pragma once
 
-#include "log.h"
 #include "lock_checker.h"
+#include "time_utils.h"
 #include <vector>
 #include <thread>
 #include <mutex>
@@ -345,6 +345,14 @@ T& operator<<(T& str, const io_dispatch::scheduled_task& task)
   return str << "{" << task.when_ << ", " << task.id_ << "}";
 }
 
+inline bool operator<(const io_dispatch::scheduled_task& t1, const io_dispatch::scheduled_task& t2)
+{
+  if (t1.when_ < t2.when_)
+    return true;
+  if (t2.when_ < t1.when_)
+    return false;
+  return t1.id_ < t2.id_;
+}
 
 
 

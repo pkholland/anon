@@ -26,8 +26,8 @@ class pipe_t
 {
 public:
   virtual ~pipe_t() {}
-  virtual size_t read(void* buff, size_t len) = 0;
-  virtual void write(const void* buff, size_t len) = 0;
+  virtual size_t read(void* buff, size_t len) const = 0;
+  virtual void write(const void* buff, size_t len) const = 0;
   virtual void limit_io_block_time(int seconds) = 0;
   virtual int get_fd() const = 0;
 };

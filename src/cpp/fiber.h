@@ -441,8 +441,8 @@ public:
     return ret;
   }
 
-  virtual size_t read(void* buff, size_t len);
-  virtual void write(const void* buff, size_t len);
+  virtual size_t read(void* buff, size_t len) const;
+  virtual void write(const void* buff, size_t len) const;
   
   static void wait_for_zero_net_pipes()
   {
@@ -477,6 +477,12 @@ private:
   static fiber_cond             zero_net_pipes_cond_;
   
   static const struct timespec  forever;
+};
+
+class fiber_io_error : public std::runtime_error
+{
+public:
+  fiber_io_error(const char* what_arg) : std::runtime_error(what_arg) {}
 };
 
 ////////////////////////////////////////////////////////////////

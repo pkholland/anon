@@ -238,7 +238,7 @@ void fiber_pipe::io_avail(const struct epoll_event& event)
   tls_io_params.wake_all(io_fiber_);
 }
 
-size_t fiber_pipe::read(void *buf, size_t count)
+size_t fiber_pipe::read(void *buf, size_t count) const
 {
   anon::assert_no_locks();
   ssize_t num_bytes_read;
@@ -249,27 +249,27 @@ size_t fiber_pipe::read(void *buf, size_t count)
         #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
         #endif
-        throw std::runtime_error("read(fd_, buf, count) detected remote hangup");
+        throw fiber_io_error("read(fd_, buf, count) detected remote hangup");
       } else if (errno == EAGAIN)
-        tls_io_params.sleep_until_data_available(this);
+        tls_io_params.sleep_until_data_available(const_cast<fiber_pipe*>(this));
       else {
         #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("read(" << fd_ << ", <ptr>, " << count << ") failed with errno: " << errno_string());
         #endif
-        throw std::runtime_error("read(fd_, buf, count)");
+        throw fiber_io_error("read(fd_, buf, count)");
       }
     } else if (num_bytes_read == 0 && count != 0) {
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
       #endif
-      throw std::runtime_error("read(fd_, buf, count) returned 0, other end probably closed");
+      throw fiber_io_error("read(fd_, buf, count) returned 0, other end probably closed");
     } else
       break;
   }
   return (size_t)num_bytes_read;
 }
 
-void fiber_pipe::write(const void *buf, size_t count)
+void fiber_pipe::write(const void *buf, size_t count) const
 {
   anon::assert_no_locks();
   size_t total_bytes_written = 0;
@@ -281,19 +281,23 @@ void fiber_pipe::write(const void *buf, size_t count)
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("remote hangup detected on write");
       #endif
-      throw std::runtime_error("remote hangup detected on write");
+      throw fiber_io_error("remote hangup detected on write");
     }
-    auto bytes_written = ::write(fd_,&p[total_bytes_written], count - total_bytes_written);
+    auto bytes_written = ::write(fd_, &p[total_bytes_written], count - total_bytes_written);
     if (bytes_written == -1) {
       if (errno == EAGAIN)
-        tls_io_params.sleep_until_write_possible(this);
-      else
-        do_error("send(" << fd_ << ", <ptr>, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
+        tls_io_params.sleep_until_write_possible(const_cast<fiber_pipe*>(this));
+      else {
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") failed with errno: " << errno_string());
+        #endif
+        throw fiber_io_error("write(fd_, &p[total_bytes_written], count - total_bytes_written)");
+      }
     } else if (bytes_written == 0 && count != 0) {
       #if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("send(" << fd_ << ", <ptr>, " << count - total_bytes_written << ", MSG_NOSIGNAL)");
+      anon_log("write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") returned 0, other end probably closed");
       #endif
-      do_error("send returned 0, other end probably closed");
+      throw fiber_io_error("write(fd_, &p[total_bytes_written], count - total_bytes_written)");
     }
     else
       total_bytes_written += bytes_written;

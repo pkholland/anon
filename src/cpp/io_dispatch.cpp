@@ -21,8 +21,6 @@
 */
 
 #include "io_dispatch.h"
-#include "log.h"
-#include "time_utils.h"
 #include <sys/epoll.h>
 #include <system_error>
 #include <fcntl.h>

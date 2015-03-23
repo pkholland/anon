@@ -38,8 +38,8 @@ public:
   
   virtual ~tls_pipe();
     
-  virtual size_t read(void* buff, size_t len);
-  virtual void write(const void* buff, size_t len);
+  virtual size_t read(void* buff, size_t len) const;
+  virtual void write(const void* buff, size_t len) const;
   virtual void limit_io_block_time(int seconds);
   virtual int get_fd() const { return fp_->get_fd(); }
   

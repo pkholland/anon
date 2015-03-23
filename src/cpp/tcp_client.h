@@ -88,16 +88,15 @@ namespace tcp_client
   
   // can only be called from a fiber.  The calling fiber will
   // be suspended while the dns (cache) lookup and tcp connect
-  // are performed.
-  // the return value is a pair where the first element is either
-  // 0 (the function succeeded and the second element is valid)
-  // or is an error code (function failed and second element is
-  // invalid).  These are the same errors as are passed
-  // to connect_and_run described above.
+  // are performed.  The return value is a pair where the first
+  // element is either 0 (the function succeeded and the second
+  // element is valid) or is an error code (function failed and
+  // second element is invalid).  These are the same parameters
+  // that are passed to 'f' in connect_and_run, described above.
   std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char* host, int port);
   
   // similar to the version of connect above, except that no dns
-  // logic is involved.
+  // logic is involved
   std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen);
 }
 

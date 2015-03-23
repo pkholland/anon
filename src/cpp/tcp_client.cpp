@@ -35,7 +35,7 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
     do_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
   
   std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
-  auto cr = connect(fd, addr, addrlen);
+  auto cr = ::connect(fd, addr, addrlen);
 
   if (cr == 0) {
   
