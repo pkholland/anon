@@ -25,6 +25,7 @@
 #include <time.h>
 #include "log.h"
 #include <sstream>
+#include <math.h>
 
 inline struct timespec cur_time()
 {
@@ -108,6 +109,22 @@ inline double to_seconds(const struct timespec& spec)
 {
   return spec.tv_sec + (spec.tv_nsec / 1000000000.);
 }
+
+inline struct timespec operator*(double m, const struct timespec& spec)
+{
+  struct timespec s;
+  double i;
+  s.tv_nsec = (int)(modf(to_seconds(spec) * m, &i) * 1000000000);
+  s.tv_sec = (int)i;
+  return s;
+}
+
+inline struct timespec operator*(const struct timespec& spec, double m)
+{
+  return m*spec;
+}
+
+
 
 
 

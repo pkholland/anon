@@ -23,6 +23,7 @@
 #pragma once
 
 #include "tcp_client.h"
+#include <list>
 
 class endpoint_cluster
 {
@@ -69,7 +70,8 @@ public:
       cur_avail_requests_(0),
       total_possible_requests_(0),
       lookup_error_(0),
-      lookup_frequency_seconds_(lookup_frequency_in_seconds)
+      lookup_frequency_seconds_(lookup_frequency_in_seconds),
+      update_running_(false)
   {
     // run as a task (right now) instead of directly starting
     // the fiber so the destructor (actually, do_shutdown) can
@@ -107,7 +109,7 @@ public:
     
     while (true) {
       try {
-        do_with_connected_pipe(new tcp_call<F>(f));
+        do_with_connected_pipe(new tcp_call<Fn>(f));
         return;
       }
       catch(const backoff_error&) {   // retry these
@@ -124,16 +126,19 @@ private:
   fiber_mutex   mtx_;
   fiber_cond    zero_fibers_cond_;
   fiber_cond    connections_possible_cond_;
-  fiber_con     update_cond_;
+  fiber_cond    update_cond_;
   int           max_conn_per_ep_;
   unsigned int  round_robin_index_;
   int           cur_avail_requests_;
   int           total_possible_requests_;
   int           lookup_error_;
   int           total_fibers_;
+  int           lookup_frequency_seconds_;
+  io_dispatch::scheduled_task update_task_;
   bool          shutting_down_;
+  bool          update_running_;
   
-  std::multimap<struct timespec,id_dispatch::scheduled_task>  io_retry_tasks_;
+  std::multimap<struct timespec,io_dispatch::scheduled_task>  io_retry_tasks_;
   
   void do_shutdown()
   {
@@ -143,7 +148,7 @@ private:
     shutting_down_ = true;
     
     while (update_running_)
-      update_cond_.wait(mtx_);
+      update_cond_.wait(lock);
         
     // kill all outstanding io retries
     // (we don't bother deleting the io_retry_tasks_ themselves, since
@@ -162,6 +167,8 @@ private:
     while (total_fibers_ > 0)
       zero_fibers_cond_.wait(lock);
   }
+  
+  struct backoff_error {};
   
   struct fiber_counter
   {
@@ -202,7 +209,7 @@ private:
   struct tcp_caller
   {
     virtual ~tcp_caller() {}
-    virtual void exec(int err_code, const fiber_pipe* pipe) = 0;
+    virtual void exec(const fiber_pipe* pipe) = 0;
   };
 
   template<typename Fn>
@@ -212,17 +219,13 @@ private:
       : f_(f)
     {}
   
-    virtual void exec(int err_code, const fiber_pipe* pipe)
+    virtual void exec(const fiber_pipe* pipe)
     {
-      f_(err_code, pipe);
+      f_(pipe);
     }
     
     Fn f_;
-  };
-  
-  void do_with_connected_pipe(tcp_caller* caller);
-    
-  void update_endpoints();
+  };    
   
   // each 'endpoint' is a single ip address
   // and a collection of 1 or more (up to max_conn_per_ep_)
@@ -230,22 +233,15 @@ private:
   struct endpoint
   {
     endpoint(const struct sockaddr_in6 &addr)
-      : outstanding_requests_(0)
+      : outstanding_requests_(0),
+        is_detached_(false),
+        backoff_exp_(0)
     {
       size_t addrlen = (addr.sin6_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
       memcpy(&addr_, &addr, addrlen);
       next_avail_time_.tv_sec = std::numeric_limits<time_t>::min();
       next_avail_time_.tv_nsec = 0;
     }
-    
-    endpoint(endpoint&& other)
-      : addr_(other.addr_),
-        next_avail_time_(other.next_avail_time_),
-        lookup_state_(other.lookup_state_),
-        connect_status_(other.connect_status_),
-        outstanding_requests_(other.outstanding_requests_),
-        sync_(std::move(other.sync_))
-    {}
     
     ~endpoint()
     {
@@ -271,6 +267,8 @@ private:
     struct sockaddr_in6               addr_;
     struct timespec                   next_avail_time_;
     int                               outstanding_requests_;
+    int                               backoff_exp_;
+    bool                              is_detached_;
     std::list<std::unique_ptr<sock>>  socks_;
   };
   
@@ -298,6 +296,10 @@ private:
       connections_possible_cond_.notify_one();
     }
   }
+  
+  void update_endpoints();
+  void backoff(endpoint* ep, const struct timespec& start_time, int explicit_seconds = 0);
+  void do_with_connected_pipe(tcp_caller* caller);
   
   // sorted by preference (for example, known network latency
   // in reaching the ip address).

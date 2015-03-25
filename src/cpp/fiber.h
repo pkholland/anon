@@ -482,7 +482,19 @@ private:
 class fiber_io_error : public std::runtime_error
 {
 public:
-  fiber_io_error(const char* what_arg) : std::runtime_error(what_arg) {}
+  fiber_io_error(const char* what_arg)
+    : std::runtime_error(what_arg),
+      backoff_(false)
+  {}
+  
+  fiber_io_error(const char* what_arg, int backoff_seconds)
+    : std::runtime_error(what_arg),
+      backoff_(true),
+      backoff_seconds_(backoff_seconds)
+  {}
+  
+  int   backoff_seconds_;
+  bool  backoff_;
 };
 
 ////////////////////////////////////////////////////////////////

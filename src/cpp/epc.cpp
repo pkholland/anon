@@ -67,7 +67,7 @@ void endpoint_cluster::update_endpoints()
     // move all endpoints out of the existing endpoints_ map and
     // into a temporary map that is sorted by ip_addr
     std::map<struct sockaddr_in6,std::unique_ptr<endpoint>> tmp_map;
-    for (auto it = endpoints_.being(); it != endpoints_.end(); ++it)
+    for (auto it = endpoints_.begin(); it != endpoints_.end(); ++it)
       tmp_map[it->second->addr_] = std::move(it->second);
       
     // now empty or existing map;
@@ -89,7 +89,7 @@ void endpoint_cluster::update_endpoints()
       } else {
       
         // no, make a new endpoint and put that in endpoints_
-        endpoints_[ep.first] = std::unique_ptr<endpoint>(new endpoint(ep.second));
+        endpoints_.insert( std::make_pair(ep.first, std::unique_ptr<endpoint>(new endpoint(ep.second))) );
       }
     
     }
@@ -102,7 +102,7 @@ void endpoint_cluster::update_endpoints()
     for (auto it = tmp_map.begin(); it != tmp_map.end(); ++it) {
       if (it->second) {
         it->second->is_detached_ = true;
-        endpoints_.insert( std::make_pair(std::numeric_limits<int>::max(), std::move(existing->second)) );
+        endpoints_.insert( std::make_pair(std::numeric_limits<int>::max(), std::move(it->second)) );
       }
     }
     
@@ -112,7 +112,7 @@ void endpoint_cluster::update_endpoints()
   }
   
   if (!shutting_down_ && lookup_frequency_seconds_ > 0)  {
-    update_task_ = io_dispatch::schedule_task([]{
+    update_task_ = io_dispatch::schedule_task([this]{
       fiber::run_in_fiber([this]
       {
         update_endpoints();
@@ -131,7 +131,7 @@ void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, 
   if (explicit_seconds > 0)
     ts = explicit_seconds;
   else
-    ts = to_seconds((1 << (ep->backoff_exp)) * (cur_time() - start_time));
+    ts = to_seconds((1 << ep->backoff_exp_) * (cur_time() - start_time));
   anon_log("backing off of: " << ep->addr_ << ", for the next " << ts << (explicit_seconds > 0 ? " (explicit)" : "") << " seconds");
   #endif
 
@@ -144,9 +144,9 @@ void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, 
     // for each time we get an error trying to connect or talk to this ip_addr,
     // double the amount of time we will wait before attempting to connect
     // to it again.
-    ep->next_avail_time_ = now + (1 << (ep->backoff_exp++)) * error_time;
-    if (ep->backoff_exp > 13)
-      ep->backoff_exp = 13;
+    ep->next_avail_time_ = now + ((1 << (ep->backoff_exp_++)) * error_time);
+    if (ep->backoff_exp_ > 13)
+      ep->backoff_exp_ = 13;
   }
 
   // schedule a task to call connections_possible_cond_.notify_all()
@@ -158,19 +158,19 @@ void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, 
   // in a fiber.  So here the functor creates a fiber and executes
   // notify_all in there.  It is the fiber exiting condition that
   // actually schedules the notified fibers to run.
-  auto wakeup_task = io_dispatch::schedulel_task([this]{
+  auto wakeup_task = io_dispatch::schedule_task([this]{
     fiber::run_in_fiber([this]{
       fiber_lock  lock(mtx_);
       connections_possible_cond_.notify_all();
       auto ct = cur_time();
       auto it = io_retry_tasks_.begin();
       while (it != io_retry_tasks_.end() && it->first <= ct) {
-        id_dispatch::remove_task(it->second);
+        io_dispatch::remove_task(it->second);
         io_retry_tasks_.erase(it++);
       }
     });
   },ep->next_avail_time_);
-  io_retry_tasks_[ep->next_avail_time_] = wakeup_task;
+  io_retry_tasks_.insert( std::make_pair(ep->next_avail_time_, wakeup_task) );
 
   // this exception gets caught in with_connected_pipe and causes that
   // to call us (do_with_connected_pipe) again immediately.  But we have
@@ -178,7 +178,7 @@ void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, 
   // that if this epc has other available ip_addrs those will be tried.
   // If no other ip_addrs are available then the function will wait
   // in connections_possible_cond_.wait (above in this routine) until
-  // one of the id_dispatch scheduled tasks (immediately above) notifies
+  // one of the io_dispatch scheduled tasks (immediately above) notifies
   // of the possibility of reconnecting.  If this epc has only one ip_addr
   // this will execute a fairly traditional "exponential backoff" design.
   throw backoff_error();
@@ -214,7 +214,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
           
       // sleep until it is worth trying a connection
       while (cur_avail_requests_ == 0 && lookup_error_ == 0)
-        connections_possible_cond_.wait(mtx_);
+        connections_possible_cond_.wait(lock);
         
       // if the lookup has failed, then throw.  This
       // transfers the error seen in the update_endpoints
@@ -258,9 +258,9 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
           while ((ep2_it != endpoints_.end()) && (ep2_it->first == ep_it->first)) {
           
             // ignoring any that we can't use at the moment
-            if (!ep2_it->is_detached_
+            if (!ep2_it->second->is_detached_
               && (ep2_it->second->outstanding_requests_ < max_conn_per_ep_)
-              && (ep2_it->next_avail_time_ < ct))
+              && (ep2_it->second->next_avail_time_ < ct))
               ++num_with_same_pref;
               
             ++ep2_it;
@@ -272,7 +272,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
               ++ep_it;
               
               // remember to skip the ones we ignored above when we were counting
-              while (!(  !ep_it_->second->is_detached_
+              while (!(  !ep_it->second->is_detached_
                       && (ep_it->second->outstanding_requests_ < max_conn_per_ep_)
                       && (ep_it->second->next_avail_time_ < ct)))
                 ++ep_it;
@@ -289,7 +289,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
         
           // is there already an existing, unused socket connected to this ip_addr?
           for (s_it = ep->socks_.begin(); s_it != ep->socks_.end(); s_it++)  {
-            if (!s_it->in_use_)
+            if (!(*s_it)->in_use_)
               break;
           }
           
@@ -337,13 +337,12 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
             
             switch (con.first) {  // con.first is the error code part of the return value
             
-              case 0:             // connected, we're good to go!
-                fp = con.second.get();
+              case 0: {           // connected, we're good to go!
                 auto ns = new endpoint::sock(std::move(con.second));
                 ep->socks_.push_back(std::unique_ptr<endpoint::sock>(ns));
                 s_it = ep->socks_.end();
                 --s_it;
-                break;
+             }  break;
               
                           
               //  Here is a basic description of the three interesting, similar
@@ -394,8 +393,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
           } else { // end of "if (s_it == ep->end())"
           
             // here we found an unused, already-connected socket, so use it.
-            fp = s_it->pipe_.get();
-            s_it->in_use = true;
+            (*s_it)->in_use_ = true;
           
           } // end of else of "if (s_it == ep->end())"
           
@@ -423,11 +421,11 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     // closed its end, and so we are free to immediately attempt to reconnect.
     
     try {
-      caller->exec(s_it->pipe_.get());
+      caller->exec((*s_it)->pipe_.get());
       fiber_lock  lock(mtx_);
-      ep->backoff_exp = 0;
+      ep->backoff_exp_ = 0;
       ep_exit(ep);
-      s_it->in_use = false;
+      (*s_it)->in_use_ = false;
       return;
     }
     catch(const fiber_io_error& e)
@@ -435,14 +433,14 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
       fiber_lock  lock(mtx_);
       ep_exit(ep);
       ep->socks_.erase(s_it);
-      if (e.backoff)
-        backoff(ep, ct, e.backoff_seconds);
+      if (e.backoff_)
+        backoff(ep, timespec(), e.backoff_seconds_);
     }
     catch(...)
     {
       fiber_lock  lock(mtx_);
       ep_exit(ep);
-      s_it->in_use = false;
+      (*s_it)->in_use_ = false;
       throw;
     }
     
