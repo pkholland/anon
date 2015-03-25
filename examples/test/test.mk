@@ -8,6 +8,7 @@ ANON_PARENT := $(patsubst ../anon/..,..,$(ANON_PARENT))
 
 SOURCES+=\
 $(ANON_ROOT)/examples/test/main.cpp\
+$(ANON_ROOT)/examples/test/epc_test.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/udp_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\

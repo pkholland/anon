@@ -479,6 +479,22 @@ private:
   static const struct timespec  forever;
 };
 
+/*
+  fiber_io_error exceptions thrown in the context
+  of endpoint_cluster::with_connected_pipe have some
+  special processing.  In this context a fiber_io_error
+  with backoff_ set to false is understood to mean a
+  case where the socket is in an error state (typically
+  the other side has closed) and we should close our side.
+  A fiber_io_error with backoff_ set to true is an indication
+  that the other side is busy and we should delay further
+  attempts to talk to it by at least backoff_seconds_ seconds.
+  In this case the close_socket_hint_ hints at whether
+  we should also close our side of the socket (like the
+  backoff_ = false case) and then reconnect when we attempt
+  to communicate again, or whether we should leave this socket
+  connected and just reuse this one.
+*/
 class fiber_io_error : public std::runtime_error
 {
 public:
@@ -487,14 +503,16 @@ public:
       backoff_(false)
   {}
   
-  fiber_io_error(const char* what_arg, int backoff_seconds)
+  fiber_io_error(const char* what_arg, int backoff_seconds, bool close_socket_hint = false)
     : std::runtime_error(what_arg),
+      backoff_seconds_(backoff_seconds),
       backoff_(true),
-      backoff_seconds_(backoff_seconds)
+      close_socket_hint_(close_socket_hint)
   {}
   
   int   backoff_seconds_;
   bool  backoff_;
+  bool  close_socket_hint_;
 };
 
 ////////////////////////////////////////////////////////////////

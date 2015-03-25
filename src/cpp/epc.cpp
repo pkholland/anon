@@ -126,27 +126,32 @@ void endpoint_cluster::update_endpoints()
 
 void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, int explicit_seconds)
 {
-  #if ANON_LOG_NET_TRAFFIC > 0
-  double ts;
-  if (explicit_seconds > 0)
-    ts = explicit_seconds;
-  else
-    ts = to_seconds((1 << ep->backoff_exp_) * (cur_time() - start_time));
-  anon_log("backing off of: " << ep->addr_ << ", for the next " << ts << (explicit_seconds > 0 ? " (explicit)" : "") << " seconds");
-  #endif
-
   auto now = cur_time();
-  if (explicit_seconds > 0)
+  if (explicit_seconds > 0) {
+    #if ANON_LOG_NET_TRAFFIC > 0
+    anon_log("backing off of: " << ep->addr_ << ", for the next " << explicit_seconds << " (explicit) seconds");
+    #endif
     ep->next_avail_time_ = now + explicit_seconds;
-  else {
+  } else {
     auto error_time = now - start_time;
 
     // for each time we get an error trying to connect or talk to this ip_addr,
     // double the amount of time we will wait before attempting to connect
     // to it again.
-    ep->next_avail_time_ = now + ((1 << (ep->backoff_exp_++)) * error_time);
-    if (ep->backoff_exp_ > 13)
-      ep->backoff_exp_ = 13;
+    auto btime = (1 << (ep->backoff_exp_++)) * error_time;
+    if (ep->backoff_exp_ > 20)
+      ep->backoff_exp_ = 20;
+      
+    if (btime.tv_sec > 120) {
+      btime.tv_sec = 120;
+      btime.tv_nsec = 0;
+    }
+    
+    #if ANON_LOG_NET_TRAFFIC > 0
+    anon_log("backing off of: " << ep->addr_ << ", for the next " << to_seconds(btime) << " seconds");
+    #endif
+    
+    ep->next_avail_time_ = now + btime;
   }
 
   // schedule a task to call connections_possible_cond_.notify_all()
@@ -202,6 +207,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     // to use when calling 'caller'
     endpoint* ep = 0;
     std::list<std::unique_ptr<endpoint::sock>>::iterator  s_it;
+    struct timespec ct;
   
     // this next loop deals with the inability to find
     // a currently usable ip_addr associated with this
@@ -232,7 +238,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
       // backoff etc will mark certain ip_addrs as
       // temporarily unavailable using a timestamp,
       // so get the current time so we can compare
-      auto ct = cur_time();
+      ct = cur_time();
       
       // figure out which endpoint/ip_addr we are going to use.
       // the 'endpoints_' list is in order, sorted by preference,
@@ -423,6 +429,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     try {
       caller->exec((*s_it)->pipe_.get());
       fiber_lock  lock(mtx_);
+      ++ep->success_count_;
       ep->backoff_exp_ = 0;
       ep_exit(ep);
       (*s_it)->in_use_ = false;
@@ -432,7 +439,19 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     {
       fiber_lock  lock(mtx_);
       ep_exit(ep);
-      ep->socks_.erase(s_it);
+      
+      // note that we treat the case where the server
+      // closes a connection immediately after accepting
+      // (so we get a fiber_io_error as soon as we try
+      // to use the pipe the first time) as a form of
+      // backoff request from the server
+      
+      if (!ep->success_count_ || !e.backoff_ || e.close_socket_hint_)
+        ep->socks_.erase(s_it);
+      else
+        (*s_it)->in_use_ = false;
+      if (!ep->success_count_)
+        backoff(ep, ct);
       if (e.backoff_)
         backoff(ep, timespec(), e.backoff_seconds_);
     }

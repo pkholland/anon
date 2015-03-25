@@ -235,7 +235,8 @@ private:
     endpoint(const struct sockaddr_in6 &addr)
       : outstanding_requests_(0),
         is_detached_(false),
-        backoff_exp_(0)
+        backoff_exp_(0),
+        success_count_(0)
     {
       size_t addrlen = (addr.sin6_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
       memcpy(&addr_, &addr, addrlen);
@@ -268,6 +269,7 @@ private:
     struct timespec                   next_avail_time_;
     int                               outstanding_requests_;
     int                               backoff_exp_;
+    int                               success_count_;
     bool                              is_detached_;
     std::list<std::unique_ptr<sock>>  socks_;
   };

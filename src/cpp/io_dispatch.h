@@ -212,6 +212,13 @@ public:
   static bool remove_task(const scheduled_task& task);
   
   static int new_command_pipe();
+  
+  #if defined(ANON_RUNTIME_CHECKS)
+  static bool is_io_dispatch_thread()
+  {
+    return io_d.on_io_thread();
+  }
+  #endif
 
 private:
   static std::string op_string(int op)

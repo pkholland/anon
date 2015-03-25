@@ -37,6 +37,7 @@
 #include "dns_lookup.h"
 #include "http_server.h"
 #include "tls_pipe.h"
+#include "epc_test.h"
 //#include "http2_handler.h"
 //#include "http2_test.h"
 
@@ -86,6 +87,8 @@ extern "C" int main(int argc, char** argv)
     
     dns_cache::initialize();
     fiber::initialize();
+    
+    epc_test_init();
 
     my_udp              m_udp(udp_port);
     
@@ -158,6 +161,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  h2 - connect to localhost:" << http_port << " and send an HTTP/1.1 with Upgrade to HTTP/2 message");
           anon_log("  dl - dns_lookup \"www.google.com\", port 80 and print all addresses");
           anon_log("  ss - send a simple command to adobe's renga server");
+          anon_log("  et - execute the endpoint_cluster tests");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -521,6 +525,10 @@ extern "C" int main(int argc, char** argv)
               
           });
           
+        } else if (!strncmp(&msgBuff[0], "et", 1)) {
+        
+          epc_test();
+          
         } else if (!strncmp(&msgBuff[0], "ss", 2)) {
         
           int total = 4;
@@ -637,6 +645,8 @@ extern "C" int main(int argc, char** argv)
       }
     }
   }
+  
+  epc_test_term();
   
   dns_cache::terminate();
   io_dispatch::join();

@@ -67,6 +67,7 @@ public:
   virtual void io_avail(const struct epoll_event& event);
   
   void stop();
+  int get_port();
 
 private:
 
