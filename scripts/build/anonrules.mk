@@ -70,7 +70,7 @@ anon.src_to_dep=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$
 #
 # Convert a (re)source path to it's equivalent auto_gen file
 #
-anon.resrc_to_auto_gen=$(anon.INTERMEDIATE_DIR)/auto_gen/rez/$(patsubst ./%,%,$(subst ..,__,$1)).cpp
+anon.resrc_to_auto_gen=$(anon.INTERMEDIATE_DIR)/auto_gen/rez/$(CONFIG)/$(patsubst ./%,%,$(subst ..,__,$1)).cpp
 
 #
 # Tool to either display short-form (when verbose is off) or
