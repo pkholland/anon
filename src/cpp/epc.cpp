@@ -21,7 +21,6 @@
 */
 
 #include "epc.h"
-#include "tcp_client.h"
 #include <netdb.h>
 
 void endpoint_cluster::update_endpoints()
@@ -344,8 +343,17 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
             switch (con.first) {  // con.first is the error code part of the return value
             
               case 0: {           // connected, we're good to go!
-                auto ns = new endpoint::sock(std::move(con.second));
-                ep->socks_.push_back(std::unique_ptr<endpoint::sock>(ns));
+                std::unique_ptr<pipe_t> pipe;
+                endpoint::sock* ns;
+                if (do_tls_)
+                  pipe = std::unique_ptr<pipe_t>(new tls_pipe(std::move(con.second),
+                                                              true,                     // client (not server)
+                                                              host_name_for_tls_ != "", // verify_peer
+                                                              host_name_for_tls_.c_str(),
+                                                              *tls_ctx_));
+                else
+                  pipe = std::unique_ptr<pipe_t>(con.second.release());
+                ep->socks_.push_back(std::unique_ptr<endpoint::sock>(new endpoint::sock(std::move(pipe))));
                 s_it = ep->socks_.end();
                 --s_it;
              }  break;
@@ -415,7 +423,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     } // end of "while (try_again)"
     
     // mtx_ is now unlocked
-    // ep and s_it are set pointing to the ip_addr/socket/fiber_pipe we are supposed to try.
+    // ep and s_it are set pointing to the ip_addr/socket/pipe_t we are supposed to try.
     // if a read/write exception (fiber_io_error) goes off at this point we immediately
     // close our side of the socket, deleting the corresponding 'sock' object and retry
     // this function.  By default this condition does _not_ cause us to back off of trying

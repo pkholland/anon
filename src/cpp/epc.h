@@ -23,6 +23,8 @@
 #pragma once
 
 #include "tcp_client.h"
+#include "tls_pipe.h"
+#include "tls_context.h"
 #include <list>
 
 class endpoint_cluster
@@ -62,9 +64,16 @@ public:
   //  is made.  It can also happen if certain "back off" strategies are currently in
   //  effect for that ip address at the time that with_connected_pipe is called.
   template<typename LookupFn>
-  endpoint_cluster(LookupFn lookup, int max_conn_per_ep = 20, int lookup_frequency_in_seconds = 120)
+  endpoint_cluster(LookupFn lookup, bool do_tls = false,
+                  const char* host_name_for_tls = "",
+                  const tls_context* ctx = 0,
+                  int max_conn_per_ep = 20,
+                  int lookup_frequency_in_seconds = 120)
     : lookup_(new lookup_caller_t<LookupFn>(lookup)),
       shutting_down_(false),
+      do_tls_(do_tls),
+      host_name_for_tls_(host_name_for_tls),
+      tls_ctx_(ctx),
       max_conn_per_ep_(max_conn_per_ep),
       round_robin_index_(0),
       cur_avail_requests_(0),
@@ -87,7 +96,7 @@ public:
    //
   //  The signature of 'f' must be:
   //
-  //    void f(const fiber_pipe* pipe)
+  //    void f(const pipe_t* pipe)
   //
   //  Note that 'f' can be called more than once, or even not at
   //  all.  When called 'pipe' will contain a socket was at some point
@@ -135,7 +144,10 @@ private:
   int           total_fibers_;
   int           lookup_frequency_seconds_;
   io_dispatch::scheduled_task update_task_;
+  std::string   host_name_for_tls_;
+  const tls_context* tls_ctx_;
   bool          shutting_down_;
+  bool          do_tls_;
   bool          update_running_;
   
   std::multimap<struct timespec,io_dispatch::scheduled_task>  io_retry_tasks_;
@@ -209,7 +221,7 @@ private:
   struct tcp_caller
   {
     virtual ~tcp_caller() {}
-    virtual void exec(const fiber_pipe* pipe) = 0;
+    virtual void exec(const pipe_t* pipe) = 0;
   };
 
   template<typename Fn>
@@ -219,7 +231,7 @@ private:
       : f_(f)
     {}
   
-    virtual void exec(const fiber_pipe* pipe)
+    virtual void exec(const pipe_t* pipe)
     {
       f_(pipe);
     }
@@ -251,13 +263,13 @@ private:
     
     struct sock
     {
-      sock(std::unique_ptr<fiber_pipe>&& pipe)
+      sock(std::unique_ptr<pipe_t>&& pipe)
         : pipe_(std::move(pipe)),
           in_use_(true)
       {}
       
-      std::unique_ptr<fiber_pipe> pipe_;
-      bool                        in_use_;
+      std::unique_ptr<pipe_t> pipe_;
+      bool                    in_use_;
     };
       
     enum {

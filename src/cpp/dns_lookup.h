@@ -61,7 +61,7 @@ namespace dns_lookup
   
   // stall this fiber and initiate an async dns lookup,
   // once that dns lookup completes resume this fiber
-  // and returned looked up information.  .first is the
+  // and return the looked up information.  .first is the
   // err_code.  If this is zero then .second is one or
   // more sockaddrs returned by the dns lookup.  They are
   // stored as inet6 addrs, but can be either normal inet(4)
