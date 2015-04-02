@@ -344,7 +344,6 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
             
               case 0: {           // connected, we're good to go!
                 std::unique_ptr<pipe_t> pipe;
-                endpoint::sock* ns;
                 if (do_tls_)
                   pipe = std::unique_ptr<pipe_t>(new tls_pipe(std::move(con.second),
                                                               true,                     // client (not server)
