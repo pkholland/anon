@@ -45,7 +45,7 @@ struct http_headers
   
   void init()
   {
-    headers = std::map<string_len, string_len>();
+    headers.clear();
   }
   
   std::map<string_len, string_len>  headers;
