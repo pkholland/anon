@@ -38,6 +38,7 @@
 #include "http_server.h"
 #include "tls_pipe.h"
 #include "epc_test.h"
+#include "mcdc.h"
 //#include "http2_handler.h"
 //#include "http2_test.h"
 
@@ -162,6 +163,7 @@ extern "C" int main(int argc, char** argv)
           anon_log("  dl - dns_lookup \"www.google.com\", port 80 and print all addresses");
           anon_log("  ss - send a simple command to adobe's renga server");
           anon_log("  et - execute the endpoint_cluster tests");
+          anon_log("  mc - execute the memcached tests");
         } else if (!strcmp(&msgBuff[0], "p")) {
           anon_log("pausing io threads");
           io_dispatch::while_paused([]{anon_log("all io threads now paused");});
@@ -525,7 +527,7 @@ extern "C" int main(int argc, char** argv)
               
           });
           
-        } else if (!strncmp(&msgBuff[0], "et", 1)) {
+        } else if (!strcmp(&msgBuff[0], "et")) {
         
           epc_test();
           
@@ -639,6 +641,46 @@ extern "C" int main(int argc, char** argv)
             anon_log("getpeername(" << sock << "...) failed with error " << errno_string());
           else
             anon_log("getpeernmame(" << sock << ", ...) reported peer as " << &addr6 );
+            
+        } else if (!strcmp(&msgBuff[0], "mc")) {
+        
+          std::condition_variable cond;
+          std::mutex              mtx;
+          bool                    running = true;
+          
+          fiber::run_in_fiber([&cond, &mtx, &running]{
+          
+            struct unlocker
+            {
+              unlocker(std::condition_variable& cond, std::mutex& mtx, bool& running)
+                : cond(cond), mtx(mtx), running(running)
+              {}
+              
+              ~unlocker()
+              {
+                std::unique_lock<std::mutex>  l(mtx);
+                running = false;
+                cond.notify_all();
+              }
+              std::condition_variable& cond;
+              std::mutex& mtx;
+              bool& running;
+            };
+            unlocker unl(cond, mtx, running);
+          
+            const char* host = "127.0.0.1";
+            int port = 11211;
+            const char* key = "key1";
+            const char* val = "this is the value for key1";
+            mcd_cluster c(host, port);
+            anon_log("setting memcache key \"" << key << "\" to \"" << val << "\"");
+            c.set(key, val, 1);
+            anon_log("fetched memcache value for \"" << key <<  "\" -> \"" << c.get(key) << "\"");
+          });
+          
+          std::unique_lock<std::mutex>  l(mtx);
+          while (running)
+            cond.wait(l);
 
         } else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
