@@ -24,3 +24,6 @@ Running the test code:<br>
 &nbsp;&nbsp;then type "h"&lt;return&gt; for a list of available tests
 
 -- Currently the proxygen-related pieces are not being used and you don't need to follow those steps (6-9) to get anon building and running.
+
+Note that the install of memcached is only for running some of the test code, it is not required for simply building anon.
+This default install of memcaced configures you machine to run memcached as a daemon.
