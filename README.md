@@ -7,6 +7,7 @@ Basic Build Instructions:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install git<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install g++<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install libssl-dev<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install memcached<br>
 3)  create a working directory and cd into it<br>
 4)  git clone https://github.com/pkholland/anon.git<br>
 5)  git clone https://github.com/joyent/http-parser.git<br>
