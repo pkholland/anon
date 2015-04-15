@@ -670,12 +670,13 @@ extern "C" int main(int argc, char** argv)
           
             const char* host = "127.0.0.1";
             int port = 11211;
+            anon_log("memcached test to host: \"" << host << "\", port: " << port);
             const char* key = "key1";
             const char* val = "this is the value for key1";
             mcd_cluster c(host, port);
-            anon_log("setting memcache key \"" << key << "\" to \"" << val << "\"");
+            anon_log("  setting value for \"" << key << "\" to:  \"" << val << "\"");
             c.set(key, val, 1);
-            anon_log("fetched memcache value for \"" << key <<  "\" -> \"" << c.get(key) << "\"");
+            anon_log(" fetching value for \"" << key <<  "\", got \"" << c.get(key) << "\"");
           });
           
           std::unique_lock<std::mutex>  l(mtx);
