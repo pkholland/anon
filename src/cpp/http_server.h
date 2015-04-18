@@ -73,6 +73,13 @@ struct http_request
     return "";
   }
   
+  string_len get_url_field_s(enum http_parser_url_fields f) const
+  {
+    if (p_url.field_set & (1 << f))
+      return string_len(&url_str.c_str()[p_url.field_data[f].off], p_url.field_data[f].len);
+    return string_len();
+  }
+  
   static std::string get_query_val_s(const string_len& query, const char* field, const char* dflt = "", bool required = false)
   {
     auto len = strlen(field);
@@ -102,7 +109,7 @@ struct http_request
   
   std::string get_query_val(const char* field, const char* dflt = "", bool required = false) const
   {
-    return get_query_val_s((p_url.field_set & (1 << UF_QUERY)) ? string_len(&url_str.c_str()[p_url.field_data[UF_QUERY].off], p_url.field_data[UF_QUERY].len) : string_len(), field, dflt, required);
+    return get_query_val_s(get_url_field_s(UF_QUERY), field, dflt, required);
   }
   
   static void remove_query_field(std::string& uri, const char* field)

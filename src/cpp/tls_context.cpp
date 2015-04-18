@@ -208,6 +208,8 @@ static const char* ssl_io_errors(unsigned long err)
 
 void throw_ssl_io_error(unsigned long err)
 {
+  if (err == SSL_ERROR_ZERO_RETURN)
+    throw fiber_io_error("SSL_ERROR_ZERO_RETURN");
   throw std::runtime_error(ssl_io_errors(err));
 }
 

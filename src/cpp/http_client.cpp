@@ -185,7 +185,7 @@ void http_client_response::parse(const pipe_t& pipe)
     }
     
     // check for some standard error codes that we handle with special logic
-    if (get_status() == "100") {
+    if (parser.status_code == 100) {
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("received http response 100, will continue and read next response");
       #endif
