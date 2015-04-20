@@ -225,8 +225,15 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
       // transfers the error seen in the update_endpoints
       // fiber to this one.
       if (lookup_error_ != 0) {
-        errno = lookup_error_;
-        do_error("endpoint_cluster lookup");
+        if (lookup_error_ > 0) {
+          errno = lookup_error_;
+          do_error("endpoint_cluster lookup");
+        } else {
+          #if ANON_LOG_NET_TRAFFIC > 0
+          anon_log("endpoint_cluster lookup failed: " << gai_strerror(lookup_error_));
+          #endif
+          throw std::runtime_error("endpoint_cluster lookup");
+        }
       }
         
       // if we are shutting down then we abort these
@@ -399,8 +406,15 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
               
               default:            // some unknown problem
                 ep_exit(ep);
-                errno = con.first;
-                do_error("tcp_client::connect(" << ep->addr_ << ")");
+                if (con.first) {
+                  errno = con.first;
+                  do_error("tcp_client::connect(" << ep->addr_ << ")");
+                } else {
+                  #if ANON_LOG_NET_TRAFFIC > 0
+                  anon_log("tcp_client::connect(" << ep->addr_ << "): " << gai_strerror(con.first));
+                  #endif
+                  throw std::runtime_error("tcp_client::connect");
+                }
             }
             
           } else { // end of "if (s_it == ep->end())"

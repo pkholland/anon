@@ -76,7 +76,7 @@ namespace dns_cache
   // has passed.  When the dns lookup completes the fiber will be resumed
   // and the function will return 0 if it succeeded in finding an
   // address for host/port, or an error code.  If the error code is
-  // >0 it is a gai_strerror error code.  If it is <0 it is a errno code.
+  // <0 it is a gai_strerror error code.  If it is >0 it is a errno code.
   // While the type for the 'addr' parameter is a ipv6 sockaddr, it is
   // frequently the case that dns will return ipv4 addresses.  Look in
   // addr->sin6_family field to tell which one you received (it will be
