@@ -21,6 +21,9 @@
 */
 
 #include "b64.h"
+#include "log.h"
+#include <stdexcept>
+#include <vector>
 
 #if 0
 
@@ -57,19 +60,23 @@ static const char alphabet[64] = {
   '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'
 };
 
-std::string b64url_encode(const char* data, size_t len)
+std::string b64url_encode(const char* data, size_t len, char pad)
 {
-  // each 3 bytes of data will encode to 4 bytes of result
-  size_t encoded_size = (len + 2) / 3 * 4;
-  
-  std::string result(encoded_size + 1, 0);
-  
+  // each complete block of 3 bytes of data will encode to 4 bytes of result
+  // if the last block of 3 bytes is incomplete (that is, len % 3 != 0)
+  // then the last characters are padded with 'pad' (by default '=')
+  // or left out of the encoded string if 'pad' is 0.  When the padding is left
+  // out each source byte in the incomplete causes one byte in the encoded data
   int num_full_blocks = len / 3;
+  int encoded_size = pad ? ((len + 2) / 3 * 4) : (num_full_blocks * 4 + (len % 3));
+  
+  std::vector<char> result(encoded_size);
+  
   const unsigned char* ptr = (const unsigned char*)data;
   const unsigned char* end = ptr+len;
   int i = 0;
   
-  for (i=0; i<num_full_blocks; i++, ptr+=3) {
+  for (; i<num_full_blocks; i++, ptr+=3) {
     result[i*4 + 0] = alphabet[  ptr[0] >> 2];
     result[i*4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
     result[i*4 + 2] = alphabet[((ptr[1] << 2) + (ptr[2] >> 6)) & 0x3f];
@@ -79,16 +86,96 @@ std::string b64url_encode(const char* data, size_t len)
   if (ptr < end) {
     result[i*4 + 0] = alphabet[ptr[0] >> 2];
     if (&ptr[1] < end) {
-      result[i*4 + 1] = alphabet[(ptr[0] << 4) & 0x3f];
-      result[i*4 + 2] = '=';
-      result[i*4 + 3] = '=';
-    } else {
       result[i*4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
       result[i*4 + 2] = alphabet[(ptr[1] << 2) & 0x3f];
-      result[i*4 + 3] = '=';
+      if (pad)
+        result[i*4 + 3] = pad;
+    } else {
+      result[i*4 + 1] = alphabet[(ptr[0] << 4) & 0x3f];
+      if (pad) {
+        result[i*4 + 2] = pad;
+        result[i*4 + 3] = pad;
+      }
+    }
+  }
+  
+  return std::string(&result[0], encoded_size);
+}
+
+static unsigned char b64_index(unsigned char code)
+{
+  if (code >= 'A' && code <= 'Z')
+    return code - 'A';
+  if (code >= 'a' && code <= 'z')
+    return code - 'a' + 26;
+  if (code >= '0' && code <= '9')
+    return code - '0' + 52;
+  if (code == '-')
+    return 62;
+  if (code == '_')
+    return 63;
+  char str[2];
+  str[0] = code;
+  str[1] = 0;
+  anon_log("invalid character in b64 string: (" << (int)code << ") \"" << &str[0] << "\"");
+  throw std::runtime_error("");
+}
+
+std::string b64url_decode(const char* data, size_t len, char pad)
+{
+  if (pad) {
+    if (len % 4) {
+      anon_log("illegal base64 length - must be a multiple of 4, was: " << len);
+      throw std::runtime_error("illegal base64 length");
+    }
+  } else {
+    if ((len % 4) == 1) {
+      anon_log("illegal unpadded base64 length - (len % 4) cannot == 1, len: " << len);
+      throw std::runtime_error("illegal base64 length");
+    }
+  }
+  int num_pads = 0;
+  if (pad) {
+    if (len > 0) {
+      if (data[len-2] == pad)
+        num_pads = 2;
+      else if (data[len-1] == pad)
+        num_pads = 1;
+    }
+  }
+  
+  len -= num_pads;
+  int num_full_blocks = len / 4;
+  int decoded_size = (num_full_blocks * 3) + (len % 4);
+
+  std::string result(decoded_size, 0);
+
+  const unsigned char* ptr = (const unsigned char*)data;
+  const unsigned char* end = ptr+len;
+  int i = 0;
+  
+  for (; i<num_full_blocks; i++, ptr+=4) {
+    auto a = b64_index(ptr[0]);
+    auto b = b64_index(ptr[1]);
+    auto c = b64_index(ptr[2]);
+    auto d = b64_index(ptr[3]);
+    
+    result[i*3+0] = (a << 2) + (b >> 4);
+    result[i*3+1] = (b << 4) + (c >> 2);
+    result[i*3+2] = (c << 6) + d;
+  }
+  
+  if (ptr < end) {
+    auto a = b64_index(ptr[0]);
+    auto b = b64_index(ptr[1]);
+    result[i*3+0] = (a << 2) + (b >> 4);
+    if (&ptr[1] < end) {
+      auto c = b64_index(ptr[2]);
+      result[i*3+1] = (b << 4) + (c >> 2);
     }
   }
   
   return result;
 }
+
 

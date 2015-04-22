@@ -24,6 +24,11 @@
 
 #include <string>
 
-std::string b64url_encode(const char* data, size_t len);
-std::string b64url_decode(const char* data, size_t len);
+std::string b64url_encode(const char* data, size_t len, char pad = '=');
+inline std::string b64url_encode(const std::string& data, char pad = '=')
+{
+  return b64url_encode(data.c_str(), data.size(), pad);
+}
+
+std::string b64url_decode(const char* data, size_t len, char pad = '=');
 
