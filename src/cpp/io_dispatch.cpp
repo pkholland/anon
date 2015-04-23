@@ -27,6 +27,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/timerfd.h>
+#include <openssl/err.h>
 
 class io_ctl_handler : public io_dispatch::handler
 {
@@ -323,6 +324,9 @@ void io_dispatch::epoll_loop()
   }
   
   anon_log("exiting io_dispatch::epoll_loop");
+  
+  // clean up some potential openssl memory
+  ERR_remove_state(0);
 }
 
 io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_* task, const timespec& when)

@@ -35,6 +35,7 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/rand.h>
+#include <openssl/engine.h>
 
 // basic mutex locking functions
 // although we can almost use fiber_mutex's here, there is one case
@@ -132,7 +133,11 @@ tls_context::fiber_init::fiber_init()
 
 tls_context::fiber_init::~fiber_init()
 {
+  ENGINE_cleanup();
+  CONF_modules_unload(1);
   ERR_free_strings();
+  EVP_cleanup();
+  CRYPTO_cleanup_all_ex_data();
 }
 
 
