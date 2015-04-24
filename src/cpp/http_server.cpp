@@ -273,6 +273,25 @@ void http_server::pipe_t::respond(const http_response& response)
   rp << "HTTP/1.1 " << response.get_status_code() << "\r\n";
   for (auto it = response.get_headers().begin(); it != response.get_headers().end(); it++)
     rp << it->first << ": " << it->second << "\r\n";
+  for (auto it = response.get_cookies().begin(); it != response.get_cookies().end(); it++) {
+    rp << "Set-Cookie: " << it->name_ << "=";
+    if (it->delete_it_) {
+      rp << "deleted; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    } else {
+      rp << it->value_;
+      if (it->path_.size())
+        rp << "; Path=" << it->path_;
+      if (it->domain_.size())
+        rp << "; Domain=" << it->domain_;
+      if (it->max_age_ > 0)
+        rp << "; Max-Age=" << it->max_age_;
+      if (it->secure_)
+        rp << "; Secure";
+      if (it->http_only_)
+        rp << "; HttpOnly";
+    }
+    rp << "\r\n";
+  }
   rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
   if (response.get_body().length())
     rp << response.get_body() << "\r\n";

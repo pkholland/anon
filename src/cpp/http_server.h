@@ -27,6 +27,7 @@
 #include "tcp_utils.h"
 #include "tls_context.h"
 #include "string_len.h"
+#include <list>
 
 struct http_headers
 {  
@@ -188,6 +189,48 @@ struct http_request
   int             method;
 };
 
+struct browser_cookie
+{
+  browser_cookie(const std::string& name, const std::string& value, int max_age,
+        const std::string& path = "", const std::string& domain = "",
+        bool secure = false, bool http_only = false)
+    : name_(name),
+      value_(value),
+      max_age_(max_age),
+      path_(path),
+      domain_(domain),
+      secure_(secure),
+      http_only_(http_only),
+      delete_it_(false)
+  {}
+  
+  // will write a "delete this cookie" instruction
+  browser_cookie(const std::string& name_to_delete)
+    : name_(name_to_delete),
+      delete_it_(true)
+  {}
+  
+  // cookie will be written as:
+  //  Set-Cookie: <name_>=<value_> followed by optional fields:
+  //          Path=<path_>        -- if path_ != ""
+  //          Domain=<domain_>    -- if domain_ != ""
+  //          Secure              -- if secure_
+  //          HttpOnly            -- if http_only_
+  //          Max-Age=<max_age_>  -- if max_age > 0 (interpreted as a number of seconds)
+  //
+  // UNLESS delete_it_ == true, in which case it will be written as:
+  //  Set-Cookie: <name_>=deleted; Expires=Thu, 01 Jan 1970 00:00:00 GMT
+  std::string name_;
+  std::string value_;
+  int         max_age_;
+  std::string path_;
+  std::string domain_;
+  bool        secure_;
+  bool        http_only_;
+  bool        delete_it_;
+};
+
+
 class http_response
 {
 public:
@@ -203,6 +246,10 @@ public:
   
   const std::string get_body() const { return ostr_.str(); }
   
+  void add_cookie(const browser_cookie& cookie) { cookies_.push_back(cookie); }
+  
+  const std::list<browser_cookie>&  get_cookies() const { return cookies_; }
+  
   template<typename T>
   http_response& operator<<(const T& t)
   {
@@ -213,6 +260,7 @@ public:
 private:
   std::string status_code_;
   std::map<std::string, std::string> headers_;
+  std::list<browser_cookie> cookies_;
   std::ostringstream ostr_;
 };
 
