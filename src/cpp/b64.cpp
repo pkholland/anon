@@ -68,7 +68,8 @@ std::string b64url_encode(const char* data, size_t len, char pad)
   // or left out of the encoded string if 'pad' is 0.  When the padding is left
   // out each source byte in the incomplete causes one byte in the encoded data
   int num_full_blocks = len / 3;
-  int encoded_size = pad ? ((len + 2) / 3 * 4) : (num_full_blocks * 4 + 1 + (len % 3));
+  auto lm3 = (len % 3);
+  int encoded_size = pad ? ((len + 2) / 3 * 4) : (num_full_blocks * 4 + (lm3 != 0 ? lm3+1 : 0));
   
   std::vector<char> result(encoded_size);
   
