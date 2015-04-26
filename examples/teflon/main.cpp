@@ -37,6 +37,8 @@ void server_init();
 void server_respond(http_server::pipe_t& pipe, const http_request& request);
 void server_term();
 
+#define SERVER_STACK_SIZE 64*1024-128
+
 static void show_help()
 {
   printf("usage: teflon -http_fd <socket file descript number to use for listening for plain tcp connections>\n");
@@ -147,14 +149,14 @@ extern "C" int main(int argc, char** argv)
                           [](http_server::pipe_t& pipe, const http_request& request){
                               server_respond(pipe, request);
                            },
-                          tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd));
+                          tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
                           
       if (http_port > 0)
         my_http = std::unique_ptr<http_server>(new http_server(http_port,
                           [](http_server::pipe_t& pipe, const http_request& request){
                               server_respond(pipe, request);
                            },
-                          tcp_server::k_default_backlog, 0, port_is_fd));
+                          tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
                         
     };
     

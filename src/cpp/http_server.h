@@ -305,9 +305,9 @@ public:
   // of this http_server
   template<typename Fn>
   http_server(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog,
-            tls_context* tls_ctx = 0, bool port_is_fd = false)
+            tls_context* tls_ctx = 0, bool port_is_fd = false, size_t stack_size = fiber::k_default_stack_size)
   {
-    start(tcp_port, f, listen_backlog, tls_ctx, port_is_fd);
+    start(tcp_port, f, listen_backlog, tls_ctx, port_is_fd, stack_size);
   }
   
   // add the given 'f' as an upgrade handler, identified by 'name'.
@@ -333,9 +333,9 @@ public:
   // of this http_server
   template<typename Fn>
   void start(int tcp_port, Fn f, int listen_backlog = tcp_server::k_default_backlog,
-            tls_context* tls_ctx = 0, bool port_is_fd = false)
+            tls_context* tls_ctx = 0, bool port_is_fd = false, size_t stack_size = fiber::k_default_stack_size)
   {
-    start_(tcp_port, new bod_hand<Fn>(f), listen_backlog, std::move(tls_ctx), port_is_fd);
+    start_(tcp_port, new bod_hand<Fn>(f), listen_backlog, std::move(tls_ctx), port_is_fd, stack_size);
   }
     
   struct pipe_t
@@ -397,7 +397,7 @@ private:
     Fn f_;
   };
   
-  void start_(int tcp_port, body_handler* base_handler, int listen_backlog, tls_context* tls_ctx, bool port_is_fd);
+  void start_(int tcp_port, body_handler* base_handler, int listen_backlog, tls_context* tls_ctx, bool port_is_fd, size_t stack_size);
   
   std::unique_ptr<tcp_server>   tcp_server_;
   std::unique_ptr<body_handler> body_holder_;

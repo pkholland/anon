@@ -135,7 +135,7 @@ public:
   static void terminate();  // must be called _after_ io_dispatch::join()
   
   enum {
-    k_default_stack_size = 32*1024
+    k_default_stack_size = 32*1024 - 256
   };
   
   // run the given 'fn' in this fiber.  If you pass 'detached' true
@@ -156,15 +156,13 @@ public:
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
-    #if defined(ANON_RUNTIME_CHECKS)
-    char* stack_end = (char*)stack_;
-    stack_end += stack_size - 4;
-    stack_end[0] = 'b';
-    stack_end[1] = 'a';
-    stack_end[2] = 'd';
-    stack_end[3] = 'f';
-    #endif
     getcontext(&ucontext_);
+    #if defined(ANON_RUNTIME_CHECKS)
+    int* s = (int*)stack_;
+    int* se = s+(stack_size_/sizeof(int));
+    while (s < se)
+      *s++ = 0xbaadf00d;
+    #endif
     ucontext_.uc_stack.ss_sp = stack_;
     ucontext_.uc_stack.ss_size = stack_size;
     ucontext_.uc_link = NULL;
@@ -179,10 +177,11 @@ public:
   {
     #if defined(ANON_RUNTIME_CHECKS)
     if (stack_) {
-      char* stack_end = (char*)stack_;
-      stack_end += stack_size_ - 4;
-      if ( stack_end[0] != 'b' || stack_end[1] != 'a' || stack_end[2] != 'd' || stack_end[3] != 'f')
-        anon_log_error("fiber stack overwrite!!!");
+      int* s = (int*)stack_;
+      int* se = s+(stack_size_/sizeof(int));
+      while (s < se && *s == 0xbaadf00d)
+        ++s;
+      anon_log_error("fiber consumed " << (char*)se - (char*)s << " bytes of stackspace, leaving " << (char*)s - (char*)stack_ << " untouched");
     }
     #endif
     ::operator delete(stack_);

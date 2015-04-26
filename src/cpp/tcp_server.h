@@ -52,9 +52,10 @@ public:
   // in an ipv6 format, so if the client was, in fact, using an ipv4
   // address it will lock like a 'tunneled' address
   template<typename Fn>
-  tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog, bool port_is_fd = false)
+  tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog, bool port_is_fd = false, size_t stack_size = fiber::k_default_stack_size)
     : new_conn_(new new_con<Fn>(f)),
-      stop_(false)
+      stop_(false),
+      stack_size_(stack_size)
   {
     init_socket(tcp_port, listen_backlog, port_is_fd);
   }
@@ -105,6 +106,7 @@ private:
   
   std::unique_ptr<new_connection> new_conn_;
   int listen_sock_;
+  size_t stack_size_;
   bool stop_;
   struct sockaddr_in6 stop_addr_;
   fiber_mutex stop_mutex_;
