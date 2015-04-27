@@ -181,7 +181,10 @@ void http_client_response::parse(const pipe_t& pipe)
       #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("invalid http received, error: " << http_errno_description((enum http_errno)parser.http_errno));
       #endif
-      throw std::runtime_error("http parser error");
+      //anon_log("bsp: " << bsp << ", bep: " << bep);
+      //header_buf_[bep] = 0;
+      //anon_log("http data:\n" << &header_buf_[bsp]);
+      throw fiber_io_error("http parser error");
     }
     
     // check for some standard error codes that we handle with special logic

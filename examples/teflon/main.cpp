@@ -34,7 +34,7 @@
 // http message sent to this server.
 
 void server_init();
-void server_respond(http_server::pipe_t& pipe, const http_request& request);
+void server_respond(http_server::pipe_t& pipe, const http_request& request, bool is_tls);
 void server_term();
 
 #define SERVER_STACK_SIZE 64*1024-128
@@ -147,14 +147,14 @@ extern "C" int main(int argc, char** argv)
       if (https_port > 0)
         my_https = std::unique_ptr<http_server>(new http_server(https_port,
                           [](http_server::pipe_t& pipe, const http_request& request){
-                              server_respond(pipe, request);
+                              server_respond(pipe, request, true);
                            },
                           tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
                           
       if (http_port > 0)
         my_http = std::unique_ptr<http_server>(new http_server(http_port,
                           [](http_server::pipe_t& pipe, const http_request& request){
-                              server_respond(pipe, request);
+                              server_respond(pipe, request, false);
                            },
                           tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
                         

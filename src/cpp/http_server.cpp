@@ -180,7 +180,7 @@ void http_server::start_(int tcp_port, body_handler* base_handler, int listen_ba
         if (bsp == bep)
           bep += http_pipe->read(&buf[bep], sizeof(buf)-bep);
 //buf[bep] = 0;
-//anon_log("\n" << &buf[0]);
+//anon_log("client sent:\n" << &buf[0] << "\n\n");
           
         // call the joyent parser
         bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep-bsp);

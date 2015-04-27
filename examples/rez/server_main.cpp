@@ -120,7 +120,7 @@ void server_init()
   });
 }
 
-void server_respond(http_server::pipe_t& pipe, const http_request& request)
+void server_respond(http_server::pipe_t& pipe, const http_request& request, bool is_tls)
 {
   auto m = response_map.find(request.method_str()); // is it GET, POST, etc...?
   if (m != response_map.end()) {

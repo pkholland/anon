@@ -48,8 +48,9 @@ std::thread death_thread;
 
 struct proc_info
 {
-  proc_info(const char* exe_name, const std::vector<std::string>& args)
+  proc_info(const char* exe_name, bool do_tls, const std::vector<std::string>& args)
     : exe_name_(exe_name),
+      do_tls_(do_tls),
       args_(args),
       exe_fd_(::open(exe_name, O_RDONLY))
   {
@@ -72,6 +73,7 @@ struct proc_info
   std::vector<std::string>  args_;
   int                       exe_fd_;
   int                       cmd_pipe[2];
+  bool                      do_tls_;
 };
 
 struct timeout_helper
@@ -188,7 +190,10 @@ int start_child(proc_info& pi)
     
     args2.push_back(const_cast<char*>(pi.exe_name_.c_str()));
 
-    args2.push_back(const_cast<char*>("-http_fd"));
+    if (pi.do_tls_)
+      args2.push_back(const_cast<char*>("-https_fd"));
+    else
+      args2.push_back(const_cast<char*>("-http_fd"));
     char lsock_buf[10];
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
@@ -368,9 +373,9 @@ void sproc_mgr_term()
   proc_map = std::map<int/*pid*/, std::unique_ptr<proc_info>>();
 }
 
-void start_server(const char* exe_name, const std::vector<std::string>& args)
+void start_server(const char* exe_name, bool do_tls, const std::vector<std::string>& args)
 {
-  std::unique_ptr<proc_info>  pi(new proc_info(exe_name, args));
+  std::unique_ptr<proc_info>  pi(new proc_info(exe_name, do_tls, args));
   auto chld = start_child(*pi);
   
   std::unique_lock<std::mutex> lock(proc_map_mutex);

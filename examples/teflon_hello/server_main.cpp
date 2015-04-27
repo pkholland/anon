@@ -27,7 +27,7 @@ void server_init()
 }
 
 // example code - just returns a canned blob of text
-void server_respond(http_server::pipe_t& pipe, const http_request& request)
+void server_respond(http_server::pipe_t& pipe, const http_request& request, bool is_tls)
 {
   http_response response;
   response.add_header("Content-Type", "text/plain");

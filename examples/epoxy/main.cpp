@@ -30,8 +30,8 @@
 char  base_path[4096];
 char  cmd_path[4096];
 
-// hard-coded for now
 const char* exe_name;
+bool do_tls;
 
 static void validate_command_file()
 {
@@ -107,7 +107,7 @@ static bool process_command(const std::string& cmd)
       args.push_back("-server_key");
       args.push_back("./secrets/srv_key.pem");
 
-      start_server(full_path.c_str(), args);
+      start_server(full_path.c_str(), do_tls, args);
       reply << "\n" << p << " now running in process " << current_server_pid() << "\n\n";
       
     } else if (cmd == "current_exe") {
@@ -160,8 +160,8 @@ static bool process_command(const std::string& cmd)
 
 extern "C" int main(int argc, char** argv)
 {
-  if (argc != 3) {
-    fprintf(stderr,"usage: epoxy <port> <exe_name>\n");
+  if (argc != 3 && argc != 4) {
+    fprintf(stderr,"usage: epoxy <port> <exe_name> [-tls]\n");
     return 1;
   }
   
@@ -170,6 +170,8 @@ extern "C" int main(int argc, char** argv)
     fprintf(stderr,"path to epoxy executable too long\n");
     return 1;
   }
+  
+  do_tls = argc > 3 && !strcmp(argv[3], "-tls");
   
   memcpy(base_path, argv[0], sz+1);
   char* p = &base_path[sz+1];
