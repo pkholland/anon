@@ -294,8 +294,7 @@ void http_server::pipe_t::respond(const http_response& response)
   }
   rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
   if (response.get_body().length())
-    rp << response.get_body() << "\r\n";
-  rp << "\r\n";
+    rp << response.get_body();
    
   pipe->write(rp.str().c_str(), rp.tellp());
 }
