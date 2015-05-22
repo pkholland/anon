@@ -26,14 +26,17 @@ namespace {
 
 struct pc
 {
-  pc(http_client_response* cr)
+  pc(http_client_response* cr, bool read_body)
     : message_complete(false),
       cr(cr),
       header_state(k_field),
       last_field_len(0),
       last_value_len(0),
       last_field_start(0),
-      last_value_start(0)
+      last_value_start(0),
+      headers_complete_(false),
+      cur_chunk_pos_(0),
+      read_body_(read_body)
   {
   }
   
@@ -49,11 +52,14 @@ struct pc
   size_t      last_field_len;
   const char* last_value_start;
   size_t      last_value_len;
+  size_t      cur_chunk_pos_;
+  bool        headers_complete_;
+  bool        read_body_;
 };
 
 }
 
-void http_client_response::parse(const pipe_t& pipe)
+void http_client_response::parse(const pipe_t& pipe, bool read_body)
 {
   // joyent data structure, set its callback functions
   http_parser_settings settings;
@@ -112,21 +118,42 @@ void http_client_response::parse(const pipe_t& pipe)
     pc* c = (pc*)p->data;
     c->cr->set_http_major(p->http_major);
     c->cr->set_http_minor(p->http_minor);
+    c->headers_complete_ = true;
     if (c->header_state == pc::k_value) {
       string_len fld(c->last_field_start,c->last_field_len);
       string_len val(c->last_value_start,c->last_value_len);
       c->cr->headers.headers[fld] = val;
     }
-    
-    // note, see code in http_parser.c, returning 1 causes the
-    // parser to skip attempting to read the body, which is
-    // what we want.
+    if (c->read_body_) {
+      if (c->cr->headers.contains_header("Content-Length")) {
+        auto clen = atoi(c->cr->headers.get_header("Content-Length").ptr());
+        c->cr->body.push_back(std::vector<char>(clen));
+      }
+      return 0;
+    }
     return 1;
   };
                             
   settings.on_body = [](http_parser* p, const char *at, size_t length)->int
   {
-    return 1;
+    pc* c = (pc*)p->data;
+    if (!c->cr->body.size()) {
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("invalid call to on_body - no current chunk");
+        #endif
+        return 1;
+    }
+    std::vector<char>& cur_chunk = c->cr->body.back();
+    auto avail = cur_chunk.size() - c->cur_chunk_pos_;
+    if (length > avail) {
+        #if ANON_LOG_NET_TRAFFIC > 1
+        anon_log("invalid call to on_body - too much data supplied");
+        #endif
+        return 1;
+    }
+    memcpy(&cur_chunk[c->cur_chunk_pos_], at, length);
+    c->cur_chunk_pos_ += length;
+    return 0;
   };
                       
   settings.on_message_complete = [](http_parser* p)->int
@@ -135,15 +162,50 @@ void http_client_response::parse(const pipe_t& pipe)
     c->message_complete = true;
     return 0;
   };
+  
+  settings.on_chunk_header = [](http_parser* p)
+  {
+    pc* c = (pc*)p->data;
+    if (c->cur_chunk_pos_) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("invalid call to on_chunk_header - incomplete previous chunk");
+      #endif
+      return 1;
+    }
+    c->cr->body.push_back(std::vector<char>(p->content_length));
+    return 0;
+  };
+  
+  settings.on_chunk_complete = [](http_parser* p)
+  {
+    pc* c = (pc*)p->data;
+    if (!c->cr->body.size()) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("invalid call to on_chunk_complete - no current chunk");
+      #endif
+      return 1;
+    }
+    std::vector<char>& cur_chunk = c->cr->body.back();
+    if (cur_chunk.size() != c->cur_chunk_pos_) {
+      #if ANON_LOG_NET_TRAFFIC > 1
+      anon_log("invalid call to on_chunk_complete - incomplete current chunk");
+      #endif
+      return 1;
+    }
+    c->cur_chunk_pos_ = 0;
+    return 0;
+  };
 
   // done in a loop because certain response status codes
   // indicate that we should just try reading the next
   // message
   size_t  bsp = 0, bep = 0;
   
+  std::vector<char> bdy_tmp(4096);
+  
   while (true) {
     headers.init();
-    pc pcallback(this);
+    pc pcallback(this, read_body);
     http_parser parser;
     parser.data = &pcallback;
     http_parser_init(&parser, HTTP_RESPONSE);
@@ -159,21 +221,27 @@ void http_client_response::parse(const pipe_t& pipe)
     }
     
     while (!pcallback.message_complete && !parser.http_errno) {
-    
+  
       // have we already filled all of header_buf_ without seeing the end of the headers?
-      if (bsp == sizeof(header_buf_)) {
+      if (!pcallback.headers_complete_ && (bsp == sizeof(header_buf_))) {
         #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("invalid http response - headers bigger than " << sizeof(header_buf_) << " bytes");
         #endif
         throw std::runtime_error("http headers too big");
       }
     
-      // if there is no un-parsed data in header_buf_ then read more
-      if (bsp == bep)
-        bep += pipe.read(&header_buf_[bep], sizeof(header_buf_)-bep);
+      // if there is no un-parsed data in our read buffer then read more
+      if (bsp == bep) {
+        if (!pcallback.headers_complete_)
+          bep += pipe.read(&header_buf_[bep], sizeof(header_buf_)-bep);
+        else {
+          bep = pipe.read(&bdy_tmp[0], bdy_tmp.size());
+          bsp = 0;
+        }
+      }
         
       // call the joyent parser
-      bsp += http_parser_execute(&parser, &settings, &header_buf_[bsp], bep-bsp);
+      bsp += http_parser_execute(&parser, &settings, !pcallback.headers_complete_ ? &header_buf_[bsp] : &bdy_tmp[bsp], bep-bsp);
     
     }
     
@@ -225,25 +293,6 @@ void http_client_response::parse(const pipe_t& pipe)
     status_code = parser.status_code;
     break;
   }
-  
-  auto clen = atoi(headers.get_header("Content-Length").ptr());
-  body = std::vector<char>(clen);
-  
-  if (bep-bsp > clen) {
-    #if ANON_LOG_NET_TRAFFIC > 1
-    anon_log("ignoring " << bep-bsp-clen << " bytes of extra data in http response");
-    #endif
-    bep = bsp+clen;
-  }
-  
-  // we might have read some, or all of the body already
-  // in the loop above, so start by copying that
-  memcpy(&body[0], &header_buf_[bsp], bep-bsp);
-
-  // read the rest of the body of the message
-  size_t pos = bep-bsp;
-  while (pos < clen)
-    pos += pipe.read(&body[pos], clen-pos);
     
 }
 

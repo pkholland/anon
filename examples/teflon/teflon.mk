@@ -22,6 +22,7 @@ $(ANON_ROOT)/src/cpp/dns_cache.cpp\
 $(ANON_ROOT)/src/cpp/epc.cpp\
 $(ANON_ROOT)/src/cpp/mcdc.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
+$(ANON_ROOT)/src/cpp/percent_codec.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c
 
 INC_DIRS+=\

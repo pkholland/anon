@@ -257,6 +257,12 @@ public:
     return *this;
   }
   
+  http_response& operator<<(const std::vector<char>& v)
+  {
+    ostr_.write(&v[0], v.size());
+    return *this;
+  }
+  
 private:
   std::string status_code_;
   std::map<std::string, std::string> headers_;

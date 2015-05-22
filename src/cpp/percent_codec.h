@@ -22,37 +22,8 @@
 
 #pragma once
 
-#include "http_server.h"
-#include "pipe.h"
+#include <string>
 
-struct http_client_response
-{
-  http_client_response()
-    : http_major_(0),
-      http_minor_(0)
-  {}
-  
-  void parse(const pipe_t& pipe, bool read_body);
-  
-  int               status_code;
-  http_headers      headers;
-  std::list<std::vector<char>>  body;
-  
-  void set_status(const char* ptr, size_t len) { status_ = std::string(ptr,len); }
-  const std::string& get_status() const { return status_; }
-  
-  void set_http_major(int major) { http_major_ = major; }
-  int get_http_major() const { return http_major_; }
-  void set_http_minor(int minor) { http_minor_ = minor; }
-  int get_http_minor() const { return http_minor_; }
-  
-  const char* get_header_buf() const { return &header_buf_[0]; }
-  
-private:
-  char        header_buf_[4096];
-  std::string status_;
-  int         http_major_;
-  int         http_minor_;
-  size_t      header_len_;
-};
+std::string percent_encode(const std::string& plain);
+std::string percent_decode(const std::string& encoded);
 
