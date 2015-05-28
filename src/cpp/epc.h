@@ -79,6 +79,7 @@ public:
       cur_avail_requests_(0),
       total_possible_requests_(0),
       lookup_error_(0),
+      total_fibers_(0),
       lookup_frequency_seconds_(lookup_frequency_in_seconds),
       update_running_(false)
   {

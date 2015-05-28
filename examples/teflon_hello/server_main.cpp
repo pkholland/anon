@@ -51,5 +51,8 @@ void server_term()
 {
 }
 
+void server_close_outgoing()
+{
+}
 
 

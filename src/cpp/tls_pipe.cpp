@@ -52,12 +52,27 @@ static BIO_METHOD methods_fdp =
   NULL,
 };
 
+namespace {
+
+class fp_pipe {
+public:
+  fp_pipe(std::unique_ptr<fiber_pipe>&& pipe)
+    : pipe_(std::move(pipe)),
+      hit_fiber_io_error_(false)
+  {}
+  
+  std::unique_ptr<fiber_pipe> pipe_;
+  bool                        hit_fiber_io_error_;
+};
+
+}
+
 static BIO *BIO_new_fp(std::unique_ptr<fiber_pipe>&& pipe)
 {
   BIO *b = BIO_new(&methods_fdp);
   if (b == 0)
     return 0;
-  b->ptr = new std::unique_ptr<fiber_pipe>(std::move(pipe));
+  b->ptr = new fp_pipe(std::move(pipe));
   return b;
 }
 
@@ -72,7 +87,7 @@ static int fp_free(BIO *b)
 {
   if (b == NULL)
     return 0;
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe*>(b->ptr);
   if (p)
     delete p;
   b->ptr = 0;
@@ -81,10 +96,13 @@ static int fp_free(BIO *b)
 
 static int fp_read(BIO *b, char *out, int outl)
 {
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe*>(b->ptr);
   if (p) {
     try {
-      return (*p)->read(out, outl);
+      return p->pipe_->read(out, outl);
+    }
+    catch(const fiber_io_error&) {
+      p->hit_fiber_io_error_ = true;
     }
     catch(...) {
     }
@@ -94,11 +112,14 @@ static int fp_read(BIO *b, char *out, int outl)
 
 static int fp_write(BIO *b, const char *in, int inl)
 {
-  auto p = reinterpret_cast<std::unique_ptr<fiber_pipe>*>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe*>(b->ptr);
   if (p) {
      try {
-      (*p)->write(in, inl);
+      p->pipe_->write(in, inl);
       return inl;
+    }
+    catch (const fiber_io_error&) {
+      p->hit_fiber_io_error_ = true;
     }
     catch(...) {
     }
@@ -200,6 +221,34 @@ struct auto_bio
   BIO *bio_;
 };
 
+void throw_ssl_error_(BIO* fpb)
+{
+  auto p = reinterpret_cast<fp_pipe*>(fpb->ptr);
+  if (p->hit_fiber_io_error_)
+    throw fiber_io_error("fiber io error during tls");
+  else
+    throw_ssl_error();
+}
+
+static void throw_ssl_error_(BIO* fpb, unsigned long err)
+{
+  auto p = reinterpret_cast<fp_pipe*>(fpb->ptr);
+  if (p->hit_fiber_io_error_)
+    throw fiber_io_error("fiber io error during tls");
+  else
+    throw_ssl_error(err);
+}
+
+void throw_ssl_io_error_(BIO* fpb, unsigned long err)
+{
+  auto p = reinterpret_cast<fp_pipe*>(fpb->ptr);
+  if (p->hit_fiber_io_error_)
+    throw fiber_io_error("fiber io error during tls");
+  else
+    throw_ssl_io_error(err);
+}
+
+
 }
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -212,11 +261,11 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client, bool verify_
   BIO_push(ssl_bio,fp_bio);
   
   if (BIO_do_handshake(ssl_bio) != 1)
-    throw_ssl_error();
+    throw_ssl_error_(fp_bio);
 
   BIO_get_ssl(ssl_bio, &ssl_);
   if (!ssl_)
-    throw_ssl_error();
+    throw_ssl_error_(fp_bio);
     
   if (verify_peer) {
     
@@ -227,17 +276,18 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client, bool verify_
       } else {
         if (cert)
           X509_free(cert);
-        throw_ssl_error(X509_V_ERR_APPLICATION_VERIFICATION);
+        throw_ssl_error_(fp_bio, X509_V_ERR_APPLICATION_VERIFICATION);
       }
     }
     
     auto res = SSL_get_verify_result(ssl_);
     if (res != X509_V_OK)
-      throw_ssl_error((unsigned long)res);
+      throw_ssl_error_(fp_bio, (unsigned long)res);
 
   }
   
   ssl_bio_ = ssl_bio.release();
+  fp_bio_ = fp_bio.release();
 }
 
 tls_pipe::~tls_pipe()
@@ -247,13 +297,14 @@ tls_pipe::~tls_pipe()
   // (that can fail, and throw, etc...)
   SSL_set_quiet_shutdown(ssl_, 1);
   BIO_free(ssl_bio_);
+  BIO_free(fp_bio_);
 }
 
 size_t tls_pipe::read(void* buff, size_t len) const
 {
   auto ret = SSL_read(ssl_, buff, len);
   if (ret <= 0)
-    throw_ssl_io_error(SSL_get_error(ssl_, ret));
+    throw_ssl_io_error_(fp_bio_, SSL_get_error(ssl_, ret));
   return ret;
 }
 
@@ -276,7 +327,7 @@ void tls_pipe::write(const void* buff, size_t len) const
       auto written = SSL_write(ssl_, &buf[tot_bytes], len-tot_bytes);
     #endif
     if (written < 0)
-      throw_ssl_io_error(SSL_get_error(ssl_, written));
+      throw_ssl_io_error_(fp_bio_, SSL_get_error(ssl_, written));
     tot_bytes += written;      
   }
 }

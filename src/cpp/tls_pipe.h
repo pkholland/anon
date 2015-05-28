@@ -47,6 +47,7 @@ public:
   
 private:
   BIO*        ssl_bio_;
+  BIO*        fp_bio_;
   SSL*        ssl_;
   fiber_pipe* fp_;
 };

@@ -36,6 +36,7 @@
 void server_init();
 void server_respond(http_server::pipe_t& pipe, const http_request& request, bool is_tls);
 void server_term();
+void server_close_outgoing();
 
 #define SERVER_STACK_SIZE 64*1024-128
 
@@ -228,6 +229,11 @@ extern "C" int main(int argc, char** argv)
           // wishes.
           pipe.write(&ok, sizeof(ok));
           
+          // tell the app to close any outgoing (they might be
+          // cached) connections, since the next step is to
+          // wait for all connections be to closed
+          server_close_outgoing();
+          
           // there may have been active network sessions because
           // of previous calls to accept.  So wait here until
           // they have all closed.  Note that in certain cases
@@ -250,7 +256,7 @@ extern "C" int main(int argc, char** argv)
     // Whatever the app wants to do at termination time.
     //
     // At this point in time all network sockets that were
-    // created as a consequence of clients calling calling
+    // created as a consequence of clients calling
     // 'connect' to this server, have been closed
     server_term();
 
