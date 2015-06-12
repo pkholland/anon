@@ -123,6 +123,19 @@ void endpoint_cluster::update_endpoints()
   update_cond_.notify_one();
 }
 
+void endpoint_cluster::idle_socket_sweep()
+{
+  auto mx_time = cur_time() + 60;
+  for (auto it = endpoints_.begin(); it != endpoints_.end(); it++) {
+    for (auto it2 = it->second->socks_.begin(); it2 != it->second->socks_.end(); ) {
+      if (!(*it2)->in_use_ && (*it2)->last_used_time_ < mx_time)
+        it->second->socks_.erase(it2++);
+      else
+        it2++;
+    }
+  }
+}
+
 void endpoint_cluster::backoff(endpoint* ep, const struct timespec& start_time, int explicit_seconds)
 {
   auto now = cur_time();
@@ -205,7 +218,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     // socket/pipe thing we are trying
     // to use when calling 'caller'
     endpoint* ep = 0;
-    std::list<std::unique_ptr<endpoint::sock>>::iterator  s_it;
+    endpoint::sock* epsock = 0;
     struct timespec ct;
   
     // this next loop deals with the inability to find
@@ -300,6 +313,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
           --cur_avail_requests_;
         
           // is there already an existing, unused socket connected to this ip_addr?
+          std::list<std::unique_ptr<endpoint::sock>>::iterator  s_it;
           for (s_it = ep->socks_.begin(); s_it != ep->socks_.end(); s_it++)  {
             if (!(*s_it)->in_use_)
               break;
@@ -362,6 +376,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
                 ep->socks_.push_back(std::unique_ptr<endpoint::sock>(new endpoint::sock(std::move(pipe))));
                 s_it = ep->socks_.end();
                 --s_it;
+                epsock = s_it->get();
              }  break;
               
                           
@@ -420,11 +435,12 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
           } else { // end of "if (s_it == ep->end())"
           
             // here we found an unused, already-connected socket, so use it.
-            (*s_it)->in_use_ = true;
+            epsock = s_it->get();
+            epsock->in_use_ = true;
           
           } // end of else of "if (s_it == ep->end())"
           
-          // ep, and s_it are now set
+          // ep, and epsock are now set
           
           try_again = false;  // so we exit the "while (try_again)" loop after we...
           break;              // break out of the "for (auto ep_it = endpoints_.begin(); ep_it != endpoints_.end(); ep_it++)" loop
@@ -436,7 +452,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     } // end of "while (try_again)"
     
     // mtx_ is now unlocked
-    // ep and s_it are set pointing to the ip_addr/socket/pipe_t we are supposed to try.
+    // ep and epsock are set pointing to the ip_addr/socket/pipe_t we are supposed to try.
     // if a read/write exception (fiber_io_error) goes off at this point we immediately
     // close our side of the socket, deleting the corresponding 'sock' object and retry
     // this function.  By default this condition does _not_ cause us to back off of trying
@@ -448,12 +464,13 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     // closed its end, and so we are free to immediately attempt to reconnect.
     
     try {
-      caller->exec((*s_it)->pipe_.get());
+      epsock->last_used_time_ = cur_time();
+      caller->exec(epsock->pipe_.get());
       fiber_lock  lock(mtx_);
       ++ep->success_count_;
       ep->backoff_exp_ = 0;
       ep_exit(ep);
-      (*s_it)->in_use_ = false;
+      epsock->in_use_ = false;
       return;
     }
     catch(const fiber_io_error& e)
@@ -467,10 +484,15 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
       // to use the pipe the first time) as a form of
       // backoff request from the server
       
-      if (!ep->success_count_ || !e.backoff_ || e.close_socket_hint_)
-        ep->socks_.erase(s_it);
-      else
-        (*s_it)->in_use_ = false;
+      if (!ep->success_count_ || !e.backoff_ || e.close_socket_hint_) {
+        for (auto s_it = ep->socks_.begin(); s_it != ep->socks_.end(); s_it++)  {
+          if (s_it->get() == epsock) {
+            ep->socks_.erase(s_it);
+            break;
+          }
+        }
+      } else
+        epsock->in_use_ = false;
       if (!ep->success_count_)
         backoff(ep, ct);
       if (e.backoff_)
@@ -480,7 +502,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller* caller)
     {
       fiber_lock  lock(mtx_);
       ep_exit(ep);
-      (*s_it)->in_use_ = false;
+      epsock->in_use_ = false;
       throw;
     }
     

@@ -89,6 +89,8 @@ public:
     update_task_ = io_dispatch::schedule_task([this]{
       fiber::run_in_fiber([this]{update_endpoints();});
     },cur_time());
+    
+    fiber_pipe::register_idle_socket_sweep(this, [this]{idle_socket_sweep();});
   }
   
   //  call the given 'f' with a pipe containing a socket that is
@@ -155,6 +157,8 @@ private:
   
   void do_shutdown()
   {
+    fiber_pipe::remove_idle_socket_sweep(this);
+    
     fiber_lock  lock(mtx_);
     
     // so we don't attempt any new background work
@@ -180,6 +184,8 @@ private:
     while (total_fibers_ > 0)
       zero_fibers_cond_.wait(lock);
   }
+  
+  void idle_socket_sweep();
   
   struct backoff_error {};
   
@@ -271,6 +277,7 @@ private:
       
       std::unique_ptr<pipe_t> pipe_;
       bool                    in_use_;
+      struct timespec         last_used_time_;
     };
       
     enum {

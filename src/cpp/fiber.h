@@ -368,10 +368,15 @@ public:
       attached_(false),
       remote_hangup_(false)
   {
+    bool start_sweep = false;
     if (socket_type == network) {
       fiber_lock  lock(zero_net_pipes_mutex_);
+      start_sweep = num_net_pipes_ == 0;
       ++num_net_pipes_;
     }
+    
+    if (start_sweep)
+      start_sweeping();
     
     std::lock_guard<std::mutex>  lock(list_mutex_);
     next_ = first_;
@@ -398,7 +403,9 @@ public:
             zero_net_pipes_cond_.notify_all();
         }
       }
-      close(fd_);
+      if (close(fd_) != 0) {
+        anon_log("close(" << fd_ << ") failed with errno: " << errno);
+      }
     }
     std::lock_guard<std::mutex>  lock(list_mutex_);
     if (next_)
@@ -449,12 +456,27 @@ public:
     while (num_net_pipes_)
       zero_net_pipes_cond_.wait(lock);
   }
+  
+  template<typename Fn>
+  static void register_idle_socket_sweep(void* key, Fn f)
+  {
+    fiber_lock  lock(zero_net_pipes_mutex_);
+    sweepers_.insert(std::make_pair(key, std::unique_ptr<sweeper_>(new sweeper<Fn>(f))));
+  }
+  
+  static void remove_idle_socket_sweep(void* key)
+  {
+    fiber_lock  lock(zero_net_pipes_mutex_);
+    sweepers_.erase(key);
+  }
 
 private:
   // fiber_pipe's are neither movable, nor copyable.
   // the address of the pipe is regestered in epoll
   fiber_pipe(const fiber_pipe&);
   fiber_pipe(fiber_pipe&&);
+  
+  static void start_sweeping();
   
   friend struct io_params;
   
@@ -476,6 +498,22 @@ private:
   static fiber_cond             zero_net_pipes_cond_;
   
   static const struct timespec  forever;
+  
+  struct sweeper_
+  {
+    virtual ~sweeper_() {}
+    virtual void sweep() = 0;
+  };
+  
+  template<typename Fn>
+  struct sweeper : public sweeper_
+  {
+    sweeper(Fn f) : f_(f) {}
+    virtual void sweep() { f_(); }
+    Fn f_;
+  };
+  
+  static std::map<void*, std::unique_ptr<sweeper_>> sweepers_;
 };
 
 /*

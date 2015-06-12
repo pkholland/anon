@@ -136,14 +136,6 @@ void fiber::initialize()
   if (fcntl(pipe, F_SETFL, fcntl(pipe, F_GETFL) | O_NONBLOCK) != 0)
     do_error("fcntl(pipe, F_SETFL, fnctl(pipe, F_GETFL) | O_NONBLOCK)");
   on_one_pipe_ = new fiber_pipe(pipe, fiber_pipe::unix_domain);
-  
-  // we don't want to directly call sweep_timed_out_pipes here because
-  // that executes io_dispatch::while_paused, which we don't want to
-  // do here, given this might be called from the main thread, prior to
-  // that thread fully starting the io_dispatch mechanism.  In that
-  // circumstance io_dispatch::while_paused will forever block if
-  // io_dispatch::start was called with "1, true"
-  io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + 10);
 }
 
 void fiber::terminate()
@@ -229,7 +221,12 @@ std::mutex  fiber_pipe::list_mutex_;
 int         fiber_pipe::num_net_pipes_;
 fiber_mutex fiber_pipe::zero_net_pipes_mutex_;
 fiber_cond  fiber_pipe::zero_net_pipes_cond_;
+std::map<void*, std::unique_ptr<fiber_pipe::sweeper_>> fiber_pipe::sweepers_;
 
+void fiber_pipe::start_sweeping()
+{
+  io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + 10);
+}
 
 void fiber_pipe::io_avail(const struct epoll_event& event)
 {
@@ -375,9 +372,12 @@ void io_params::wake_all(fiber* first)
 void io_params::sweep_timed_out_pipes()
 {
   io_dispatch::while_paused([]{
+
+    for (auto it = fiber_pipe::sweepers_.begin(); it != fiber_pipe::sweepers_.end(); it++)
+      it->second->sweep();
   
     // since no io threads are running now, we know that there
-    // is no way for io to be delivered to one of waiting pipes,
+    // is no way for io to be delivered to any of the waiting pipes,
     // causing the epoll code to return and try to handle that
     // io until we return from this function.  But it is still
     // possible for a non-io thread to create or destroy new
@@ -426,11 +426,20 @@ void io_params::sweep_timed_out_pipes()
     #if defined(ANON_RUNTIME_CHECKS)
     fiber::while_paused_ = false;
     #endif
-      
+
   });  
   
   // wake up and sweep every 10 seconds
-  next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + 10);
+  bool again = false;
+  {
+    fiber_lock  lock(fiber_pipe::zero_net_pipes_mutex_);
+    again = fiber_pipe::num_net_pipes_ > 0;
+  }
+
+  if (again)
+    next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + 10);
+  else
+    next_pipe_sweep_ = io_dispatch::scheduled_task();
 }
 
 void io_params::sleep_until_data_available(fiber_pipe* pipe)

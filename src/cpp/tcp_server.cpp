@@ -67,7 +67,7 @@ void tcp_server::io_avail(const struct epoll_event& event)
     int conn = accept4(listen_sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC);
     if (conn == -1) {
       io_dispatch::epoll_ctl(EPOLL_CTL_MOD, listen_sock_, EPOLLIN | EPOLLONESHOT, this);
-      // we can get EAGAIN because multiple id_d threads
+      // we can get EAGAIN because multiple io_d threads
       // can wake up from a single EPOLLIN event.
       // don't bother reporting those.
       if (errno != EAGAIN)
