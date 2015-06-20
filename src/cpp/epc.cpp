@@ -39,7 +39,7 @@ void endpoint_cluster::update_endpoints()
   fiber_lock  lock(mtx_);
   int err = endpoints.first;
   
-  if (err != 0) {
+  if (err != 0 || endpoints.second.empty()) {
   
     // if this lookup failed (for example there was a problem reaching dns),
     // but we previously were able to look things up and so have a non-empty
@@ -83,6 +83,7 @@ void endpoint_cluster::update_endpoints()
         // yes, move it back into endpoints_, but use the (possibly updated)
         // preference reported by this call to lookup
         cur_outstanding_requests += existing->second->outstanding_requests_;
+        existing->second->is_detached_ = false;
         endpoints_.insert( std::make_pair(ep.first, std::move(existing->second)) );
         
       } else {
@@ -97,11 +98,15 @@ void endpoint_cluster::update_endpoints()
     // that is, they were in endpoints_ at the start of this function
     // but were not returned by lookup (it no longer considers them
     // as valid ip_addrs), so they are now still valid pointers
-    // in tmp_map
+    // in tmp_map.  If there are outstanding requests on that endpoint
+    // we keep it in the endpoints_ map until those requests have completed.
+    // otherwise we let the tmp_map dtor delete them.
     for (auto it = tmp_map.begin(); it != tmp_map.end(); ++it) {
       if (it->second) {
-        it->second->is_detached_ = true;
-        endpoints_.insert( std::make_pair(std::numeric_limits<int>::max(), std::move(it->second)) );
+        if (it->second->outstanding_requests_ != 0) {
+          it->second->is_detached_ = true;
+          endpoints_.insert( std::make_pair(std::numeric_limits<int>::max(), std::move(it->second)) );
+        }
       }
     }
     
