@@ -27,3 +27,17 @@ Running the test code:<br>
 
 Note that the install of memcached is only for running some of the test code, it is not required for simply building anon.
 This default install of memcaced configures you machine to run memcached as a daemon.
+
+Config/Build in structions for the Raspberry Pi 2:<br>
+- boot your Raspberry as normal, get it connected to the internet and then in a command shell
+- sudo apt-get update
+- sudo apt-get dist-upgrade
+- sudo apt-get install gcc-4.8
+- sudo apt-get install g++-4.8
+- cd /usr/bin
+- optional, but do before the next step: sudo apt-get remove gcc-4.6
+- sudo ln -s -f gcc-4.8 gcc
+- in a text editor, sudo open /etc/modules and add "ipv6" as a last line
+- reboot your Pi
+- follow git/build instructions from above
+
