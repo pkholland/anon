@@ -1,7 +1,7 @@
 see 
 http://pkholland.github.io/anon
 
-Basic Build Instructions:<br>
+###Basic Build Instructions:<br>
 1)  On an Ubuntu 14.04 VM instance:<br>
 2)  if not already:<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install git<br>
@@ -28,7 +28,7 @@ Running the test code:<br>
 Note that the install of memcached is only for running some of the test code, it is not required for simply building anon.
 This default install of memcaced configures you machine to run memcached as a daemon.
 
-Config/Build in structions for the Raspberry Pi 2:<br>
+###Config/Build in structions for the Raspberry Pi 2:<br>
 - boot your Raspberry as normal, get it connected to the internet and then in a command shell
 - sudo apt-get update
 - sudo apt-get dist-upgrade
