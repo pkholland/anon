@@ -32,47 +32,50 @@ udp_dispatch::udp_dispatch(int udp_port)
     do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
 
   // bind to any address that will route to this machine
-  struct sockaddr_in6 addr = { 0 };
+  struct sockaddr_in6 addr = {0};
   addr.sin6_family = AF_INET6;
   addr.sin6_port = htons(udp_port);
   addr.sin6_addr = in6addr_any;
-  if (bind(sock_, (struct sockaddr*)&addr, sizeof(addr)) != 0)
+  if (bind(sock_, (struct sockaddr *)&addr, sizeof(addr)) != 0)
   {
     close(sock_);
     do_error("bind(<AF_INET6 SOCK_DGRAM socket>, <" << udp_port << ", in6addr_any>, sizeof(addr))");
   }
 
   anon_log("listening for udp on port " << udp_port << ", socket " << sock_);
-  
+
   io_dispatch::epoll_ctl(EPOLL_CTL_ADD, sock_, EPOLLIN, this);
 }
 
-void udp_dispatch::io_avail(const struct epoll_event& event)
+void udp_dispatch::io_avail(const struct epoll_event &event)
 {
-  if (event.events & EPOLLIN) {
-  
+  if (event.events & EPOLLIN)
+  {
+
     unsigned char msgBuff[8192];
-    while (true) {
+    while (true)
+    {
       struct sockaddr_storage host;
       socklen_t host_addr_size = sizeof(struct sockaddr_storage);
-      auto dlen = recvfrom(sock_, &msgBuff[0], sizeof(msgBuff), 0, (struct sockaddr*)&host, &host_addr_size);
-      if (dlen == -1) {
-        #if ANON_LOG_NET_TRAFFIC > 1
+      auto dlen = recvfrom(sock_, &msgBuff[0], sizeof(msgBuff), 0, (struct sockaddr *)&host, &host_addr_size);
+      if (dlen == -1)
+      {
+#if ANON_LOG_NET_TRAFFIC > 1
         if (errno != EAGAIN)
           anon_log("recvfrom failed with errno: " << errno_string());
-        #endif
+#endif
         return;
       }
-      else if (dlen == sizeof(msgBuff)) {
-        #if ANON_LOG_NET_TRAFFIC > 1
+      else if (dlen == sizeof(msgBuff))
+      {
+#if ANON_LOG_NET_TRAFFIC > 1
         anon_log("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
-        #endif
-      } else
+#endif
+      }
+      else
         recv_msg(&msgBuff[0], dlen, &host, host_addr_size);
     }
-    
-  } else
+  }
+  else
     anon_log_error("udp_dispatch::io_avail called with no EPOLLIN. event.events = " << event_bits_to_string(event.events));
 }
-
-

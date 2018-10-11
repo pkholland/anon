@@ -24,6 +24,5 @@
 
 #include <string>
 
-std::string percent_encode(const std::string& plain);
-std::string percent_decode(const std::string& encoded);
-
+std::string percent_encode(const std::string &plain);
+std::string percent_decode(const std::string &encoded);

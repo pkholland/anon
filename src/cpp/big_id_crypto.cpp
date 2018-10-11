@@ -41,7 +41,8 @@ bool init_big_id_crypto()
 
 void term_big_id_crypto()
 {
-  if (rand_file != -1) {
+  if (rand_file != -1)
+  {
     close(rand_file);
     rand_file = -1;
   }
@@ -56,7 +57,7 @@ big_id rand_id()
 }
 
 // the sha256sum of the given 'buf' as a big_id
-big_id sha256_id(const char* buf, size_t len)
+big_id sha256_id(const char *buf, size_t len)
 {
   uint8_t hash[big_id::id_size];
   SHA256_CTX sha256;
@@ -65,4 +66,3 @@ big_id sha256_id(const char* buf, size_t len)
   SHA256_Final(hash, &sha256);
   return big_id(hash);
 }
-

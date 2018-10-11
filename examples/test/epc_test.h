@@ -25,6 +25,3 @@
 void epc_test_init();
 void epc_test_term();
 void epc_test();
-
-
-

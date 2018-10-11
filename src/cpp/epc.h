@@ -63,40 +63,41 @@ public:
   //  executing in other fibers at the time that a new call to with_connected_pipe
   //  is made.  It can also happen if certain "back off" strategies are currently in
   //  effect for that ip address at the time that with_connected_pipe is called.
-  template<typename LookupFn>
+  template <typename LookupFn>
   endpoint_cluster(LookupFn lookup, bool do_tls = false,
-                  const char* host_name_for_tls = "",
-                  const tls_context* ctx = 0,
-                  int max_conn_per_ep = 20,
-                  int lookup_frequency_in_seconds = 120)
-    : lookup_(new lookup_caller_t<LookupFn>(lookup)),
-      shutting_down_(false),
-      do_tls_(do_tls),
-      host_name_for_tls_(host_name_for_tls),
-      tls_ctx_(ctx),
-      max_conn_per_ep_(max_conn_per_ep),
-      round_robin_index_(0),
-      cur_avail_requests_(0),
-      total_possible_requests_(0),
-      lookup_error_(0),
-      total_fibers_(0),
-      lookup_frequency_seconds_(lookup_frequency_in_seconds),
-      update_running_(false)
+                   const char *host_name_for_tls = "",
+                   const tls_context *ctx = 0,
+                   int max_conn_per_ep = 20,
+                   int lookup_frequency_in_seconds = 120)
+      : lookup_(new lookup_caller_t<LookupFn>(lookup)),
+        shutting_down_(false),
+        do_tls_(do_tls),
+        host_name_for_tls_(host_name_for_tls),
+        tls_ctx_(ctx),
+        max_conn_per_ep_(max_conn_per_ep),
+        round_robin_index_(0),
+        cur_avail_requests_(0),
+        total_possible_requests_(0),
+        lookup_error_(0),
+        total_fibers_(0),
+        lookup_frequency_seconds_(lookup_frequency_in_seconds),
+        update_running_(false)
   {
     // run as a task (right now) instead of directly starting
     // the fiber so the destructor (actually, do_shutdown) can
     // reliably wait for proper exit.
-    update_task_ = io_dispatch::schedule_task([this]{
-      fiber::run_in_fiber([this]{update_endpoints();});
-    },cur_time());
-    
-    fiber_pipe::register_idle_socket_sweep(this, [this]{idle_socket_sweep();});
+    update_task_ = io_dispatch::schedule_task([this] {
+      fiber::run_in_fiber([this] { update_endpoints(); });
+    },
+                                              cur_time());
+
+    fiber_pipe::register_idle_socket_sweep(this, [this] { idle_socket_sweep(); });
   }
-  
+
   //  call the given 'f' with a pipe containing a socket that is
   //  connected to one of the ip address returned by the 'lookup'
   //  parameter given to the constructor of this endpoint_cluster.
-   //
+  //
   //  The signature of 'f' must be:
   //
   //    void f(const pipe_t* pipe)
@@ -114,190 +115,198 @@ public:
   //  your significant calculations to compute what you wish to write
   //  to the pipe prior to calling with_connected_pipe, and then mostly
   //  perform the write itself (perhaps followed by read) inside of 'f'.
-  template<typename Fn>
+  template <typename Fn>
   void with_connected_pipe(Fn f)
   {
     fiber_counter fc(this);
-    
-    while (true) {
-      try {
+
+    while (true)
+    {
+      try
+      {
         do_with_connected_pipe(new tcp_call<Fn>(f));
         return;
       }
-      catch(const backoff_error&) {   // retry these
+      catch (const backoff_error &)
+      { // retry these
       }
     }
   }
-  
+
   ~endpoint_cluster()
   {
     do_shutdown();
   }
-  
+
 private:
-  fiber_mutex   mtx_;
-  fiber_cond    zero_fibers_cond_;
-  fiber_cond    connections_possible_cond_;
-  fiber_cond    update_cond_;
-  int           max_conn_per_ep_;
-  unsigned int  round_robin_index_;
-  int           cur_avail_requests_;
-  int           total_possible_requests_;
-  int           lookup_error_;
-  int           total_fibers_;
-  int           lookup_frequency_seconds_;
+  fiber_mutex mtx_;
+  fiber_cond zero_fibers_cond_;
+  fiber_cond connections_possible_cond_;
+  fiber_cond update_cond_;
+  int max_conn_per_ep_;
+  unsigned int round_robin_index_;
+  int cur_avail_requests_;
+  int total_possible_requests_;
+  int lookup_error_;
+  int total_fibers_;
+  int lookup_frequency_seconds_;
   io_dispatch::scheduled_task update_task_;
-  std::string   host_name_for_tls_;
-  const tls_context* tls_ctx_;
-  bool          shutting_down_;
-  bool          do_tls_;
-  bool          update_running_;
-  
-  std::multimap<struct timespec,io_dispatch::scheduled_task>  io_retry_tasks_;
-  
+  std::string host_name_for_tls_;
+  const tls_context *tls_ctx_;
+  bool shutting_down_;
+  bool do_tls_;
+  bool update_running_;
+
+  std::multimap<struct timespec, io_dispatch::scheduled_task> io_retry_tasks_;
+
   void do_shutdown()
   {
     fiber_pipe::remove_idle_socket_sweep(this);
-    
-    fiber_lock  lock(mtx_);
-    
+
+    fiber_lock lock(mtx_);
+
     // so we don't attempt any new background work
     shutting_down_ = true;
-    
+
     while (update_running_)
       update_cond_.wait(lock);
-        
+
     // kill all outstanding io retries
     // (we don't bother deleting the io_retry_tasks_ themselves, since
     // they will be deleted when this is destructed. here we are just
     // killing the tasks themselves so we don't get called when they expire).
     for (auto it = io_retry_tasks_.begin(); it != io_retry_tasks_.end(); it++)
       io_dispatch::remove_task(it->second);
-      
+
     // wake all remaining, stalled/backed-off fibers.
     // they will all throw exceptions when they come out
     // of their wait call and see shutting_down_ == true
     connections_possible_cond_.notify_all();
-    
+
     // now wait for all in-flight calls to with_connect_pipe
     // to get to the end of that function
     while (total_fibers_ > 0)
       zero_fibers_cond_.wait(lock);
   }
-  
+
   void idle_socket_sweep();
-  
-  struct backoff_error {};
-  
+
+  struct backoff_error
+  {
+  };
+
   struct fiber_counter
   {
-    fiber_counter(endpoint_cluster* epc)
-      : epc_(epc)
+    fiber_counter(endpoint_cluster *epc)
+        : epc_(epc)
     {
-      fiber_lock  lock(epc_->mtx_);
+      fiber_lock lock(epc_->mtx_);
       ++epc_->total_fibers_;
     }
-    
+
     ~fiber_counter()
     {
-      fiber_lock  lock(epc_->mtx_);
+      fiber_lock lock(epc_->mtx_);
       if (--epc_->total_fibers_ == 0)
         epc_->zero_fibers_cond_.notify_one();
     }
-    
-    endpoint_cluster* epc_;
+
+    endpoint_cluster *epc_;
   };
   friend struct fiber_counter;
 
   struct lookup_caller
   {
     virtual ~lookup_caller() {}
-    virtual std::pair<int,std::vector<std::pair<int, sockaddr_in6>>> lookup() = 0;
+    virtual std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> lookup() = 0;
   };
-  
-  template<typename Fn>
+
+  template <typename Fn>
   struct lookup_caller_t : public lookup_caller
   {
     lookup_caller_t(Fn f) : f_(f) {}
-    virtual std::pair<int,std::vector<std::pair<int, sockaddr_in6>>> lookup() { return f_(); }
+    virtual std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> lookup() { return f_(); }
     Fn f_;
   };
-  
-  std::auto_ptr<lookup_caller>  lookup_;
-  
+
+  std::auto_ptr<lookup_caller> lookup_;
+
   struct tcp_caller
   {
     virtual ~tcp_caller() {}
-    virtual void exec(const pipe_t* pipe) = 0;
+    virtual void exec(const pipe_t *pipe) = 0;
   };
 
-  template<typename Fn>
+  template <typename Fn>
   struct tcp_call : public tcp_caller
   {
     tcp_call(Fn f)
-      : f_(f)
-    {}
-  
-    virtual void exec(const pipe_t* pipe)
+        : f_(f)
+    {
+    }
+
+    virtual void exec(const pipe_t *pipe)
     {
       f_(pipe);
     }
-    
+
     Fn f_;
-  };    
-  
+  };
+
   // each 'endpoint' is a single ip address
   // and a collection of 1 or more (up to max_conn_per_ep_)
   // open, connected sockets to that endpoint
   struct endpoint
   {
     endpoint(const struct sockaddr_in6 &addr)
-      : outstanding_requests_(0),
-        is_detached_(false),
-        backoff_exp_(0),
-        success_count_(0)
+        : outstanding_requests_(0),
+          is_detached_(false),
+          backoff_exp_(0),
+          success_count_(0)
     {
       size_t addrlen = (addr.sin6_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
       memcpy(&addr_, &addr, addrlen);
       next_avail_time_.tv_sec = std::numeric_limits<time_t>::min();
       next_avail_time_.tv_nsec = 0;
     }
-    
+
     ~endpoint()
     {
       // fancy "tell h2 to shutdown, then wait until fiber exits"
     }
-    
+
     struct sock
     {
-      sock(std::unique_ptr<pipe_t>&& pipe)
-        : pipe_(std::move(pipe)),
-          in_use_(true)
-      {}
-      
+      sock(std::unique_ptr<pipe_t> &&pipe)
+          : pipe_(std::move(pipe)),
+            in_use_(true)
+      {
+      }
+
       std::unique_ptr<pipe_t> pipe_;
-      bool                    in_use_;
-      struct timespec         last_used_time_;
+      bool in_use_;
+      struct timespec last_used_time_;
     };
-      
-    enum {
+
+    enum
+    {
       k_invalid,
       k_valid,
     };
-    
-    struct sockaddr_in6               addr_;
-    struct timespec                   next_avail_time_;
-    int                               outstanding_requests_;
-    int                               backoff_exp_;
-    int                               success_count_;
-    bool                              is_detached_;
-    std::list<std::unique_ptr<sock>>  socks_;
+
+    struct sockaddr_in6 addr_;
+    struct timespec next_avail_time_;
+    int outstanding_requests_;
+    int backoff_exp_;
+    int success_count_;
+    bool is_detached_;
+    std::list<std::unique_ptr<sock>> socks_;
   };
-  
-  void ep_exit(endpoint* ep)
+
+  void ep_exit(endpoint *ep)
   {
     --ep->outstanding_requests_;
-    
+
     // a "detatched" endpoint is one which was at one point
     // being reported as a valid ip_addr by the lookup mechanism,
     // but then at some later point WAS no longer reported as
@@ -306,26 +315,29 @@ private:
     // becomes "detached".  We no longer attempt new requests
     // on detached endpoints, and just wait for the existing
     // requests to complete before deleting the endpoint.
-    if (ep->is_detached_ && ep->outstanding_requests_ == 0) {
-      for (auto ep_it = endpoints_.begin(); ep_it != endpoints_.end(); ++ep_it) {
-        if (ep_it->second.get() == ep) {
+    if (ep->is_detached_ && ep->outstanding_requests_ == 0)
+    {
+      for (auto ep_it = endpoints_.begin(); ep_it != endpoints_.end(); ++ep_it)
+      {
+        if (ep_it->second.get() == ep)
+        {
           endpoints_.erase(ep_it);
           break;
         }
       }
-    } else {
+    }
+    else
+    {
       ++cur_avail_requests_;
       connections_possible_cond_.notify_one();
     }
   }
-  
+
   void update_endpoints();
-  void backoff(endpoint* ep, const struct timespec& start_time, int explicit_seconds = 0);
-  void do_with_connected_pipe(tcp_caller* caller);
-  
+  void backoff(endpoint *ep, const struct timespec &start_time, int explicit_seconds = 0);
+  void do_with_connected_pipe(tcp_caller *caller);
+
   // sorted by preference (for example, known network latency
   // in reaching the ip address).
   std::multimap<int, std::unique_ptr<endpoint>> endpoints_;
-
 };
-

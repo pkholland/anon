@@ -23,5 +23,3 @@
 #pragma once
 
 void run_http2_test(int http_port);
-
-

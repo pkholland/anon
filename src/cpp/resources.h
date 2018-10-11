@@ -26,42 +26,42 @@
 
 struct rez_file_ent
 {
-  const unsigned char*  uncompressed;
-  size_t                sz_uncompressed;
-  const unsigned char*  compressed;
-  size_t                sz_compressed;
-  const char*           etag;
-  const char*           content_type;
+  const unsigned char *uncompressed;
+  size_t sz_uncompressed;
+  const unsigned char *compressed;
+  size_t sz_compressed;
+  const char *etag;
+  const char *content_type;
 };
 
-const rez_file_ent* get_resource(const std::string& path);
+const rez_file_ent *get_resource(const std::string &path);
 
 class for_each_rez_helper
 {
 public:
   virtual ~for_each_rez_helper() {}
-  virtual void rez(const std::string& path, const rez_file_ent* ent) = 0;
+  virtual void rez(const std::string &path, const rez_file_ent *ent) = 0;
 };
 
-template<typename T>
+template <typename T>
 class for_each_rez_helper_t : public for_each_rez_helper
 {
 public:
   for_each_rez_helper_t(T h)
-    : _h(h)
-  {}
-  
-  virtual void rez(const std::string& path, const rez_file_ent* ent) { _h(path, ent); }
+      : _h(h)
+  {
+  }
+
+  virtual void rez(const std::string &path, const rez_file_ent *ent) { _h(path, ent); }
   T _h;
 };
 
-void do_for_each_rez(for_each_rez_helper* h);
+void do_for_each_rez(for_each_rez_helper *h);
 
 // t will be called with (const std::string& path, const rez_file_ent* ent) for each
 // resource
-template<typename T>
+template <typename T>
 void for_each_rez(T t)
 {
   do_for_each_rez(new for_each_rez_helper_t<T>(t));
 }
-

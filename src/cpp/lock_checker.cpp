@@ -28,7 +28,7 @@
 namespace anon
 {
 
-static thread_local int  lock_count;
+static thread_local int lock_count;
 
 void inc_lock_count()
 {
@@ -46,7 +46,6 @@ void assert_no_locks()
     do_error("assert_no_locks() called with " << lock_count << " lock" << (lock_count > 1 ? "s" : ""));
 }
 
-}
+} // namespace anon
 
 #endif
-

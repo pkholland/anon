@@ -28,34 +28,37 @@
 #include <string.h>
 
 // stream out a sockaddr in a human-readable form
-template<typename T>
-T& operator<<(T& str, const struct sockaddr_storage& addr)
+template <typename T>
+T &operator<<(T &str, const struct sockaddr_storage &addr)
 {
-  char  ipaddr[64] = { 0 };
-  int   port = 0;
-  if (addr.ss_family == AF_INET6) {
-    inet_ntop(AF_INET6, &((struct ::sockaddr_in6*)&addr)->sin6_addr, ipaddr, sizeof(ipaddr));
-    port = ntohs(((struct ::sockaddr_in6*)&addr)->sin6_port);
-  } else if (addr.ss_family == AF_INET) {
-    inet_ntop(AF_INET, &((struct ::sockaddr_in*)&addr)->sin_addr, ipaddr, sizeof(ipaddr));
-    port = ntohs(((struct ::sockaddr_in*)&addr)->sin_port);
+  char ipaddr[64] = {0};
+  int port = 0;
+  if (addr.ss_family == AF_INET6)
+  {
+    inet_ntop(AF_INET6, &((struct ::sockaddr_in6 *)&addr)->sin6_addr, ipaddr, sizeof(ipaddr));
+    port = ntohs(((struct ::sockaddr_in6 *)&addr)->sin6_port);
+  }
+  else if (addr.ss_family == AF_INET)
+  {
+    inet_ntop(AF_INET, &((struct ::sockaddr_in *)&addr)->sin_addr, ipaddr, sizeof(ipaddr));
+    port = ntohs(((struct ::sockaddr_in *)&addr)->sin_port);
   }
   return str << ipaddr << "/" << port;
 }
 
-template<typename T>
-T& operator<<(T& str, const struct sockaddr& addr)
+template <typename T>
+T &operator<<(T &str, const struct sockaddr &addr)
 {
-  return str << *(const struct sockaddr_storage*)&addr;
+  return str << *(const struct sockaddr_storage *)&addr;
 }
 
-template<typename T>
-T& operator<<(T& str, const struct sockaddr_in6& addr)
+template <typename T>
+T &operator<<(T &str, const struct sockaddr_in6 &addr)
 {
-  return str << *(const struct sockaddr_storage*)&addr;
+  return str << *(const struct sockaddr_storage *)&addr;
 }
 
-inline bool operator==(const struct sockaddr_in6& addr1, const struct sockaddr_in6& addr2)
+inline bool operator==(const struct sockaddr_in6 &addr1, const struct sockaddr_in6 &addr2)
 {
   if (addr1.sin6_family != addr2.sin6_family)
     return false;
@@ -63,13 +66,10 @@ inline bool operator==(const struct sockaddr_in6& addr1, const struct sockaddr_i
   return memcmp(&addr1, &addr2, sz) == 0;
 }
 
-inline bool operator<(const struct sockaddr_in6& addr1, const struct sockaddr_in6& addr2)
+inline bool operator<(const struct sockaddr_in6 &addr1, const struct sockaddr_in6 &addr2)
 {
   if (addr1.sin6_family != addr2.sin6_family)
     return addr1.sin6_family < addr2.sin6_family;
   size_t sz = addr1.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
   return memcmp(&addr1, &addr2, sz) < 0;
 }
-
-
-

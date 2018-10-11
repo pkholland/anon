@@ -31,20 +31,20 @@
 class tls_context
 {
 public:
-  tls_context(bool client,              // vs. server
-              const char* verify_cert,  // file name of a single trusted cert (or NULL)
-              const char* verify_loc,   // path to c_rehash dir of trusted certs (or NULL)
-              const char* server_cert,  // if !client then path to server's cert (in PEM format)
-              const char* server_key,   // if !client then path to server's key (in PEM format)
-              int verify_depth);        // maximum length cert chain that is allowed
-              
+  tls_context(bool client,             // vs. server
+              const char *verify_cert, // file name of a single trusted cert (or NULL)
+              const char *verify_loc,  // path to c_rehash dir of trusted certs (or NULL)
+              const char *server_cert, // if !client then path to server's cert (in PEM format)
+              const char *server_key,  // if !client then path to server's key (in PEM format)
+              int verify_depth);       // maximum length cert chain that is allowed
+
   ~tls_context();
-  
-  operator SSL_CTX*() const { return ctx_; }
-  
+
+  operator SSL_CTX *() const { return ctx_; }
+
 private:
-  SSL_CTX*  ctx_;
-  
+  SSL_CTX *ctx_;
+
   // singlton object that should exist for the life of the process.
   // This object initializes openssl, and binds it to the fiber-based
   // mechanism in anon.  This permits opensll to be called from fiber
@@ -61,4 +61,4 @@ private:
 void throw_ssl_error();
 void throw_ssl_error(unsigned long err);
 void throw_ssl_io_error(unsigned long err);
-bool verify_host_name(X509* cert,const char* host_name);
+bool verify_host_name(X509 *cert, const char *host_name);

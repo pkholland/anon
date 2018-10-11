@@ -27,10 +27,8 @@
 
 void sproc_mgr_init(int port);
 void sproc_mgr_term();
-void start_server(const char* exe_name, bool do_tls, const std::vector<std::string>& args);
+void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args);
 void stop_server();
 int current_server_pid();
-void list_exes(const char* base_path, const char* name_match, std::ostringstream& reply);
+void list_exes(const char *base_path, const char *name_match, std::ostringstream &reply);
 std::string current_exe_name();
-
-

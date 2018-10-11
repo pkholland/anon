@@ -27,7 +27,7 @@ void server_init()
 }
 
 // example code - just returns a canned blob of text
-void server_respond(http_server::pipe_t& pipe, const http_request& request, bool is_tls)
+void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
   http_response response;
   response.add_header("Content-Type", "text/plain");
@@ -36,16 +36,15 @@ void server_respond(http_server::pipe_t& pipe, const http_request& request, bool
   response << "server response generated from:\n";
   response << "    process: " << getpid() << "\n";
   response << "    thread:  " << syscall(SYS_gettid) << "\n";
-  #if defined(ANON_LOG_FIBER_IDS)
+#if defined(ANON_LOG_FIBER_IDS)
   response << "    fiber:   " << get_current_fiber_id() << "\n";
-  #endif
+#endif
   response << "\n\nyou sent:\n";
   response << request.method_str() << " " << request.url_str << " HTTP/" << request.http_major << "." << request.http_minor << "\n";
   for (auto it = request.headers.headers.begin(); it != request.headers.headers.end(); it++)
     response << it->first.str() << ": " << it->second.str() << "\n";
   pipe.respond(response);
 }
-
 
 void server_term()
 {
@@ -54,5 +53,3 @@ void server_term()
 void server_close_outgoing()
 {
 }
-
-

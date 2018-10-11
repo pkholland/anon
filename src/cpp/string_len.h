@@ -30,49 +30,50 @@
   the memory pointed to by its pointer will outlive the
   class instance.  This makes it a very specialized class.
 */
-struct string_len {
+struct string_len
+{
   string_len()
-    : str_(""),
-      len_(0)
-  {}
- 
-  string_len(const char* str, size_t len)
-    : str_(str),
-      len_(len)
-  {}
-  
+      : str_(""),
+        len_(0)
+  {
+  }
+
+  string_len(const char *str, size_t len)
+      : str_(str),
+        len_(len)
+  {
+  }
+
   // warning! can only be called with a literal
   // or some other str whose lifespan exceeds
   // the lifespan of this string_len.
-  explicit string_len(const char* str)
-    : str_(str),
-      len_(strlen(str))
-  {}
-  
-  bool operator<(const string_len& sl) const
+  explicit string_len(const char *str)
+      : str_(str),
+        len_(strlen(str))
+  {
+  }
+
+  bool operator<(const string_len &sl) const
   {
     size_t l = len_ < sl.len_ ? len_ : sl.len_;
-    auto ret = memcmp(str_,sl.str_,l);
+    auto ret = memcmp(str_, sl.str_, l);
     if (ret != 0)
       return ret < 0;
     return len_ < sl.len_;
   }
-  
-  std::string str() const { return std::string(str_,len_); }
-  const char* ptr() const { return str_; }
-  size_t      len() const { return len_; }
-        
+
+  std::string str() const { return std::string(str_, len_); }
+  const char *ptr() const { return str_; }
+  size_t len() const { return len_; }
+
 private:
-  const char* str_;
-  size_t      len_;
+  const char *str_;
+  size_t len_;
 };
 
 // helper
-template<typename T>
-T& operator<<(T& str, const string_len& sl)
+template <typename T>
+T &operator<<(T &str, const string_len &sl)
 {
   return str << sl.str();
 }
-
-
-

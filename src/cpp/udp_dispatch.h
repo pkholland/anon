@@ -28,25 +28,22 @@ class udp_dispatch : public io_dispatch::handler
 {
 public:
   udp_dispatch(int port);
-  
+
   ~udp_dispatch()
   {
     close(sock_);
   }
-  
+
   // messages sent to this machine/port are passed to this
   // method.
-  virtual void recv_msg(const unsigned char* msg, ssize_t len,
+  virtual void recv_msg(const unsigned char *msg, ssize_t len,
                         const struct sockaddr_storage *sockaddr,
                         socklen_t sockaddr_len) = 0;
 
-  virtual void io_avail(const struct epoll_event& event);
-  
+  virtual void io_avail(const struct epoll_event &event);
+
   int get_sock() { return sock_; }
-                        
-private:  
-  
+
+private:
   int sock_;
 };
-
-

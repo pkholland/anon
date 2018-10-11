@@ -31,18 +31,19 @@ class test_server : public tcp_server
 {
 public:
   test_server()
-    : tcp_server(0/*port*/, [](std::unique_ptr<fiber_pipe>&& pipe, const sockaddr* src_addr, socklen_t src_addr_len){
-        for (int i = 0; i < 1000; i++) {
-          char  buf[100];
-          int   bytes_read = 0;
-          while (!bytes_read || buf[bytes_read-1])
-            bytes_read += pipe->read(&buf[bytes_read], sizeof(buf) - bytes_read);
-          const char* reply = "world";
-          //anon_log("epc server received \"" << &buf[0] << "\", replying with \"" << reply << "\"");
-          //fiber::msleep(10);
-          pipe->write(reply, strlen(reply)+1);
-        }
-      })
+      : tcp_server(0 /*port*/, [](std::unique_ptr<fiber_pipe> &&pipe, const sockaddr *src_addr, socklen_t src_addr_len) {
+          for (int i = 0; i < 1000; i++)
+          {
+            char buf[100];
+            int bytes_read = 0;
+            while (!bytes_read || buf[bytes_read - 1])
+              bytes_read += pipe->read(&buf[bytes_read], sizeof(buf) - bytes_read);
+            const char *reply = "world";
+            //anon_log("epc server received \"" << &buf[0] << "\", replying with \"" << reply << "\"");
+            //fiber::msleep(10);
+            pipe->write(reply, strlen(reply) + 1);
+          }
+        })
   {
     port_nums[port_count++] = get_port();
   }
@@ -52,25 +53,23 @@ std::vector<std::unique_ptr<test_server>> my_test_servers;
 
 void epc_test_init()
 {
-  for (int i = 0; i < sizeof(port_nums)/sizeof(port_nums[0]); i++)
+  for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
     my_test_servers.push_back(std::unique_ptr<test_server>(new test_server()));
 }
 
 void epc_test_term()
 {
-  for (int i = 0; i < sizeof(port_nums)/sizeof(port_nums[0]); i++)
+  for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
     my_test_servers[i]->stop();
 }
 
 void epc_test()
 {
   //auto start_time = cur_time();
-  fiber::run_in_fiber([]{
-  
+  fiber::run_in_fiber([] {
     auto start_time = cur_time();
-  
-    endpoint_cluster  epc([]()->std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>{
-    
+
+    endpoint_cluster epc([]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
       // "address lookup" function that simply returns
       // localhost with each port number currently in port_nums
       // all using "preference" 0
@@ -78,50 +77,45 @@ void epc_test()
       lh.sin6_family = AF_INET6;
       lh.sin6_addr = in6addr_loopback;
       std::vector<std::pair<int, sockaddr_in6>> addrs;
-      for (int i = 0; i < sizeof(port_nums)/sizeof(port_nums[0]); i++) {
+      for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
+      {
         lh.sin6_port = htons(port_nums[i]);
-        addrs.push_back(std::make_pair(0/*preference*/,lh));
+        addrs.push_back(std::make_pair(0 /*preference*/, lh));
       }
-      return std::make_pair(0/*err_code*/, addrs);
-      
-    }, false/*do_tls*/, ""/*host_name_for_tls*/, 0/*tls_ctx*/, 20/*max_conn_per_ep*/);
-    
-    fiber_mutex mtx;
-    fiber_cond  cond;
-    int         num_fibers = 100;
-    int         remaining = num_fibers;
-    
-    for (int i = 0; i < num_fibers; i++) {
+      return std::make_pair(0 /*err_code*/, addrs);
+    },
+                         false /*do_tls*/, "" /*host_name_for_tls*/, 0 /*tls_ctx*/, 20 /*max_conn_per_ep*/);
 
-      fiber::run_in_fiber([&mtx, &cond, &remaining, &epc]{
+    fiber_mutex mtx;
+    fiber_cond cond;
+    int num_fibers = 100;
+    int remaining = num_fibers;
+
+    for (int i = 0; i < num_fibers; i++)
+    {
+
+      fiber::run_in_fiber([&mtx, &cond, &remaining, &epc] {
         for (int j = 0; j < 100; j++)
-          epc.with_connected_pipe([](const pipe_t* pipe){
-            const char* msg = "hello";
+          epc.with_connected_pipe([](const pipe_t *pipe) {
+            const char *msg = "hello";
             //anon_log("sending epc test message \"" << msg << "\"");
-            pipe->write(msg, strlen(msg)+1);
-            char  response[100];
+            pipe->write(msg, strlen(msg) + 1);
+            char response[100];
             int bytes_read = 0;
-            while (!bytes_read || response[bytes_read-1])
-              bytes_read += pipe->read(&response[bytes_read], sizeof(response)-bytes_read);
+            while (!bytes_read || response[bytes_read - 1])
+              bytes_read += pipe->read(&response[bytes_read], sizeof(response) - bytes_read);
             //anon_log("got back \"" << &response[0] << "\"");
           });
-        
-        fiber_lock  lock(mtx);
+
+        fiber_lock lock(mtx);
         if (--remaining == 0)
           cond.notify_one();
       });
-      
     }
-    fiber_lock  lock(mtx);
+    fiber_lock lock(mtx);
     while (remaining)
       cond.wait(lock);
-      
+
     anon_log("finished in " << to_seconds(cur_time() - start_time) << " seconds");
-  
   });
-    
-                    
 }
-
-
-

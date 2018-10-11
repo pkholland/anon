@@ -27,18 +27,17 @@
 class mcd_cluster
 {
 public:
-  mcd_cluster(const char* host, int port,
+  mcd_cluster(const char *host, int port,
               int max_conn_per_ep = 20,
               int lookup_frequency_in_seconds = 120);
-              
-  std::string get(const std::string& key, int vbucket = 0);
-  void set(const std::string& key, const std::string& val, int expiration, int flags = 0, int vbucket = 0);
-              
+
+  std::string get(const std::string &key, int vbucket = 0);
+  void set(const std::string &key, const std::string &val, int expiration, int flags = 0, int vbucket = 0);
+
 private:
   static void status_check(uint16_t status);
 
-  std::string       host_;
-  int               port_;
-  endpoint_cluster  clstr_;
+  std::string host_;
+  int port_;
+  endpoint_cluster clstr_;
 };
-

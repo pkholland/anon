@@ -25,58 +25,58 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-char  base_path[4096];
-char  cmd_path[4096];
+char base_path[4096];
+char cmd_path[4096];
 
-extern "C" int main(int argc, char** argv)
+extern "C" int main(int argc, char **argv)
 {
-  if (argc != 2) {
-    fprintf(stderr,"usage: srv_test <num of server restarts>\n");
+  if (argc != 2)
+  {
+    fprintf(stderr, "usage: srv_test <num of server restarts>\n");
     return 1;
   }
 
   size_t sz = strlen(argv[0]);
-  if (sz > sizeof(cmd_path) - 20) {
-    fprintf(stderr,"path to epoxy executable too long\n");
+  if (sz > sizeof(cmd_path) - 20)
+  {
+    fprintf(stderr, "path to epoxy executable too long\n");
     return 1;
   }
-  
-  memcpy(base_path, argv[0], sz+1);
-  char* p = &base_path[sz+1];
-  while (p > &base_path[0] && *(p-1) != '/')
+
+  memcpy(base_path, argv[0], sz + 1);
+  char *p = &base_path[sz + 1];
+  while (p > &base_path[0] && *(p - 1) != '/')
     --p;
   *p = 0;
-  
-  const char* cmd_file_name = ".epoxy_cmd";
-  
+
+  const char *cmd_file_name = ".epoxy_cmd";
+
   strcpy(cmd_path, base_path);
   strcat(cmd_path, cmd_file_name);
-  
+
   int num_restarts = atoi(argv[1]);
 
   anon_log("restarting " << num_restarts << " times");
-  for (int i = 0; i < num_restarts; i++) {
-  
+  for (int i = 0; i < num_restarts; i++)
+  {
+
     int fd = open(cmd_path, O_WRONLY);
     if (fd < 0)
       do_error("open(\"" << &cmd_path[0] << "\", O_WRONLY)");
-    const char* cmd = "start teflon\n";
+    const char *cmd = "start teflon\n";
     if (write(fd, cmd, strlen(cmd)) != strlen(cmd))
       do_error("write(fd, cmd, strlen(cmd))");
     close(fd);
-    
+
     fd = open(cmd_path, O_RDONLY);
     if (fd < 0)
       do_error("open(\"" << &cmd_path[0] << "\", O_RDONLY)");
     char reply[4096];
     ssize_t bytes;
     while ((bytes = ::read(fd, &reply[0], sizeof(reply))) > 0)
-    close(fd);
-
+      close(fd);
   }
   anon_log("done restarting " << num_restarts << " times");
-  
+
   return 0;
 }
-
-

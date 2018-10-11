@@ -53,14 +53,13 @@ From: https://tools.ietf.org/html/rfc4648
 #endif
 
 static const char alphabet[64] = {
-  'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
-  'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
-  'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
-  'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
-  '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'
-};
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'};
 
-std::string b64url_encode(const char* data, size_t len, char pad)
+std::string b64url_encode(const char *data, size_t len, char pad)
 {
   // each complete block of 3 bytes of data will encode to 4 bytes of result
   // if the last block of 3 bytes is incomplete (that is, len % 3 != 0)
@@ -69,37 +68,43 @@ std::string b64url_encode(const char* data, size_t len, char pad)
   // out each source byte in the incomplete causes one byte in the encoded data
   int num_full_blocks = len / 3;
   auto lm3 = (len % 3);
-  int encoded_size = pad ? ((len + 2) / 3 * 4) : (num_full_blocks * 4 + (lm3 != 0 ? lm3+1 : 0));
-  
+  int encoded_size = pad ? ((len + 2) / 3 * 4) : (num_full_blocks * 4 + (lm3 != 0 ? lm3 + 1 : 0));
+
   std::vector<char> result(encoded_size);
-  
-  const unsigned char* ptr = (const unsigned char*)data;
-  const unsigned char* end = ptr+len;
+
+  const unsigned char *ptr = (const unsigned char *)data;
+  const unsigned char *end = ptr + len;
   int i = 0;
-  
-  for (; i<num_full_blocks; i++, ptr+=3) {
-    result[i*4 + 0] = alphabet[  ptr[0] >> 2];
-    result[i*4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
-    result[i*4 + 2] = alphabet[((ptr[1] << 2) + (ptr[2] >> 6)) & 0x3f];
-    result[i*4 + 3] = alphabet[  ptr[2] & 0x3f];
+
+  for (; i < num_full_blocks; i++, ptr += 3)
+  {
+    result[i * 4 + 0] = alphabet[ptr[0] >> 2];
+    result[i * 4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
+    result[i * 4 + 2] = alphabet[((ptr[1] << 2) + (ptr[2] >> 6)) & 0x3f];
+    result[i * 4 + 3] = alphabet[ptr[2] & 0x3f];
   }
-  
-  if (ptr < end) {
-    result[i*4 + 0] = alphabet[ptr[0] >> 2];
-    if (&ptr[1] < end) {
-      result[i*4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
-      result[i*4 + 2] = alphabet[(ptr[1] << 2) & 0x3f];
+
+  if (ptr < end)
+  {
+    result[i * 4 + 0] = alphabet[ptr[0] >> 2];
+    if (&ptr[1] < end)
+    {
+      result[i * 4 + 1] = alphabet[((ptr[0] << 4) + (ptr[1] >> 4)) & 0x3f];
+      result[i * 4 + 2] = alphabet[(ptr[1] << 2) & 0x3f];
       if (pad)
-        result[i*4 + 3] = pad;
-    } else {
-      result[i*4 + 1] = alphabet[(ptr[0] << 4) & 0x3f];
-      if (pad) {
-        result[i*4 + 2] = pad;
-        result[i*4 + 3] = pad;
+        result[i * 4 + 3] = pad;
+    }
+    else
+    {
+      result[i * 4 + 1] = alphabet[(ptr[0] << 4) & 0x3f];
+      if (pad)
+      {
+        result[i * 4 + 2] = pad;
+        result[i * 4 + 3] = pad;
       }
     }
   }
-  
+
   return std::string(&result[0], encoded_size);
 }
 
@@ -122,61 +127,69 @@ static unsigned char b64_index(unsigned char code)
   throw std::runtime_error("");
 }
 
-std::string b64url_decode(const char* data, size_t len, char pad)
+std::string b64url_decode(const char *data, size_t len, char pad)
 {
-  if (pad) {
-    if (len % 4) {
+  if (pad)
+  {
+    if (len % 4)
+    {
       anon_log("illegal base64 length - must be a multiple of 4, was: " << len);
       throw std::runtime_error("illegal base64 length");
     }
-  } else {
-    if ((len % 4) == 1) {
+  }
+  else
+  {
+    if ((len % 4) == 1)
+    {
       anon_log("illegal unpadded base64 length - (len % 4) cannot == 1, len: " << len);
       throw std::runtime_error("illegal base64 length");
     }
   }
   int num_pads = 0;
-  if (pad) {
-    if (len > 0) {
-      if (data[len-2] == pad)
+  if (pad)
+  {
+    if (len > 0)
+    {
+      if (data[len - 2] == pad)
         num_pads = 2;
-      else if (data[len-1] == pad)
+      else if (data[len - 1] == pad)
         num_pads = 1;
     }
   }
-  
+
   len -= num_pads;
   int num_full_blocks = len / 4;
   int decoded_size = (num_full_blocks * 3) + (len % 4);
 
   std::string result(decoded_size, 0);
 
-  const unsigned char* ptr = (const unsigned char*)data;
-  const unsigned char* end = ptr+len;
+  const unsigned char *ptr = (const unsigned char *)data;
+  const unsigned char *end = ptr + len;
   int i = 0;
-  
-  for (; i<num_full_blocks; i++, ptr+=4) {
+
+  for (; i < num_full_blocks; i++, ptr += 4)
+  {
     auto a = b64_index(ptr[0]);
     auto b = b64_index(ptr[1]);
     auto c = b64_index(ptr[2]);
     auto d = b64_index(ptr[3]);
-    
-    result[i*3+0] = (a << 2) + (b >> 4);
-    result[i*3+1] = (b << 4) + (c >> 2);
-    result[i*3+2] = (c << 6) + d;
+
+    result[i * 3 + 0] = (a << 2) + (b >> 4);
+    result[i * 3 + 1] = (b << 4) + (c >> 2);
+    result[i * 3 + 2] = (c << 6) + d;
   }
-  
-  if (ptr < end) {
+
+  if (ptr < end)
+  {
     auto a = b64_index(ptr[0]);
     auto b = b64_index(ptr[1]);
-    result[i*3+0] = (a << 2) + (b >> 4);
-    if (&ptr[1] < end) {
+    result[i * 3 + 0] = (a << 2) + (b >> 4);
+    if (&ptr[1] < end)
+    {
       auto c = b64_index(ptr[2]);
-      result[i*3+1] = (b << 4) + (c >> 2);
+      result[i * 3 + 1] = (b << 4) + (c >> 2);
     }
   }
-  
+
   return result;
 }
-
-

@@ -28,15 +28,14 @@
 class http2_handler
 {
 public:
-  template<typename Fn>
-  http2_handler(http_server& serv, Fn f, size_t stack_size = fiber::k_default_stack_size)
-    : http2_(false, f, stack_size)
+  template <typename Fn>
+  http2_handler(http_server &serv, Fn f, size_t stack_size = fiber::k_default_stack_size)
+      : http2_(false, f, stack_size)
   {
-    serv.add_upgrade_handler(http2::http2_name, [this](http_server::pipe_t& pipe, const http_request& request){exec(pipe, request);});
+    serv.add_upgrade_handler(http2::http2_name, [this](http_server::pipe_t &pipe, const http_request &request) { exec(pipe, request); });
   }
-  
+
 private:
-  void exec(http_server::pipe_t& pipe, const http_request& request);
+  void exec(http_server::pipe_t &pipe, const http_request &request);
   http2 http2_;
 };
-

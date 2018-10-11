@@ -26,26 +26,21 @@
 void run_http2_test(int http_port)
 {
   anon_log("sending http/2 upgrade to localhost:" << http_port);
-  http2_client::connect_and_run("localhost", http_port, [](http_server::pipe_t& pipe){
-  
+  http2_client::connect_and_run("localhost", http_port, [](http_server::pipe_t &pipe) {
     anon_log("upgrade request succeeded!");
-    
-    http2 h2(true, [](std::unique_ptr<fiber_pipe>&& read_pipe, http_server::pipe_t& write_pipe, uint32_t stream_id){
-    
+
+    http2 h2(true, [](std::unique_ptr<fiber_pipe> &&read_pipe, http_server::pipe_t &write_pipe, uint32_t stream_id) {
       anon_log("new HEADERS or PUSH_PROMISE for stream_id: " << stream_id);
-      
     });
-    
-    fiber cf([&h2, &pipe]{
+
+    fiber cf([&h2, &pipe] {
       h2.run(pipe);
     });
-    
+
     std::vector<http2::hpack_header> req_headers;
     req_headers.push_back(http2::hpack_header(":method", "GET"));
     req_headers.push_back(http2::hpack_header(":scheme", "http"));
     req_headers.push_back(http2::hpack_header(":path", "/"));
     h2.open_stream(pipe, req_headers, true);
-    
   });
 }
-

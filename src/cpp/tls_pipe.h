@@ -33,22 +33,21 @@ public:
   // establishes a tls handshake over this pipe, and if sucessful
   // (does not thow an exception) all future read and write
   // calls will be encrypted/decrypted and then sent over this pipe;
-  tls_pipe(std::unique_ptr<fiber_pipe>&& pipe, bool client,
-          bool verify_peer, const char* host_name, const tls_context& context);
-  
+  tls_pipe(std::unique_ptr<fiber_pipe> &&pipe, bool client,
+           bool verify_peer, const char *host_name, const tls_context &context);
+
   virtual ~tls_pipe();
-    
-  virtual size_t read(void* buff, size_t len) const;
-  virtual void write(const void* buff, size_t len) const;
+
+  virtual size_t read(void *buff, size_t len) const;
+  virtual void write(const void *buff, size_t len) const;
   virtual void limit_io_block_time(int seconds);
   virtual int get_fd() const { return fp_->get_fd(); }
-  
-  void shutdown();
-  
-private:
-  BIO*        ssl_bio_;
-  BIO*        fp_bio_;
-  SSL*        ssl_;
-  fiber_pipe* fp_;
-};
 
+  void shutdown();
+
+private:
+  BIO *ssl_bio_;
+  BIO *fp_bio_;
+  SSL *ssl_;
+  fiber_pipe *fp_;
+};
