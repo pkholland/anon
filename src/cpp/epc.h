@@ -63,13 +63,13 @@ public:
   //  executing in other fibers at the time that a new call to with_connected_pipe
   //  is made.  It can also happen if certain "back off" strategies are currently in
   //  effect for that ip address at the time that with_connected_pipe is called.
-  template <typename LookupFn>
-  endpoint_cluster(LookupFn lookup, bool do_tls = false,
+  endpoint_cluster(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
+                   bool do_tls = false,
                    const char *host_name_for_tls = "",
                    const tls_context *ctx = 0,
                    int max_conn_per_ep = 20,
                    int lookup_frequency_in_seconds = 120)
-      : lookup_(new lookup_caller_t<LookupFn>(lookup)),
+      : lookup_(lookup),
         shutting_down_(false),
         do_tls_(do_tls),
         host_name_for_tls_(host_name_for_tls),
@@ -115,8 +115,7 @@ public:
   //  your significant calculations to compute what you wish to write
   //  to the pipe prior to calling with_connected_pipe, and then mostly
   //  perform the write itself (perhaps followed by read) inside of 'f'.
-  template <typename Fn>
-  void with_connected_pipe(Fn f)
+  void with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
   {
     fiber_counter fc(this);
 
@@ -124,7 +123,7 @@ public:
     {
       try
       {
-        do_with_connected_pipe(new tcp_call<Fn>(f));
+        do_with_connected_pipe(f);
         return;
       }
       catch (const backoff_error &)
@@ -215,43 +214,7 @@ private:
   };
   friend struct fiber_counter;
 
-  struct lookup_caller
-  {
-    virtual ~lookup_caller() {}
-    virtual std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> lookup() = 0;
-  };
-
-  template <typename Fn>
-  struct lookup_caller_t : public lookup_caller
-  {
-    lookup_caller_t(Fn f) : f_(f) {}
-    virtual std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> lookup() { return f_(); }
-    Fn f_;
-  };
-
-  std::auto_ptr<lookup_caller> lookup_;
-
-  struct tcp_caller
-  {
-    virtual ~tcp_caller() {}
-    virtual void exec(const pipe_t *pipe) = 0;
-  };
-
-  template <typename Fn>
-  struct tcp_call : public tcp_caller
-  {
-    tcp_call(Fn f)
-        : f_(f)
-    {
-    }
-
-    virtual void exec(const pipe_t *pipe)
-    {
-      f_(pipe);
-    }
-
-    Fn f_;
-  };
+  std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> lookup_;
 
   // each 'endpoint' is a single ip address
   // and a collection of 1 or more (up to max_conn_per_ep_)
@@ -335,7 +298,7 @@ private:
 
   void update_endpoints();
   void backoff(endpoint *ep, const struct timespec &start_time, int explicit_seconds = 0);
-  void do_with_connected_pipe(tcp_caller *caller);
+  void do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f);
 
   // sorted by preference (for example, known network latency
   // in reaching the ip address).

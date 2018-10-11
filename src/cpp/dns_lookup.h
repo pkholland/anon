@@ -27,38 +27,11 @@
 
 namespace dns_lookup
 {
-struct dns_caller
-{
-  virtual ~dns_caller() {}
-  virtual void exec(int err_code, const std::vector<sockaddr_in6> &addrs) = 0;
-};
-
-template <typename Fn>
-struct dns_call : public dns_caller
-{
-  dns_call(Fn f)
-      : f_(f)
-  {
-  }
-
-  virtual void exec(int err_code, const std::vector<sockaddr_in6> &addrs)
-  {
-    f_(err_code, addrs);
-  }
-
-  Fn f_;
-};
-
-void do_lookup_and_run(const char *host, int port, dns_caller *dnsc, size_t stack_size);
 
 // perform an async dns lookup of host/port, and when
 // complete execute f(err_code, addrs) in a newly created
 // fiber using the given stack_size
-template <typename Fn>
-void lookup_and_run(const char *host, int port, Fn f, size_t stack_size = fiber::k_default_stack_size)
-{
-  do_lookup_and_run(host, port, new dns_call<Fn>(f), stack_size);
-}
+void lookup_and_run(const char *host, int port, const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &f, size_t stack_size = fiber::k_default_stack_size);
 
 // stall this fiber and initiate an async dns lookup,
 // once that dns lookup completes resume this fiber

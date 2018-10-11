@@ -28,10 +28,10 @@
 namespace
 {
 
-void inform_in_fiber(dns_lookup::dns_caller *dnsc, int err)
+void inform_in_fiber(const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &dnsc, int err)
 {
   fiber::run_in_fiber([dnsc, err] {
-    dnsc->exec(err, std::vector<sockaddr_in6>());
+    dnsc(err, std::vector<sockaddr_in6>());
   });
 }
 
@@ -39,7 +39,7 @@ void inform_in_fiber(dns_lookup::dns_caller *dnsc, int err)
 // during the getaddrinfo_a lookup
 struct notify_complete
 {
-  notify_complete(const char *host, int port, dns_lookup::dns_caller *dnsc, size_t stack_size)
+  notify_complete(const char *host, int port, const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &dnsc, size_t stack_size)
       : host_(host),
         dnsc_(dnsc),
         stack_size_(stack_size)
@@ -96,7 +96,7 @@ struct notify_complete
   static void resolve_complete(union sigval sv);
 
   std::string host_;
-  std::unique_ptr<dns_lookup::dns_caller> dnsc_;
+  const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> dnsc_;
   size_t stack_size_;
   struct gaicb cb_;
   struct addrinfo hints_;
@@ -129,7 +129,7 @@ void notify_complete::resolve_complete(union sigval sv)
     anon_log("getaddrinfo_a completed with error: " << gai_strerror(ret));
 #endif
 
-    inform_in_fiber(ths->dnsc_.get(), ret);
+    inform_in_fiber(ths->dnsc_, ret);
   }
   else
   {
@@ -165,10 +165,9 @@ void notify_complete::resolve_complete(union sigval sv)
     }
     freeaddrinfo(ths->cb_.ar_result);
 
-    auto dnsc = ths->dnsc_.release();
+    auto dnsc = ths->dnsc_;
     fiber::run_in_fiber([dnsc, addrs] {
-      std::unique_ptr<dns_lookup::dns_caller> cd(dnsc);
-      dnsc->exec(0, addrs);
+      dnsc(0, addrs);
     });
   }
 }
@@ -181,7 +180,7 @@ void notify_complete::resolve_complete(union sigval sv)
 namespace dns_lookup
 {
 
-void do_lookup_and_run(const char *host, int port, dns_caller *dnsc, size_t stack_size)
+void lookup_and_run(const char *host, int port, const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &dnsc, size_t stack_size)
 {
 #if defined(ANON_LOG_DNS_LOOKUP)
   anon_log("starting dns lookup for \"" << host << "\", port " << port);

@@ -34,7 +34,7 @@ void endpoint_cluster::update_endpoints()
 
   // call the lookup function to get
   // the list of ip addrs
-  auto endpoints = lookup_->lookup();
+  auto endpoints = lookup_();
 
   fiber_lock lock(mtx_);
   int err = endpoints.first;
@@ -224,10 +224,8 @@ void endpoint_cluster::backoff(endpoint *ep, const struct timespec &start_time, 
 }
 
 // a bit complicated because of all of the error/retry things it deals with...
-void endpoint_cluster::do_with_connected_pipe(tcp_caller *caller)
+void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
 {
-  // ensure that we delete this when we exit
-  std::unique_ptr<tcp_caller> c(caller);
 
   // this outer loop performs reconnects to an existing,
   // working ip_addr when a once-functional socket is now
@@ -502,7 +500,7 @@ void endpoint_cluster::do_with_connected_pipe(tcp_caller *caller)
     try
     {
       epsock->last_used_time_ = cur_time();
-      caller->exec(epsock->pipe_.get());
+      f(epsock->pipe_.get());
       fiber_lock lock(mtx_);
       ++ep->success_count_;
       ep->backoff_exp_ = 0;

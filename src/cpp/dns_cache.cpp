@@ -44,22 +44,6 @@ void terminate()
   io_dispatch::remove_task(next_sweep);
 }
 
-class call_deleter
-{
-public:
-  call_deleter(dns_caller *dnsc)
-      : dnsc_(dnsc)
-  {
-  }
-
-  ~call_deleter()
-  {
-    delete dnsc_;
-  }
-
-  dns_caller *dnsc_;
-};
-
 // a time much later than now...
 static struct timespec forever = {std::numeric_limits<time_t>::max(), 1000000000 - 1};
 
@@ -72,7 +56,7 @@ public:
   {
   }
 
-  bool call(const char *host, int port, dns_caller *dnsc, size_t stack_size, struct sockaddr_in6 &addr)
+  bool call(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size, struct sockaddr_in6 &addr)
   {
     switch (state_)
     {
@@ -97,11 +81,10 @@ private:
 
   // tell dns callers about failure conditions
   // and then delete the callback object
-  static void inform_in_fiber(dns_caller *dnsc, int err)
+  static void inform_in_fiber(const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, int err)
   {
     fiber::run_in_fiber([dnsc, err] {
-      call_deleter cd(dnsc);
-      dnsc->exec(err, 0, 0);
+      dnsc(err, 0, 0);
     });
   }
 
@@ -116,14 +99,14 @@ private:
   }
 
   static void resolve_complete(union sigval sv);
-  void initiate_lookup(const char *host, int port, dns_caller *dnsc, size_t stack_size);
-  bool call_from_cache(const char *host, int port, dns_caller *dnsc, size_t stack_size, struct sockaddr_in6 &addr);
+  void initiate_lookup(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size);
+  bool call_from_cache(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size, struct sockaddr_in6 &addr);
 
   // structure used to hold state data
   // during the getaddrinfo_a lookup
   struct notify_complete
   {
-    notify_complete(const char *host, dns_caller *dnsc, size_t stack_size, dns_entry *entry)
+    notify_complete(const char *host, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size, dns_entry *entry)
         : host_(host),
           dnsc_(dnsc),
           stack_size_(stack_size),
@@ -132,7 +115,7 @@ private:
     }
 
     std::string host_;
-    dns_caller *dnsc_;
+    const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> dnsc_;
     size_t stack_size_;
     dns_entry *entry_;
     struct gaicb cb_;
@@ -161,7 +144,7 @@ private:
 
   struct pending_call
   {
-    pending_call(const char *host, int port, dns_caller *dnsc, size_t stack_size)
+    pending_call(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size)
         : host_(host),
           port_(port),
           dnsc_(dnsc),
@@ -171,7 +154,7 @@ private:
 
     std::string host_;
     int port_;
-    dns_caller *dnsc_;
+    std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> dnsc_;
     size_t stack_size_;
   };
 
@@ -292,12 +275,11 @@ void dns_entry::resolve_complete(union sigval sv)
       auto addr = ths->addrs_[i % ths->addrs_.size()].addr_;
 
       fiber::run_in_fiber([pc, addr] {
-        call_deleter del(pc.dnsc_);
         if (addr.sin6_family == AF_INET6)
           ((struct sockaddr_in6 *)&addr)->sin6_port = htons(pc.port_);
         else
           ((struct sockaddr_in *)&addr)->sin_port = htons(pc.port_);
-        pc.dnsc_->exec(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+        pc.dnsc_(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
       },
                           pc.stack_size_);
 
@@ -311,7 +293,7 @@ void dns_entry::resolve_complete(union sigval sv)
 
 // use linux's getaddrinfo_a to do an async
 // dns lookup
-void dns_entry::initiate_lookup(const char *host, int port, dns_caller *dnsc, size_t stack_size)
+void dns_entry::initiate_lookup(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size)
 {
   state_ = k_in_progress;
 
@@ -395,7 +377,7 @@ void dns_entry::initiate_lookup(const char *host, int port, dns_caller *dnsc, si
   }
 }
 
-bool dns_entry::call_from_cache(const char *host, int port, dns_caller *dnsc, size_t stack_size, struct sockaddr_in6 &addr)
+bool dns_entry::call_from_cache(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size, struct sockaddr_in6 &addr)
 {
   auto now = cur_time();
   auto earliest = forever;
@@ -425,7 +407,7 @@ bool dns_entry::call_from_cache(const char *host, int port, dns_caller *dnsc, si
   // to try again at 'earliest'
   std::string host_copy = host;
   io_dispatch::schedule_task([host_copy, port, dnsc, stack_size] {
-    do_lookup_and_run(host_copy.c_str(), port, dnsc, stack_size);
+    lookup_and_run(host_copy.c_str(), port, dnsc, stack_size);
   },
                              earliest);
 
@@ -434,7 +416,7 @@ bool dns_entry::call_from_cache(const char *host, int port, dns_caller *dnsc, si
 
 ////////////////////////////////////////////////////////
 
-void do_lookup_and_run(const char *host, int port, dns_caller *dnsc, size_t stack_size)
+void lookup_and_run(const char *host, int port, const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, size_t stack_size)
 {
   // we don't want to start a new fiber from this thread/fiber
   // while dns_map_mutex is locked (starting new fibers when
@@ -453,12 +435,11 @@ void do_lookup_and_run(const char *host, int port, dns_caller *dnsc, size_t stac
   if (immediate)
   {
     fiber::run_in_fiber([port, dnsc, addr] {
-      call_deleter cd(dnsc);
       if (addr.sin6_family == AF_INET6)
         ((struct sockaddr_in6 *)&addr)->sin6_port = htons(port);
       else
         ((struct sockaddr_in *)&addr)->sin_port = htons(port);
-      dnsc->exec(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+      dnsc(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
     });
   }
 }
@@ -475,7 +456,7 @@ int get_addrinfo(const char *host, int port, struct sockaddr_in6 *addr, socklen_
   // f is called in every case other than when
   // dns_entry::call_from_cache returns true.  In that
   // case dns_entry::call fills out addr before returning.
-  auto f = [&ret, &addr, &addrlen, &done, &mtx, &cond](int err_code, const struct sockaddr *_addr, socklen_t _addrlen) {
+  auto dnsc = [&ret, &addr, &addrlen, &done, &mtx, &cond](int err_code, const struct sockaddr *_addr, socklen_t _addrlen) {
     ret = err_code;
     if (ret == 0)
     {
@@ -488,16 +469,12 @@ int get_addrinfo(const char *host, int port, struct sockaddr_in6 *addr, socklen_
     cond.notify_all();
   };
 
-  dns_caller *dnsc = new dns_call<decltype(f)>(f);
-
   bool immediate;
   {
     anon::lock_guard<std::mutex> lock(dns_map_mutex);
     immediate = dns_map[host].call(host, port, dnsc, fiber::k_default_stack_size, *addr);
   }
-  if (immediate)
-    delete dnsc; // 'call' doesn't use dnsc in 'immediate=true' case, so we just delete it.
-  else
+  if (!immediate)
   {
     // wait for 'f' above to be called (once dns resolution is done)
     fiber_lock lock(mtx);
