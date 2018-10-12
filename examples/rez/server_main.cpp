@@ -24,6 +24,12 @@
 #include "http_server.h"
 #include <map>
 
+#ifdef TEFLON_AWS
+#include <aws/core/Aws.h>
+#include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
+#endif
+
 class c_helper
 {
 public:
@@ -87,7 +93,11 @@ static bool permits_gzip(const string_len &s)
   return false;
 }
 
+#ifdef TEFLON_AWS
+void server_init(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider, const Aws::Client::ClientConfiguration &client_config)
+#else
 void server_init()
+#endif
 {
   for_each_rez([](const std::string &path, const rez_file_ent *ent) {
     add_mapping("GET", path, [ent](http_server::pipe_t &pipe, const http_request &request) {

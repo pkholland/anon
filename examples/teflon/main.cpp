@@ -25,6 +25,15 @@
 #include "tls_context.h"
 #include "http_server.h"
 
+#ifdef TEFLON_AWS
+#include <aws/core/Aws.h>
+#include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <aws/core/config/AWSProfileConfigLoader.h>
+#include "aws_http.h"
+#endif
+
 #include <dirent.h>
 #include <fcntl.h>
 
@@ -33,7 +42,12 @@
 // called every time there is a GET/POST/etc...
 // http message sent to this server.
 
+#ifdef TEFLON_AWS
+void server_init(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider, const Aws::Client::ClientConfiguration &client_config);
+#else
 void server_init();
+#endif
+
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls);
 void server_term();
 void server_close_outgoing();
@@ -56,6 +70,29 @@ static void show_help()
   printf("              -server_pw <OPTIONAL - password to decrypt server_key>\n");
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
 }
+
+#include <aws/core/utils/threading/Executor.h>
+#include "fiber.h"
+
+#ifdef TEFLON_AWS
+namespace
+{
+class aws_executor : public Aws::Utils::Threading::Executor
+{
+public:
+  static std::shared_ptr<aws_executor> singleton;
+
+protected:
+  bool SubmitToThread(std::function<void()> &&f) override
+  {
+    fiber::run_in_fiber([f] {
+      f();
+    });
+  }
+};
+std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
+} // namespace
+#endif
 
 extern "C" int main(int argc, char **argv)
 {
@@ -142,11 +179,77 @@ extern "C" int main(int argc, char **argv)
   io_dispatch::start(std::thread::hardware_concurrency(), true);
   fiber::initialize();
 
+#ifdef TEFLON_AWS
+  Aws::SDKOptions aws_options;
+  aws_options.httpOptions.httpClientFactory_create_fn = [] { return std::static_pointer_cast<Aws::Http::HttpClientFactory>(std::make_shared<aws_http_client_factory>()); };
+  Aws::InitAPI(aws_options);
+  Aws::Client::ClientConfiguration client_cfg;
+
+  bool specific_profile = true;
+  const char *profile = getenv("AWS_PROFILE");
+  if (!profile)
+  {
+    profile = "default";
+    specific_profile = false;
+  }
+
+  // basically, if you specified a specific profile to use and we can't find
+  // the credentials file, or that file doesn't have the profile you are asking for,
+  // we will revert to using the default credential chain mechanism.
+  if (specific_profile)
+  {
+    auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
+    Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
+    if (!loader.Load())
+      specific_profile = false;
+    else
+    {
+      auto profiles = loader.GetProfiles();
+      if (profiles.find(profile) == profiles.end())
+        specific_profile = false;
+    }
+  }
+  std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_prov;
+  if (specific_profile)
+    aws_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(profile);
+  else
+    aws_prov = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+
+  std::string region("");
+  const char *region_ = getenv("AWS_DEFAULT_REGION");
+  if (region_)
+  {
+    region = region_;
+  }
+  else
+  {
+    auto cfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetConfigProfileFilename();
+    Aws::Config::AWSConfigFileProfileConfigLoader loader(cfn);
+    if (loader.Load())
+    {
+      auto profiles = loader.GetProfiles();
+      auto prof = profiles.find(profile);
+      if (prof != profiles.end())
+        region = prof->second.GetRegion();
+    }
+  }
+  if (region == "")
+    region = "us-east-1";
+
+  client_cfg.requestTimeoutMs = 5000;
+  client_cfg.region = region;
+  client_cfg.executor = aws_executor::singleton;
+#endif
+
   int ret = 0;
   try
   {
 
+#ifdef TEFLON_AWS
+    server_init(aws_prov, client_cfg);
+#else
     server_init();
+#endif
 
     // construct the server's ssl/tls context if we are
     // asked to use a tls port
