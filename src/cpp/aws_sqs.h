@@ -40,16 +40,23 @@
 class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
 {
 public:
-  aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
-                   const Aws::Client::ClientConfiguration &client_config,
-                   const Aws::String &queue_url,
-                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler);
+  static std::shared_ptr<aws_sqs_listener> new_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
+                                                        const Aws::Client::ClientConfiguration &client_config,
+                                                        const Aws::String &queue_url,
+                                                        const std::function<bool(const Aws::SQS::Model::Message &m)> &handler)
+  {
+    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, handler);
+    ths->start();
+    return ths;
+  }
+
   ~aws_sqs_listener();
 
-  void start();
   static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<void(const nlohmann::json &body)> &fn);
 
 private:
+  void start();
+
   Aws::SQS::SQSClient _client;
   Aws::String _queue_url;
   fiber_mutex _mtx;
@@ -75,4 +82,10 @@ private:
   void remove_from_keep_alive(const Aws::SQS::Model::Message &, bool reset_visibility);
   void delete_message(const Aws::SQS::Model::Message &);
   void start_listen();
+
+public:
+  aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
+                   const Aws::Client::ClientConfiguration &client_config,
+                   const Aws::String &queue_url,
+                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler);
 };
