@@ -37,7 +37,7 @@
 #include "fiber.h"
 #include "nlohmann/json.hpp"
 
-class aws_sqs_listener : std::enable_shared_from_this<aws_sqs_listener>
+class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
 {
 public:
   aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
