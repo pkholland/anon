@@ -37,22 +37,27 @@
 #include "fiber.h"
 #include "nlohmann/json.hpp"
 
+template<typename T>
+class sqs_handler
+{};
+
 class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
 {
 public:
+  template<typename Fn>
   static std::shared_ptr<aws_sqs_listener> new_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                                         const Aws::Client::ClientConfiguration &client_config,
                                                         const Aws::String &queue_url,
-                                                        const std::function<bool(const Aws::SQS::Model::Message &m)> &handler)
+                                                        const Fn &handler)
   {
-    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, handler);
+    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, sqs_handler<Fn>::wrap(handler));
     ths->start();
     return ths;
   }
 
   ~aws_sqs_listener();
 
-  static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<void(const nlohmann::json &body)> &fn);
+  static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
 
 private:
   void start();
@@ -88,4 +93,24 @@ public:
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler);
+};
+
+template<>
+class sqs_handler<bool(const Aws::SQS::Model::Message &m)>
+{
+  public:
+    static std::function<bool(const Aws::SQS::Model::Message &m)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m)> &fn)
+    {
+      return fn;
+    }
+};
+
+template<>
+class sqs_handler<void(const Aws::SQS::Model::Message &, const nlohmann::json &)>
+{
+  public:
+    static std::function<bool(const Aws::SQS::Model::Message &m)> wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
+    {
+      return aws_sqs_listener::js_wrap(fn);
+    }
 };
