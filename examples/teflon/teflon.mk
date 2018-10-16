@@ -38,6 +38,22 @@ cflags+=-DTEFLON_AWS_SQS
 LIBS:=-laws-cpp-sdk-sqs $(LIBS)
 endif
 
+ifneq ($(filter S3,$(TEFLON_AWS)),)
+LIBS:=-laws-cpp-sdk-s3 $(LIBS)
+cflags+=-DTEFLON_AWS_S3
+endif
+
+ifneq ($(filter DDB,$(TEFLON_AWS)),)
+LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
+cflags+=-DTEFLON_AWS_DDB
+endif
+
+ifneq ($(TEFLON_REQUEST_DISPATCHER),)
+LIBS:=-lpcrecpp $(LIBS)
+SOURCES+=$(ANON_ROOT)/src/cpp/request_dispatcher.cpp
+cflags+=-DTEFLON_REQUEST_DISPATCHER
+endif
+
 INC_DIRS+=\
 $(ANON_ROOT)/src/cpp\
 $(ANON_PARENT)/http-parser\
