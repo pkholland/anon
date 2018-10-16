@@ -274,24 +274,28 @@ public:
   template <typename Fn>
   void request_mapping(const std::string &method, const std::string &path_spec, Fn f)
   {
+    anon_log("request_mapping, method: " << method << ", path spec: " << path_spec);
     std::string non_var, var;
     if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
     {
       do_error("path split failed, invalid path: " << path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
+    anon_log(" nonvar" << non_var);
     _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(path_spec)));
   }
 
   template <typename Fn>
   void request_mapping_body(const std::string &method, const std::string &path_spec, Fn f)
   {
+    anon_log("request_mapping_body, method: " << method << ", path spec: " << path_spec);
     std::string non_var, var;
     if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
     {
       do_error("path split failed, invalid path: " << path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
+    anon_log(" nonvar" << non_var);
     _map[method][non_var].push_back(get_map_responder_body(f, request_mapping_helper(path_spec)));
   }
 

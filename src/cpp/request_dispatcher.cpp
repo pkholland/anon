@@ -61,7 +61,7 @@ request_helper request_mapping_helper(const std::string &path_spec)
 
   request_helper h(newre_str, count);
 
-  pcrecpp::RE split_at_and("([^&]*)");
+  pcrecpp::RE split_at_and("([^&]+)");
   if (query.size() > 0)
   {
     pcrecpp::StringPiece input(query);
@@ -72,10 +72,12 @@ request_helper request_mapping_helper(const std::string &path_spec)
 
   if (headers.size() > 0)
   {
-    pcrecpp::StringPiece input(query);
+    pcrecpp::StringPiece input(headers);
     std::string val;
     while (split_at_and.FindAndConsume(&input, &val))
-      h.query_string_items.push_back(val);
+    {
+      h.header_items.push_back(val);
+    }
   }
 
   return h;
@@ -141,22 +143,19 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
     auto m = _map.find(request.method_str());
     if (m == _map.end())
-      throw request_error(HTTP_STATUS_NOT_FOUND, "");
+      throw_request_error(HTTP_STATUS_NOT_FOUND, "method: " << request.method_str());
     std::string path, query;
     if (!_split_at_q.FullMatch(request.get_url_field(UF_PATH), &path, &query))
-    {
-      do_error("path split failed, invalid path: " << request.get_url_field(UF_PATH));
-      throw std::runtime_error("request_mapping failed, invalid path");
-    }
+      throw_request_error(400, "path split failed, invalid path: " << request.get_url_field(UF_PATH));
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
-      throw request_error(HTTP_STATUS_NOT_FOUND, "");
+      throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
     --e;
     for (auto &f : e->second)
     {
       if (f(pipe, request, is_tls, path, query))
         return;
     }
-    throw request_error(HTTP_STATUS_NOT_FOUND, "");
+    throw_request_error(HTTP_STATUS_NOT_FOUND, "");
   });
 }
