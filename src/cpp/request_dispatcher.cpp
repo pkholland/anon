@@ -80,6 +80,11 @@ request_helper request_mapping_helper(const std::string &path_spec)
     }
   }
 
+  pcrecpp::RE split_at_var("([^?{]*)(.*)");
+  if (!split_at_var.FullMatch(path_spec, &h.non_var))
+    throw std::runtime_error("request_mapping failed, invalid path");
+  anon_log("non_var portion of path_spec: " << path_spec << ", non_var: " << h.non_var);
+
   return h;
 }
 
@@ -92,7 +97,7 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
     std::vector<std::string> p(8);
     if (!h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4], &p[5], &p[6], &p[7]))
       return ret;
-    if (h.num_path_substitutions <= 8 && p[h.num_path_substitutions - 1].size() == 0)
+    if (h.num_path_substitutions > 0 && h.num_path_substitutions <= 8 && p[h.num_path_substitutions - 1].size() == 0)
       return ret;
     for (auto &v : p)
     {
@@ -151,11 +156,16 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     if (e == m->second.begin())
       throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
     --e;
+    anon_log(" mapped request to: " << e->first);
     for (auto &f : e->second)
     {
       if (f(pipe, request, is_tls, path, query))
+      {
+        anon_log("f returned true");
         return;
+      }
     }
-    throw_request_error(HTTP_STATUS_NOT_FOUND, "");
+    anon_log("no f returned true, throwing not-found");
+    throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
   });
 }

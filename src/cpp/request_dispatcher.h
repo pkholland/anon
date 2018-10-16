@@ -30,6 +30,7 @@ struct request_helper
 {
   pcrecpp::RE path_re;
   int num_path_substitutions;
+  std::string non_var;
   std::vector<std::string> query_string_items;
   std::vector<std::string> header_items;
 
@@ -121,9 +122,12 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
 
 std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query);
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &) -> decltype((void)(f(n_pipe, n_request)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
+auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
 {
-  return [f](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &, const std::string &) -> bool {
+  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
+    auto params = extract_params(h, request, path, query);
+    if (!params.first)
+      return false;
     f(pipe, request);
     return true;
   };
@@ -190,9 +194,12 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &) -> decltype((void)(f(n_pipe, n_request, nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
+auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
 {
-  return [f](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
+  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
+    auto params = extract_params(h, request, path, query);
+    if (!params.first)
+      return false;
     body_as_json(pipe, request, f);
     return true;
   };
@@ -281,7 +288,7 @@ public:
       do_error("path split failed, invalid path: " << path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
-    anon_log(" nonvar" << non_var);
+    anon_log(" nonvar: " << non_var);
     _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(path_spec)));
   }
 
