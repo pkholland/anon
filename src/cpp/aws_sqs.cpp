@@ -69,7 +69,7 @@ aws_sqs_listener::~aws_sqs_listener()
   io_dispatch::remove_task(_timer_task);
 }
 
-std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap(const std::function<void(const nlohmann::json &body)> &fn)
+std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
 {
   return [fn](const Aws::SQS::Model::Message &m) -> bool {
     std::string body = m.GetBody();
@@ -78,7 +78,7 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
       json body_js = json::parse(body.begin(), body.end());
       try
       {
-        fn(body_js);
+        fn(m, body_js);
         return true;
       }
       catch (const std::exception &exc)
