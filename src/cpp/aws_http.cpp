@@ -83,6 +83,12 @@ public:
     auto headers = request.GetHeaders();
     for (auto &h : headers)
       str << h.first << ": " << h.second << "\r\n";
+    str << "transfer-encoding: identity\r\n";
+    if (!request.HasHeader(CONTENT_LENGTH_HEADER))
+      str << "content-length: 0\r\n";
+    if (!request.HasHeader(CONTENT_TYPE_HEADER))
+      str << "content-type: application/xml\r\n";
+
     str << "\r\n";
     auto body = request.GetContentBody();
     if (body)
@@ -96,8 +102,10 @@ public:
     fiber_mutex mtx;
     auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
     bool done = false;
+    anon_log("sending request to: " << uri.GetURIString());
     get_epc(uri.GetURIString())->with_connected_pipe([&cond, &mtx, &resp, &message, &done](const pipe_t *pipe) {
-      // anon_log("sending...\n" << message << "\n\n...");
+      anon_log("sending...\n"
+               << message << "\n\n...");
       pipe->write(message.c_str(), message.size());
       http_client_response re;
       re.parse(*pipe, true /*readBody*/);

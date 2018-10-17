@@ -39,6 +39,8 @@
 #include <map>
 #include <mutex>
 
+extern char **environ;
+
 namespace
 {
 
@@ -225,13 +227,9 @@ int start_child(proc_info &pi)
 
     for (int i = 0; i < pi.args_.size(); i++)
       args2.push_back(const_cast<char *>(pi.args_[i].c_str()));
-
     args2.push_back(0);
 
-    char *argp[1];
-    argp[0] = 0;
-
-    fexecve(pi.exe_fd_, &args2[0], &argp[0]);
+    fexecve(pi.exe_fd_, &args2[0], environ);
 
     // if fexecve succeeded then we never get here.  So getting here is a failure,
     // but we are already in the child process at this point, so we do what we can
