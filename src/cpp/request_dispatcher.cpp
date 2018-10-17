@@ -93,7 +93,6 @@ request_helper request_mapping_helper(const std::string &path_spec)
   pcrecpp::RE split_at_var("([^?{]*)(.*)");
   if (!split_at_var.FullMatch(path_spec, &h.non_var))
     throw std::runtime_error("request_mapping failed, invalid path");
-  anon_log("non_var portion of path_spec: " << path_spec << ", non_var: " << h.non_var);
 
   return h;
 }
@@ -102,19 +101,47 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
 {
   auto ret = std::make_pair(false, std::vector<std::string>());
 
-  if (h.num_path_substitutions > 0)
+  std::vector<std::string> p(8);
+  bool match = false;
+  switch (h.num_path_substitutions)
   {
-    std::vector<std::string> p(8);
-    if (!h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4], &p[5], &p[6], &p[7]))
-      return ret;
-    if (h.num_path_substitutions > 0 && h.num_path_substitutions <= 8 && p[h.num_path_substitutions - 1].size() == 0)
-      return ret;
-    for (auto &v : p)
-    {
-      if (v.size() == 0)
-        break;
-      ret.second.push_back(v);
-    }
+  case 0:
+    match = h.path_re.FullMatch(path);
+    break;
+  case 1:
+    match = h.path_re.FullMatch(path, &p[0]);
+    break;
+  case 2:
+    match = h.path_re.FullMatch(path, &p[0], &p[1]);
+    break;
+  case 3:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2]);
+    break;
+  case 4:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3]);
+    break;
+  case 5:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4]);
+    break;
+  case 6:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4], &p[5]);
+    break;
+  case 7:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4], &p[5], &p[6]);
+    break;
+  case 8:
+    match = h.path_re.FullMatch(path, &p[0], &p[1], &p[2], &p[3], &p[4], &p[5], &p[6], &p[7]);
+    break;
+  default:
+    break;
+  }
+  if (!match)
+    return ret;
+  for (auto &v : p)
+  {
+    if (v.size() == 0)
+      break;
+    ret.second.push_back(v);
   }
 
   if (h.query_string_items.size() > 0)
@@ -158,24 +185,19 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
     auto m = _map.find(request.method_str());
     if (m == _map.end())
-      throw_request_error(HTTP_STATUS_NOT_FOUND, "method: " << request.method_str());
+      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << request.method_str());
     std::string path, query;
     if (!_split_at_q.FullMatch(request.get_url_field(UF_PATH), &path, &query))
       throw_request_error(400, "path split failed, invalid path: " << request.get_url_field(UF_PATH));
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
-      throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
+      throw_request_error(HTTP_STATUS_NOT_FOUND, "path: \"" << path << "\", not found");
     --e;
-    anon_log(" mapped request to: " << e->first);
     for (auto &f : e->second)
     {
       if (f(pipe, request, is_tls, path, query))
-      {
-        anon_log("f returned true");
         return;
-      }
     }
-    anon_log("no f returned true, throwing not-found");
     throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
   });
 }

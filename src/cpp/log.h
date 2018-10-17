@@ -32,9 +32,50 @@
 #include <system_error>
 #include <errno.h>
 #include <string.h>
+#include <vector>
+#include <mutex>
 
 #if defined(ANON_LOG_FIBER_IDS)
 extern int get_current_fiber_id();
+#endif
+
+#if defined(ANON_LOG_KEEP_RECENT)
+struct recent_logs
+{
+  recent_logs()
+      : lines(num_kept),
+        current(0)
+  {
+  }
+  enum
+  {
+    num_kept = 1024
+  };
+  std::vector<std::string> lines;
+  int current;
+  static recent_logs singleton;
+  std::mutex mutex;
+};
+inline void add_to_recent_logs(const std::string &line)
+{
+  std::unique_lock<std::mutex> l(recent_logs::singleton.mutex);
+  auto indx = recent_logs::singleton.current % recent_logs::num_kept;
+  recent_logs::singleton.lines[indx] = line;
+  ++recent_logs::singleton.current;
+}
+template <typename T>
+T &operator<<(T &t, const recent_logs &r)
+{
+  std::unique_lock<std::mutex> l(recent_logs::singleton.mutex);
+  auto start_indx = r.current - recent_logs::num_kept;
+  if (start_indx < 0)
+    start_indx = 0;
+  start_indx = start_indx % recent_logs::num_kept;
+  auto end_indx = r.current % recent_logs::num_kept;
+  for (auto i = start_indx; i < end_indx; i++)
+    t << r.lines[i];
+  return t;
+}
 #endif
 
 #define anon_log(_body) Log::output(__FILE__, __LINE__, [&](std::ostream &formatter) { formatter << _body; }, false)
@@ -72,9 +113,9 @@ static void output(const char *file_name, int line_num, Func func, bool err)
   else
     fb << ".....";
   loc << fb.str();
-  const int width = 58;
+  const int width = 60;
 #else
-  const int width = 52;
+  const int width = 54;
 #endif
   loc << ", " << file_name << ", " << line_num << ")";
   format << std::setiosflags(std::ios_base::left) << std::setfill(' ') << std::setw(width) << loc.str();
@@ -87,9 +128,12 @@ static void output(const char *file_name, int line_num, Func func, bool err)
   // test the return value of write to quite compiler warnings,
   // but there is nothing we can do if it fails for some reason.
   std::string s = format.str();
+#if defined(ANON_LOG_KEEP_RECENT)
+  add_to_recent_logs(s);
+#endif
   if (write(err ? 2 : 1, s.c_str(), s.length()))
     ;
-}
+} // namespace Log
 }; // namespace Log
 
 inline std::string error_string2(int err)

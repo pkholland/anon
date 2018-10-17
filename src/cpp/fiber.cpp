@@ -24,6 +24,10 @@
 #include "time_utils.h"
 #include <fcntl.h>
 
+#if defined(ANON_LOG_KEEP_RECENT)
+recent_logs recent_logs::singleton;
+#endif
+
 thread_local io_params tls_io_params;
 
 // suspend the calling fiber on the fiber_cond's wake list

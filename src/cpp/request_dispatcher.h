@@ -47,10 +47,10 @@ class response_strings
   static response_strings _singleton;
   static std::string _empty;
 
-  public:
+public:
   response_strings();
-  
-  static const std::string& get_description(int code)
+
+  static const std::string &get_description(int code)
   {
     auto it = _singleton._map.find(code);
     return it != _singleton._map.end() ? it->second : _empty;
@@ -67,7 +67,7 @@ struct request_error
   {
     std::ostringstream code_str;
     code_str << std::to_string(c);
-    auto& desc = response_strings::get_description(c);
+    auto &desc = response_strings::get_description(c);
     if (desc != "")
       code_str << " " << desc;
     code = code_str.str();
@@ -302,28 +302,24 @@ public:
   template <typename Fn>
   void request_mapping(const std::string &method, const std::string &path_spec, Fn f)
   {
-    anon_log("request_mapping, method: " << method << ", path spec: " << path_spec);
     std::string non_var, var;
     if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
     {
       do_error("path split failed, invalid path: " << path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
-    anon_log(" nonvar: " << non_var);
     _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(path_spec)));
   }
 
   template <typename Fn>
   void request_mapping_body(const std::string &method, const std::string &path_spec, Fn f)
   {
-    anon_log("request_mapping_body, method: " << method << ", path spec: " << path_spec);
     std::string non_var, var;
     if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
     {
       do_error("path split failed, invalid path: " << path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
-    anon_log(" nonvar" << non_var);
     _map[method][non_var].push_back(get_map_responder_body(f, request_mapping_helper(path_spec)));
   }
 
