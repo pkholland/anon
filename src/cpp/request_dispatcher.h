@@ -291,36 +291,40 @@ class request_dispatcher
   std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>>>> _map;
   pcrecpp::RE _split_at_q;
   pcrecpp::RE _split_at_var;
+  std::string _root_path;
 
 public:
-  request_dispatcher()
+  request_dispatcher(const std::string &root_path)
       : _split_at_q("([^?]*)(.*)"),
-        _split_at_var("([^?{]*)(.*)")
+        _split_at_var("([^?{]*)(.*)"),
+        _root_path(root_path)
   {
   }
 
   template <typename Fn>
   void request_mapping(const std::string &method, const std::string &path_spec, Fn f)
   {
+    auto full_path_spec = _root_path + path_spec;
     std::string non_var, var;
-    if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
+    if (!_split_at_var.FullMatch(full_path_spec, &non_var, &var))
     {
-      do_error("path split failed, invalid path: " << path_spec);
+      do_error("path split failed, invalid path: " << full_path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
-    _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(path_spec)));
+    _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(full_path_spec)));
   }
 
   template <typename Fn>
   void request_mapping_body(const std::string &method, const std::string &path_spec, Fn f)
   {
+    auto full_path_spec = _root_path + path_spec;
     std::string non_var, var;
-    if (!_split_at_var.FullMatch(path_spec, &non_var, &var))
+    if (!_split_at_var.FullMatch(full_path_spec, &non_var, &var))
     {
-      do_error("path split failed, invalid path: " << path_spec);
+      do_error("path split failed, invalid path: " << full_path_spec);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
-    _map[method][non_var].push_back(get_map_responder_body(f, request_mapping_helper(path_spec)));
+    _map[method][non_var].push_back(get_map_responder_body(f, request_mapping_helper(full_path_spec)));
   }
 
   void dispatch(http_server::pipe_t &pipe, const http_request &request, bool is_tls);

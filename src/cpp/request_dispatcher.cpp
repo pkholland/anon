@@ -191,13 +191,13 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
       throw_request_error(400, "path split failed, invalid path: " << request.get_url_field(UF_PATH));
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
-      throw_request_error(HTTP_STATUS_NOT_FOUND, "path: \"" << path << "\", not found");
+      throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found");
     --e;
     for (auto &f : e->second)
     {
       if (f(pipe, request, is_tls, path, query))
         return;
     }
-    throw_request_error(HTTP_STATUS_NOT_FOUND, "path: " << path);
+    throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found");
   });
 }
