@@ -23,6 +23,16 @@
 #include "request_dispatcher.h"
 #include "percent_codec.h"
 
+response_strings response_strings::_singleton;
+std::string response_strings::_empty = "";
+
+response_strings::response_strings()
+{
+#define XX(num, name, string) _map[num] = #string;
+  HTTP_STATUS_MAP(XX)
+#undef XX
+}
+
 // path "specs" look like this:
 //
 //  some_host.com/some_partial_path/{thing_one}/some_more_partial_path/{thing_two}/maybe_even_more?queryName1&queryName2

@@ -41,15 +41,36 @@ struct request_helper
   }
 };
 
+class response_strings
+{
+  std::map<int, std::string> _map;
+  static response_strings _singleton;
+  static std::string _empty;
+
+  public:
+  response_strings();
+  
+  static const std::string& get_description(int code)
+  {
+    auto it = _singleton._map.find(code);
+    return it != _singleton._map.end() ? it->second : _empty;
+  }
+};
+
 struct request_error
 {
   std::string code;
   std::string reason;
 
-  request_error(int code, const std::string &reason)
-      : code(std::to_string(code)),
-        reason(reason)
+  request_error(int c, const std::string &reason)
+      : reason(reason)
   {
+    std::ostringstream code_str;
+    code_str << std::to_string(c);
+    auto& desc = response_strings::get_description(c);
+    if (desc != "")
+      code_str << " " << desc;
+    code = code_str.str();
   }
 };
 
