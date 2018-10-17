@@ -22,6 +22,7 @@
 
 #pragma once
 
+#include <string>
 #include "big_id.h"
 
 bool init_big_id_crypto(); // call this prior to any of the crypto functions, returns true on success, false on failure.
@@ -32,3 +33,8 @@ big_id rand_id();
 
 // Function to return a big_id whose value is the SHA256 checksum value of the given 'buf'.
 big_id sha256_id(const char *buf, size_t len);
+
+inline big_id sha256_id(const std::string &str)
+{
+    return sha256_id(str.c_str(), str.size());
+}

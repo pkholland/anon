@@ -43,14 +43,14 @@ request_helper request_mapping_helper(const std::string &path_spec)
   pcrecpp::RE split_at_q("([^?]*)(.*)");
   if (!split_at_q.FullMatch(path_spec, &path, &query))
   {
-    do_error("request_mapping failed, invalid path: " << path_spec);
+    anon_log_error("request_mapping failed, invalid path: " << path_spec);
     throw std::runtime_error("request_mapping failed, invalid path");
   }
   if (query.size() > 0)
   {
     if (!split_at_q.FullMatch(query.substr(1), &query, &headers))
     {
-      do_error("request_mapping failed, invalid path: " << path);
+      anon_log_error("request_mapping failed, invalid path: " << path);
       throw std::runtime_error("request_mapping failed, invalid path");
     }
     if (headers.size() > 0)

@@ -23,6 +23,7 @@
 #include "io_dispatch.h"
 #include "fiber.h"
 #include "tls_context.h"
+#include "big_id_crypto.h"
 #include "http_server.h"
 
 #ifdef TEFLON_AWS
@@ -178,6 +179,7 @@ extern "C" int main(int argc, char **argv)
   // we are done completing our initialization)
   io_dispatch::start(std::thread::hardware_concurrency(), true);
   fiber::initialize();
+  init_big_id_crypto();
 
 #ifdef TEFLON_AWS
   Aws::SDKOptions aws_options;
@@ -392,6 +394,8 @@ extern "C" int main(int argc, char **argv)
 
     // shut down the fiber control pipe mechanisms
     fiber::terminate();
+
+    term_big_id_crypto();
   }
   catch (const std::exception &exc)
   {
