@@ -36,7 +36,7 @@ class http_client : public HttpClient
 {
   static std::string normalize(const std::string& path)
   {
-    if (path.find_first_of("//") == 0)
+    if (path.find("//") == 0)
       return path.substr(1);
     return path;
   }
@@ -44,24 +44,23 @@ class http_client : public HttpClient
 public:
   http_client(const std::shared_ptr<aws_http_client_factory::epc_map> &maps, const std::shared_ptr<tls_context> &tls)
       : _maps(maps),
-        _tls(tls),
-        _max_outstanding_requests(200),
-        _cur_outstanding_requests(0)
+        _tls(tls)
   {
   }
   ~http_client() {}
 
   std::shared_ptr<endpoint_cluster> get_epc(const Aws::String &url) const
   {
+    URI uri(url);
+    auto key = uri.GetAuthority() + ":" + std::to_string(uri.GetPort());
     fiber_lock l(_maps->_mtx);
     auto &m = _maps->_epc_map;
-    auto epc = m.find(url);
+    auto epc = m.find(key);
     if (epc != m.end())
       return epc->second;
 
-    URI uri(url);
-    auto lookup = [uri]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
-      // anon_log("looking up sockaddr for " << uri.GetAuthority() << ":" << uri.GetPort() << uri.GetPath());
+    auto lookup = [uri, key]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
+      anon_log("looking up sockaddr for " << key);
       auto dnsl = dns_lookup::get_addrinfo(uri.GetAuthority().c_str(), uri.GetPort());
       std::vector<std::pair<int, sockaddr_in6>> addrs;
       if (dnsl.first == 0)
@@ -69,14 +68,14 @@ public:
         for (auto a : dnsl.second)
         {
           a.sin6_port = htons(uri.GetPort());
-          //anon_log(" found: " << a);
+          anon_log(" found: " << a);
           addrs.push_back(std::make_pair(0 /*preference*/, a));
         }
       }
       return std::make_pair(dnsl.first, addrs);
     };
 
-    return m[url] = std::make_shared<endpoint_cluster>(lookup, uri.GetScheme() == Scheme::HTTPS, uri.GetAuthority().c_str(), _tls.get(), 100);
+    return m[key] = std::make_shared<endpoint_cluster>(lookup, uri.GetScheme() == Scheme::HTTPS, uri.GetAuthority().c_str(), _tls.get());
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
@@ -86,12 +85,6 @@ public:
     URI uri = request.GetUri();
     // anon_log("MakeRequest, url: " << uri.GetURIString());
 
-    {
-      fiber_lock l(_mutex);
-      while (_cur_outstanding_requests >= _max_outstanding_requests)
-        _cond.wait(l);
-      ++_cur_outstanding_requests;
-    }
     auto start_time = cur_time();
 
     auto body = request.GetContentBody();
@@ -105,7 +98,7 @@ public:
     auto headers = request.GetHeaders();
     for (auto &h : headers)
       str << h.first << ": " << h.second << "\r\n";
-    if (body)
+    if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
     {
       str << "transfer-encoding: identity\r\n";
       str << "content-length: " << body_buff.size() << "\r\n";
@@ -116,36 +109,22 @@ public:
       str.write(&body_buff[0], body_buff.size());
     auto message = str.str();
 
-    fiber_cond cond;
-    fiber_mutex mtx;
-    auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
-    bool done = false;
-    // anon_log("sending request to: " << uri.GetURIString());
-    get_epc(uri.GetURIString())->with_connected_pipe([&cond, &mtx, &resp, &message, &done](const pipe_t *pipe) {
+    std::shared_ptr<Standard::StandardHttpResponse> resp;
+    get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message](const pipe_t *pipe) {
       // anon_log("sending...\n\n" << message << "\n");
       pipe->write(message.c_str(), message.size());
+      // anon_log("done sending");
       http_client_response re;
       re.parse(*pipe, true /*readBody*/);
+      resp = std::make_shared<Standard::StandardHttpResponse>(request);
       resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
       for (auto &h : re.headers.headers)
         resp->AddHeader(h.first.str(), h.second.str());
       for (auto &data : re.body)
         resp->GetResponseBody().write(&data[0], data.size());
-      fiber_lock l(mtx);
-      done = true;
-      cond.notify_all();
     });
 
-    fiber_lock l(mtx);
-    while (!done)
-      cond.wait(l);
-
-    {
-      fiber_lock l(_mutex);
-      --_cur_outstanding_requests;
-        _cond.notify_all();
-      anon_log("time for transfer: " << cur_time() - start_time << ", outstanding http requests: " << _cur_outstanding_requests);
-    }
+    anon_log("time for transfer: " << cur_time() - start_time);
 
     return std::static_pointer_cast<HttpResponse>(resp);
   }
@@ -159,10 +138,6 @@ public:
 
   std::shared_ptr<aws_http_client_factory::epc_map> _maps;
   std::shared_ptr<tls_context> _tls;
-  mutable int _cur_outstanding_requests;
-  mutable int _max_outstanding_requests;
-  mutable fiber_mutex _mutex;
-  mutable fiber_cond _cond;
 };
 
 } // namespace

@@ -244,7 +244,7 @@ void throw_ssl_error_(BIO *fpb)
 {
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
-    throw fiber_io_error("fiber io error during tls");
+    throw fiber_io_error("fiber io error during tls 1");
   else
     throw_ssl_error();
 }
@@ -253,7 +253,7 @@ static void throw_ssl_error_(BIO *fpb, unsigned long err)
 {
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
-    throw fiber_io_error("fiber io error during tls");
+    throw fiber_io_error("fiber io error during tls 2");
   else
     throw_ssl_error(err);
 }
@@ -262,7 +262,7 @@ void throw_ssl_io_error_(BIO *fpb, unsigned long err)
 {
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
-    throw fiber_io_error("fiber io error during tls");
+    throw fiber_io_error("fiber io error during tls 3");
   else
     throw_ssl_io_error(err);
 }

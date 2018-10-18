@@ -35,23 +35,23 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
     do_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
 
   std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
+  // anon_log("connecting new socket, fd: " << fd);
   auto cr = ::connect(fd, addr, addrlen);
 
   if (cr == 0)
   {
-
     anon_log("a little weird, but ok.  non-blocking connect succeeded immediately");
   }
   else if (errno != EINPROGRESS)
   {
-
     do_error("connect(fd, addr, addrlen)");
   }
   else
   {
-
     // fiber-sleep until connect completes
     io_params::sleep_cur_until_write_possible(pipe.get());
+
+    // anon_log("new socket connected, fd: " << fd);
 
     // did connect succeed or fail?
     int result;

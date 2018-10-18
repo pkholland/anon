@@ -294,6 +294,7 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
           secs = atoi(p);
         else
           secs = 30;
+        anon_log("got 503 with retry-after " << secs);
       }
       else
         secs = 30;
