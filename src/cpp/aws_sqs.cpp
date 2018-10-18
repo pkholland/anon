@@ -116,7 +116,7 @@ void aws_sqs_listener::start_listen()
       return;
     if (!out.IsSuccess())
     {
-      do_error("SQS ReceiveMessage: " << out.GetError().GetMessage());
+      anon_log_error("SQS ReceiveMessage failed:\n" << out.GetError());
     }
     else
     {

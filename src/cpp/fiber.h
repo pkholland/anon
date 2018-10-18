@@ -160,6 +160,7 @@ public:
     {
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
+      anon_log("num running fibers: " << num_running_fibers_);
     }
     getcontext(&ucontext_);
 #if defined(ANON_RUNTIME_CHECKS)
