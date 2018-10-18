@@ -34,7 +34,7 @@ namespace
 
 class http_client : public HttpClient
 {
-  static std::string normalize(const std::string& path)
+  static std::string normalize(const std::string &path)
   {
     if (path.find("//") == 0)
       return path.substr(1);
@@ -85,7 +85,7 @@ public:
     URI uri = request.GetUri();
     // anon_log("MakeRequest, url: " << uri.GetURIString());
 
-    auto start_time = cur_time();
+    // auto start_time = cur_time();
 
     auto body = request.GetContentBody();
     std::vector<char> body_buff;
@@ -113,7 +113,6 @@ public:
     get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message](const pipe_t *pipe) {
       // anon_log("sending...\n\n" << message << "\n");
       pipe->write(message.c_str(), message.size());
-      // anon_log("done sending");
       http_client_response re;
       re.parse(*pipe, true /*readBody*/);
       resp = std::make_shared<Standard::StandardHttpResponse>(request);
@@ -124,7 +123,7 @@ public:
         resp->GetResponseBody().write(&data[0], data.size());
     });
 
-    anon_log("time for transfer: " << cur_time() - start_time);
+    // anon_log("time for transfer: " << cur_time() - start_time);
 
     return std::static_pointer_cast<HttpResponse>(resp);
   }
