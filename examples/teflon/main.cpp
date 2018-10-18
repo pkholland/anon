@@ -32,6 +32,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/config/AWSProfileConfigLoader.h>
+#include <aws/core/utils/logging/LogSystemInterface.h>
 #include "aws_http.h"
 #endif
 
@@ -92,6 +93,22 @@ protected:
   }
 };
 std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
+
+class logger : public Aws::Utils::Logging::LogSystemInterface
+{
+  public:
+    ~logger() {}
+    Aws::Utils::Logging::LogLevel GetLogLevel(void) const override {return Aws::Utils::Logging::LogLevel::Info;}
+    void Log(Aws::Utils::Logging::LogLevel logLevel, const char* tag, const char* formatStr, ...) override
+    {
+      anon_log("Aws Log");
+    }
+
+    void LogStream(Aws::Utils::Logging::LogLevel logLevel, const char* tag, const Aws::OStringStream &messageStream) override
+    {
+      anon_log(tag << " " << messageStream.rdbuf()->str());
+    }
+};
 } // namespace
 #endif
 
@@ -184,6 +201,8 @@ extern "C" int main(int argc, char **argv)
 #ifdef TEFLON_AWS
   Aws::SDKOptions aws_options;
   aws_options.httpOptions.httpClientFactory_create_fn = [] { return std::static_pointer_cast<Aws::Http::HttpClientFactory>(std::make_shared<aws_http_client_factory>()); };
+  aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
+  aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
   Aws::InitAPI(aws_options);
   Aws::Client::ClientConfiguration client_cfg;
 
