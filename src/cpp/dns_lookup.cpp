@@ -117,7 +117,6 @@ void notify_complete::resolve_complete(union sigval sv)
   int ret = gai_error(&ths->cb_);
   if (ret == EAI_INPROGRESS)
   {
-
     anon_log("strange call to resolve_complete with gai_error returning EAI_INPROGRESS");
     ths.release(); // don't delete in this case -- whatever this case is...
     return;

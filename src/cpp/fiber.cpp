@@ -403,8 +403,14 @@ void io_params::wake_all(fiber *first)
 void io_params::sweep_timed_out_pipes()
 {
   io_dispatch::while_paused([] {
+#if defined(ANON_RUNTIME_CHECKS)
+    fiber::while_paused_ = true;
+#endif
     for (auto it = fiber_pipe::sweepers_.begin(); it != fiber_pipe::sweepers_.end(); it++)
       it->second->sweep();
+#if defined(ANON_RUNTIME_CHECKS)
+    fiber::while_paused_ = false;
+#endif
 
     // since no io threads are running now, we know that there
     // is no way for io to be delivered to any of the waiting pipes,

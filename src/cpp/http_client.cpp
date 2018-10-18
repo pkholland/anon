@@ -275,9 +275,9 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
     if (parser.status_code == 408)
       throw fiber_io_error("408 server response");
     if (parser.status_code == 500)
-      throw fiber_io_error("500 server response", 30 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("500 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
     if (parser.status_code == 502)
-      throw fiber_io_error("502 server response", 30 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("502 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
     if (parser.status_code == 503)
     {
       // lame TODO note: 503's are allowed to have a Retry-After header containing
@@ -301,7 +301,7 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
       throw fiber_io_error("503 server response", secs, true /*close_socket_hint*/);
     }
     if (parser.status_code == 504)
-      throw fiber_io_error("504 server response", 30 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("504 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
 
     // response is good enough to return
     status_code = parser.status_code;

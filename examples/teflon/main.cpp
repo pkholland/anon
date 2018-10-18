@@ -96,18 +96,18 @@ std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_exe
 
 class logger : public Aws::Utils::Logging::LogSystemInterface
 {
-  public:
-    ~logger() {}
-    Aws::Utils::Logging::LogLevel GetLogLevel(void) const override {return Aws::Utils::Logging::LogLevel::Debug;}
-    void Log(Aws::Utils::Logging::LogLevel logLevel, const char* tag, const char* formatStr, ...) override
-    {
-      anon_log("Aws Log");
-    }
+public:
+  ~logger() {}
+  Aws::Utils::Logging::LogLevel GetLogLevel(void) const override { return Aws::Utils::Logging::LogLevel::Debug; }
+  void Log(Aws::Utils::Logging::LogLevel logLevel, const char *tag, const char *formatStr, ...) override
+  {
+    anon_log("Aws Log");
+  }
 
-    void LogStream(Aws::Utils::Logging::LogLevel logLevel, const char* tag, const Aws::OStringStream &messageStream) override
-    {
-      anon_log(tag << " " << messageStream.rdbuf()->str());
-    }
+  void LogStream(Aws::Utils::Logging::LogLevel logLevel, const char *tag, const Aws::OStringStream &messageStream) override
+  {
+    anon_log(tag << " " << messageStream.rdbuf()->str());
+  }
 };
 } // namespace
 #endif
@@ -395,6 +395,10 @@ extern "C" int main(int argc, char **argv)
           io_dispatch::stop();
         }));
       });
+    }
+    else
+    {
+      create_srvs_proc();
     }
 
     // this call returns after the above call to io_dispatch::stop() has been
