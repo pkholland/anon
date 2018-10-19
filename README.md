@@ -14,7 +14,7 @@ http://pkholland.github.io/anon
 <b>skip</b>  git clone https://github.com/facebook/proxygen.git<br>
 <b>skip</b>  cd proxygen/proxygen<br>
 <b>skip</b>  ./deps.sh<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing <code>deps.sh</code> eventually hangs in some of the fb testing code, kill it<br>
 <b>skip</b>  ./reinstall.sh
 10) cd &lt;working dir&gt;/anon
 11) make
