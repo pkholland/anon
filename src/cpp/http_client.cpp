@@ -293,11 +293,11 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
         if (h.len() > 0 && *p >= '0' && *p <= '9')
           secs = atoi(p);
         else
-          secs = 30;
+          secs = 2;
         anon_log("got 503 with retry-after " << secs);
       }
       else
-        secs = 30;
+        secs = 2;
       throw fiber_io_error("503 server response", secs, true /*close_socket_hint*/);
     }
     if (parser.status_code == 504)
