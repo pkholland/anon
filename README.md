@@ -10,11 +10,11 @@ http://pkholland.github.io/anon
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;sudo apt-get install memcached
 3)  create a working directory and cd into it
 4)  git clone https://github.com/pkholland/anon.git
-5)  git clone https://github.com/joyent/http-parser.git
-<b>skip</b> 6)  git clone https://github.com/facebook/proxygen.git
-<b>skip</b> 7)  cd proxygen/proxygen
-<b>skip</b> 8)  ./deps.sh
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it
+5)  git clone https://github.com/joyent/http-parser.git<br>
+<b>skip</b>  git clone https://github.com/facebook/proxygen.git<br>
+<b>skip</b>  cd proxygen/proxygen<br>
+<b>skip</b>  ./deps.sh<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;note, as of this writing step 8) eventually hangs in some of the fb testing code, kill it<br>
 <b>skip</b> 9)  ./reinstall.sh
 10) cd &lt;working dir&gt;/anon
 11) make
