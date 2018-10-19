@@ -86,10 +86,11 @@ public:
     // run as a task (right now) instead of directly starting
     // the fiber so the destructor (actually, do_shutdown) can
     // reliably wait for proper exit.
-    update_task_ = io_dispatch::schedule_task([this] {
-      fiber::run_in_fiber([this] { update_endpoints(); });
-    },
-                                              cur_time());
+    update_task_ = io_dispatch::schedule_task(
+        [this] {
+          fiber::run_in_fiber([this] { update_endpoints(); });
+        },
+        cur_time());
 
     fiber_pipe::register_idle_socket_sweep(this, [this] { idle_socket_sweep(); });
   }
@@ -162,6 +163,9 @@ private:
   {
     fiber_pipe::remove_idle_socket_sweep(this);
 
+    // so we don't kick off a new call to update_endpoints
+    io_dispatch::remove_task(update_task_);
+
     fiber_lock lock(mtx_);
 
     // so we don't attempt any new background work
@@ -229,7 +233,7 @@ private:
     {
       size_t addrlen = (addr.sin6_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
       memcpy(&addr_, &addr, addrlen);
-      next_avail_time_.tv_sec = std::numeric_limits<time_t>::min();
+      next_avail_time_.tv_sec = std::numeric_limits<decltype(next_avail_time_.tv_sec)>::min();
       next_avail_time_.tv_nsec = 0;
     }
 
@@ -272,7 +276,7 @@ private:
 
     // a "detatched" endpoint is one which was at one point
     // being reported as a valid ip_addr by the lookup mechanism,
-    // but then at some later point WAS no longer reported as
+    // but then at some later point is no longer reported as
     // a valid ip_addr.  When this transition occurs while
     // one or more fibers are still using this endpoint, it
     // becomes "detached".  We no longer attempt new requests

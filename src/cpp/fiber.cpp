@@ -296,7 +296,7 @@ void fiber_pipe::write(const void *buf, size_t count) const
     if (remote_hangup_)
     {
 #if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("remote hangup detected on write");
+      anon_log("remote hangup detected on write, fd: " << fd_);
 #endif
       throw fiber_io_error("remote hangup detected on write");
     }

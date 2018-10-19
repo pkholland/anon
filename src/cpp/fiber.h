@@ -627,6 +627,7 @@ inline void fiber_mutex::lock()
 {
   anon::assert_no_locks();
 
+  int num_spins = 1;
   while (true)
   {
     switch (state_.fetch_add(1))
@@ -646,6 +647,11 @@ inline void fiber_mutex::lock()
       // someone has it locked, and someone else is
       // manipulating the wake list. spin and try again
       state_.fetch_add(-1);
+      num_spins *= 2;
+      if (num_spins > 100000)
+        num_spins = 100000;
+      for (auto i = 0; i < num_spins; i++)
+        asm("");
       break;
     }
   }

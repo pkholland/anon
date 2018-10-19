@@ -37,11 +37,11 @@ void endpoint_cluster::update_endpoints()
   auto endpoints = lookup_();
 
   fiber_lock lock(mtx_);
+
   int err = endpoints.first;
 
   if (err != 0 || endpoints.second.empty())
   {
-
     // if this lookup failed (for example there was a problem reaching dns),
     // but we previously were able to look things up and so have a non-empty
     // endpoint_ list, then we ignore this error and continue to use the
@@ -125,12 +125,13 @@ void endpoint_cluster::update_endpoints()
 
   if (!shutting_down_ && lookup_frequency_seconds_ > 0)
   {
-    update_task_ = io_dispatch::schedule_task([this] {
-      fiber::run_in_fiber([this] {
-        update_endpoints();
-      });
-    },
-                                              cur_time() + lookup_frequency_seconds_);
+    update_task_ = io_dispatch::schedule_task(
+        [this] {
+          fiber::run_in_fiber([this] {
+            update_endpoints();
+          });
+        },
+        cur_time() + lookup_frequency_seconds_);
   }
 
   update_running_ = false;
@@ -183,6 +184,9 @@ void endpoint_cluster::backoff(endpoint *ep, const struct timespec &start_time, 
     anon_log("backing off of: " << ep->addr_ << ", for the next " << to_seconds(btime) << " seconds");
 #endif
 
+    // TODO: fix this...
+    cur_avail_requests_ = 0;
+
     ep->next_avail_time_ = now + btime;
   }
 
@@ -195,20 +199,33 @@ void endpoint_cluster::backoff(endpoint *ep, const struct timespec &start_time, 
   // in a fiber.  So here the functor creates a fiber and executes
   // notify_all in there.  It is the fiber exiting condition that
   // actually schedules the notified fibers to run.
-  auto wakeup_task = io_dispatch::schedule_task([this] {
-    fiber::run_in_fiber([this] {
-      fiber_lock lock(mtx_);
-      connections_possible_cond_.notify_all();
-      auto ct = cur_time();
-      auto it = io_retry_tasks_.begin();
-      while (it != io_retry_tasks_.end() && it->first <= ct)
-      {
-        io_dispatch::remove_task(it->second);
-        io_retry_tasks_.erase(it++);
-      }
-    });
-  },
-                                                ep->next_avail_time_);
+  auto wakeup_task = io_dispatch::schedule_task(
+      [this] {
+        fiber::run_in_fiber([this] {
+          fiber_lock lock(mtx_);
+
+          // TODO: fix this
+          int cur_outstanding_requests = 0;
+          for (auto ep = endpoints_.begin(); ep != endpoints_.end(); ep++)
+          {
+            if (!ep->second->is_detached_)
+              cur_outstanding_requests += ep->second->outstanding_requests_;
+          }
+
+          cur_avail_requests_ = total_possible_requests_ - cur_outstanding_requests;
+          if (cur_avail_requests_ > 0)
+            connections_possible_cond_.notify_all();
+
+          auto ct = cur_time();
+          auto it = io_retry_tasks_.begin();
+          while (it != io_retry_tasks_.end() && it->first <= ct)
+          {
+            io_dispatch::remove_task(it->second);
+            io_retry_tasks_.erase(it++);
+          }
+        });
+      },
+      ep->next_avail_time_);
   io_retry_tasks_.insert(std::make_pair(ep->next_avail_time_, wakeup_task));
 
   // this exception gets caught in with_connected_pipe and causes that
@@ -236,7 +253,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     // when we exit the try_again loop
     // we will have set these 2 to the
     // socket/pipe thing we are trying
-    // to use when calling 'caller'
+    // to use when calling 'f'
     endpoint *ep = 0;
     endpoint::sock *epsock = 0;
     struct timespec ct;
