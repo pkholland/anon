@@ -22,270 +22,220 @@
 
 #pragma once
 
-#include "http_server.h"
+#include "http_error.h"
 #include "nlohmann/json.hpp"
 #include <pcrecpp.h>
+#include "request_dispatcher_priv.h"
 
-struct request_helper
-{
-  pcrecpp::RE path_re;
-  int num_path_substitutions;
-  std::string non_var;
-  std::vector<std::string> query_string_items;
-  std::vector<std::string> header_items;
-
-  request_helper(const pcrecpp::RE &path_re, int num_path_substitutions)
-      : path_re(path_re),
-        num_path_substitutions(num_path_substitutions)
-  {
-  }
-};
-
-class response_strings
-{
-  std::map<int, std::string> _map;
-  static response_strings _singleton;
-  static std::string _empty;
-
-public:
-  response_strings();
-
-  static const std::string &get_description(int code)
-  {
-    auto it = _singleton._map.find(code);
-    return it != _singleton._map.end() ? it->second : _empty;
-  }
-};
-
-struct request_error
-{
-  std::string code;
-  std::string reason;
-
-  request_error(int c, const std::string &reason)
-      : reason(reason)
-  {
-    std::ostringstream code_str;
-    code_str << std::to_string(c);
-    auto &desc = response_strings::get_description(c);
-    if (desc != "")
-      code_str << " " << desc;
-    code = code_str.str();
-  }
-};
-
-template <typename T>
-void throw_request_error_(int code, T err)
-{
-  std::ostringstream format;
-  err(format);
-  format << "\n";
-  throw request_error(code, format.str());
-}
-
-#define throw_request_error(_code, _body) throw_request_error_(_code, [&](std::ostream &formatter) { formatter << _body; })
-
-template <typename Fn>
-void request_wrap(http_server::pipe_t &pipe, Fn f)
-{
-  try
-  {
-    f();
-  }
-  catch (const request_error &e)
-  {
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code(e.code);
-    response << e.reason << "\n";
-    pipe.respond(response);
-  }
-  catch (const std::exception &e)
-  {
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code("500");
-    response << e.what() << "\n";
-    pipe.respond(response);
-  }
-  catch (...)
-  {
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code("500");
-    response << "caugh unknown exception\n";
-    pipe.respond(response);
-  }
-}
-
-request_helper request_mapping_helper(const std::string &path_spec);
-
-template <typename Fn, typename... Args>
-void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, Args &&... args)
-{
-  auto &h = request.headers;
-  if (!h.contains_header("Content-Length"))
-    throw request_error(HTTP_STATUS_LENGTH_REQUIRED, "required Content-Length header is missing");
-  auto cl = h.get_header("Content-Length").str();
-  auto clen = std::stoi(cl);
-  if (clen <= 2)
-    throw request_error(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2");
-  if (clen > 16384)
-    throw request_error(HTTP_STATUS_PAYLOAD_TOO_LARGE, "Content-Length cannot exceed clen");
-  std::vector<char> buff(clen);
-  pipe.read(&buff[0], clen);
-  nlohmann::json body = nlohmann::json::parse(buff.begin(), buff.end());
-  f(pipe, request, std::forward<Args>(args)..., body);
-}
-
-#define n_pipe *(http_server::pipe_t *)0
-#define n_request *(http_request *)0
-
-std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query);
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request, params.second[0]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request, params.second[0], params.second[1]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request, params.second[0], params.second[1], params.second[2]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request, params.second[0], params.second[1], params.second[2], params.second[3]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    f(pipe, request, params.second[0], params.second[1], params.second[2], params.second[3], params.second[4]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f, params.second[0]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f, params.second[0], params.second[1]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f, params.second[0], params.second[1], params.second[2]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f, params.second[0], params.second[1], params.second[2], params.second[3]);
-    return true;
-  };
-}
-
-template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), std::string(), nlohmann::json())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>())
-{
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query) -> bool {
-    auto params = extract_params(h, request, path, query);
-    if (!params.first)
-      return false;
-    body_as_json(pipe, request, f, params.second[0], params.second[1], params.second[2], params.second[3], params.second[4]);
-    return true;
-  };
-}
-
+/*
+ * class to help in mapping url paths to handling function
+ * 
+ * There are two main types of handling functions supported here
+ * - those that want to read the body of an http message as a json
+ * objct, and those that do not (it is always possible for you to
+ * read the body yourself in your function and do whatever you want,
+ * but this class has helper logic for the case where you want to read
+ * it as a json object).
+ * 
+ * Here is a trivial example of usage:
+ * 
+ *    // all paths will be under "/myapi"
+ *    request_dispatcher rd("/myapi");
+ *    
+ *    rd.request_mapping(
+ *        "GET",
+ *        "hello",
+ *        [](http_server::pipe_t &pipe, const http_request &request){
+ *          http_response response;
+ *          response.add_header("Content-Type", "text/plain");
+ *          response << "myapi says hello\n";
+ *          pipe.respond(response);
+ *        });
+ * 
+ * This example calls the function above whenever a client issues
+ * an http GET to /myapi/hello.
+ * 
+ * request_dispatcher also supports url path variables, query
+ * string, and http header value parsing - all by specifying
+ * more sophisticated "path_spec" values (the parameter that is
+ * simply "hello" in the example above).  Consider an api design
+ * that puts a client name in the path url such that:
+ * 
+ *    /myapi/jeff/hello
+ *    /myapi/sarah/hello
+ *    /myapi/bob/hello
+ * 
+ * should all map to a "hello" function with the client name
+ * passed to that function as an argument.  You do that like this:
+ * 
+ *    rd.request_mapping(
+ *        "GET",
+ *        "{client_name}/hello",
+ *        [](http_server::pipe_t &pipe, const http_request &request, const std::string& client_name){
+ *          http_response response;
+ *          response.add_header("Content-Type", "text/plain");
+ *          response << "hi " << client_name << ", how's it going?\n";
+ *          pipe.respond(response);
+ *        });
+ * 
+ * where the basic rules are that path variables are specified
+ * by "{...}" sequences in the path_spec, and require a matching
+ * std::string argument to the function you supply.  The example
+ * above seems to suggest that there is a relationship between the
+ * name you supply inside the {...} and the name of the argument
+ * to your function - but this isn't true.  It's probably a good
+ * idea for you to do this, but the name inside the {...} and
+ * the name of your function argument are ignored.  The only thing
+ * that matters is the _order_ of these.  If you supply a path_spec
+ * that looks like:
+ * 
+ *    "foo/{var1}/bar/{var2}/bonk/{var3}"
+ * 
+ * that will map to a function whose argument types are:
+ * 
+ *    (pipe, request, string, string, string)
+ * 
+ * and the value of the string arguments will be the values
+ * of var1, var2, and var3 - in that order.  You are free to
+ * name your functio arguments anything you want, as you can
+ * the contents inside the {...}.  The above path_spec is
+ * equivelent to:
+ * 
+ *    "foo/{}/bar/{}/bonk/{}"
+ * 
+ * One rule about the way you specify path variables is that
+ * they have to be the entire contents between the "/"'s.
+ * That is, you can't give a path spec that looks like:
+ * 
+ *    "foo/hello-{name}/bar"
+ * 
+ * and then provide a function whose arguments are:
+ * 
+ *    (pipe, request, string)
+ * 
+ * and use a GET request to "/myapi/foo/hello-bob/bar"
+ * and try to capture just the "bob" of the url as your
+ * string argument.  If you need to support urls like
+ * this one, you need to specify the path spec as:
+ * 
+ *    "foo/{name}/bar"
+ * 
+ * and then remove the "hello-" part of the string yourself
+ * when your function is called - it will be called with the
+ * string "hello-bob".
+ * 
+ * Query strings
+ * 
+ * To get a request_dispatcher to parse the query string values
+ * "accountName" and "password" for you, you use a path_spec that
+ * looks like:
+ * 
+ *    "foo/{var1}/bar?accountName&password"
+ * 
+ * The "?" character in the path_spec separates the path part
+ * of the spec from the query string part.  The query string
+ * values will be passed to your function as additional string
+ * arguments.  Like the path variables, these values will be in
+ * the order you have specified them in the path_spec, with all
+ * of the path variable arguments first, followed by all of the
+ * query spec arguments.  The example above would be called as:
+ * 
+ *  (pipe, request, string var1, string, accountName, string password)
+ * 
+ * Query string values can either be required or optional.  By
+ * default they are optional meaning that a request that did
+ * not specify one of them would result in your function being
+ * called with the corresponding argument set to "".  To make one
+ * or more of them be required you put a "+" character at the
+ * start.  So if accountName was required, but password was
+ * optional you would specify it as:
+ * 
+ *    "foo/{var1}/bar?+accountName&password"
+ * 
+ * if a required query string value is not supplied in the url
+ * then request_dispatcher will return a 400 response to the
+ * caller and will not call your function.
+ * 
+ * Http Headers
+ * 
+ * Like query string values, request_dispatcher can parse and
+ * pass header values to your function if you specify them in
+ * your path_spec.  Header values follow the same syntax as
+ * query string values and are specified after the second
+ * "&" in the path spec.  They follow the same ordering rules
+ * regarding which parameter is used when calling your function.
+ * Here are some example path_specs and their treatment:
+ * 
+ *    "foo??+Authorization"
+ *    calls
+ *    (pipe, request, string auth)
+ *    - returns 400 without calling the function if Authorization is missing
+ * 
+ *    "foo/{account}?password?+Authorization"
+ *    calls
+ *    (pipe, request, string acc, string pass, string auth)
+ *    - returns 400 if Authorization is missing, calls with "" if password is missing
+ * 
+ * The non-variable portion of a path and qeury string values
+ * are treated case sensitive.  Header values are case insensitive
+ * 
+ * That is, an http message that looks like:
+ * 
+ *    GET foo/myaccount?Password=hello HTTP/1.1
+ *    authorization: letMeIn
+ * 
+ * will call the above function with the "pass" argument set
+ * to "" because Password is not the same as password, and the
+ * path_spec did not specify Password as required.
+ * 
+ * 
+ *    GET foo/myaccount?password=hello HTTP/1.1
+ *    authorization: letMeIn
+ * 
+ * will call the function with "pass" set to "hello", and "auth"
+ * set to "letMeIn" because Authorization is treated as case
+ * insensitive.
+ * 
+ * Support for reading message bodies as json
+ * 
+ * If your api design uses the body of the http message as
+ * json, specifying other aspects of the api, you can use the
+ * request_dispatcher::request_mapping_body method with all the
+ * same rules as discussed above, except that you specify your
+ * function with an additional argument at the end of type
+ * const nlohmann::json&.  This support requries that the entire
+ * body of the message be exactly one json object and that the
+ * Content-Length of the header be set to this length.  Somewhat
+ * like error condition handling above, if the body is not parsable
+ * as a json object request_dispatcher will return 400 responses
+ * to the caller without calling your function.
+ * 
+ * Some final notes.
+ * 
+ * request_dispatcher is intended to to be used in a teflon-like
+ * design where the request_dispatcher object is created and
+ * initialized during teflon's server_init call.  Dispatching
+ * to your functions happens via you calling
+ * request_dispatcher::dispatch, which is designed to be called
+ * during your implementation of teflon's server_respond.  So
+ * you end up with teflon-based code that looks roughly like:
+ * 
+ *    request_dispatcher  rd("/myapi");
+ * 
+ *    void server_init(...)
+ *    {
+ *      rd.request_mapping(1...);
+ *      rd.request_mapping(2...);
+ *      rd.request_mapping(3...);
+ *      rd.request_mapping_body(4...);
+ *      ...
+ *    }
+ * 
+ *    void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
+ *    {
+ *      rd.dispatch(pipe, request, is_tls);
+ *    }
+ */
 class request_dispatcher
 {
   std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>>>> _map;

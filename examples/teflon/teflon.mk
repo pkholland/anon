@@ -51,7 +51,9 @@ endif
 
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
-SOURCES+=$(ANON_ROOT)/src/cpp/request_dispatcher.cpp
+SOURCES+=\
+$(ANON_ROOT)/src/cpp/request_dispatcher.cpp\
+$(ANON_ROOT)/src/cpp/http_error.cpp
 cflags+=-DTEFLON_REQUEST_DISPATCHER
 endif
 
