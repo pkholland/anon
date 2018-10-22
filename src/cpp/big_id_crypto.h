@@ -23,6 +23,7 @@
 #pragma once
 
 #include <string>
+#include <openssl/sha.h>
 #include "big_id.h"
 
 bool init_big_id_crypto(); // call this prior to any of the crypto functions, returns true on success, false on failure.
@@ -36,5 +37,35 @@ big_id sha256_id(const char *buf, size_t len);
 
 inline big_id sha256_id(const std::string &str)
 {
-    return sha256_id(str.c_str(), str.size());
+  return sha256_id(str.c_str(), str.size());
 }
+
+class sha256_builder
+{
+  SHA256_CTX sha256;
+
+public:
+  sha256_builder()
+  {
+    SHA256_Init(&sha256);
+  }
+
+  sha256_builder &operator<<(const std::string &str)
+  {
+    SHA256_Update(&sha256, str.c_str(), str.size() + 1);
+    return *this;
+  }
+
+  sha256_builder &operator<<(const big_id &id)
+  {
+    SHA256_Update(&sha256, &id.m_buf[0], sizeof(id.m_buf));
+    return *this;
+  }
+
+  big_id id()
+  {
+    uint8_t hash[big_id::id_size];
+    SHA256_Final(hash, &sha256);
+    return big_id(hash);
+  }
+};
