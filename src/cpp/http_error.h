@@ -59,7 +59,6 @@ struct request_error
   }
 };
 
-
 template <typename T>
 void throw_request_error_(int code, T err)
 {
@@ -80,7 +79,7 @@ void throw_request_error_(int code, T err)
  * code, plus whatever you add with the second, streaming
  * description written into the body of the response.
  */
-#define throw_request_error(_code, _body) throw_request_error_(_code, [&](std::ostream &formatter) { formatter << _body; })
+#define throw_request_error(_code, _body) throw_request_error_((int)_code, [&](std::ostream &formatter) { formatter << _body; })
 
 template <typename Fn>
 void request_wrap(http_server::pipe_t &pipe, Fn f)

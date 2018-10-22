@@ -28,13 +28,13 @@ $(ANON_PARENT)/http-parser/http_parser.c
 
 ifneq ($(TEFLON_AWS),)
 SOURCES+=$(ANON_ROOT)/src/cpp/aws_http.cpp
+INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DTEFLON_AWS
 LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
 endif
 
 ifneq ($(filter SQS,$(TEFLON_AWS)),)
 SOURCES+=$(ANON_ROOT)/src/cpp/aws_sqs.cpp
-INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DTEFLON_AWS_SQS
 LIBS:=-laws-cpp-sdk-sqs $(LIBS)
 endif
@@ -45,6 +45,7 @@ cflags+=-DTEFLON_AWS_S3
 endif
 
 ifneq ($(filter DDB,$(TEFLON_AWS)),)
+SOURCES+=$(ANON_ROOT)/src/cpp/aws_ddb.cpp
 LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
 cflags+=-DTEFLON_AWS_DDB
 endif
