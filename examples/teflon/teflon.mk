@@ -45,7 +45,6 @@ cflags+=-DTEFLON_AWS_S3
 endif
 
 ifneq ($(filter DDB,$(TEFLON_AWS)),)
-SOURCES+=$(ANON_ROOT)/src/cpp/aws_ddb.cpp
 LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
 cflags+=-DTEFLON_AWS_DDB
 endif
