@@ -34,6 +34,10 @@ class dynamoDB
   Aws::DynamoDB::DynamoDBClient _client;
   Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> *_null_map;
 
+  class ddb_condition_failed
+  {
+  };
+
 public:
   dynamoDB(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
            const Aws::Client::ClientConfiguration &client_config)
@@ -73,23 +77,33 @@ public:
                 const std::string &primary_key_name, const std::string &primary_key_value,
                 const std::string &proj = "")
   {
-    Aws::DynamoDB::Model::GetItemRequest req;
-
-    Aws::DynamoDB::Model::AttributeValue primary_key;
-    primary_key.SetS(primary_key_value);
-    req.WithTableName(table_name).AddKey(primary_key_name, primary_key);
-
-    if (!proj.empty())
-      req.SetProjectionExpression(proj);
-
-    auto out = _client.GetItem(req);
-    if (!out.IsSuccess())
+    while (true)
     {
-      auto &e = out.GetError();
-      throw_request_error(e.GetResponseCode(), e.GetMessage());
-    }
+      try {
+        Aws::DynamoDB::Model::GetItemRequest req;
 
-    f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue>&>(out.GetResult().GetItem())));
+        Aws::DynamoDB::Model::AttributeValue primary_key;
+        primary_key.SetS(primary_key_value);
+        req.WithTableName(table_name).AddKey(primary_key_name, primary_key);
+
+        if (!proj.empty())
+          req.SetProjectionExpression(proj);
+
+        auto out = _client.GetItem(req);
+        if (!out.IsSuccess())
+        {
+          auto &e = out.GetError();
+          throw_request_error(e.GetResponseCode(), e.GetMessage());
+        }
+
+        f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue>&>(out.GetResult().GetItem())));
+        break;
+      }
+      catch (const ddb_condition_failed&)
+      {
+        anon_log("ddb conditional write failed, retrying");
+      }
+    }
   }
 
   template <typename Fn>
@@ -101,6 +115,8 @@ public:
     if (!out.IsSuccess())
     {
       auto &e = out.GetError();
+      if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
+        throw ddb_condition_failed();
       throw_request_error(e.GetResponseCode(), e.GetMessage());
     }
   }
