@@ -25,24 +25,27 @@
 #include <aws/core/Aws.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
+#include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/core/utils/Outcome.h>
 #include "http_error.h"
 
 class dynamoDB
 {
   Aws::DynamoDB::DynamoDBClient _client;
+  Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> *_null_map;
 
 public:
   dynamoDB(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
            const Aws::Client::ClientConfiguration &client_config)
-      : _client(provider, client_config)
+      : _client(provider, client_config),
+        _null_map(0)
   {
   }
 
   template <typename Fn>
   auto get_item(Fn deserializer, const std::string &table_name,
                 const std::string &primary_key_name, const std::string &primary_key_value,
-                const std::string &proj = "") -> decltype(deserializer(*(Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> *)0))
+                const std::string &proj = "") -> decltype(deserializer(*_null_map))
   {
     Aws::DynamoDB::Model::GetItemRequest req;
 
@@ -62,5 +65,43 @@ public:
 
     auto items = out.GetResult().GetItem();
     return deserializer(items);
+  }
+
+  template <typename Fn>
+  void with_item(const std::function<void(const decltype((*((Fn*)0))(*_null_map))& )>& f,
+                Fn deserializer, const std::string &table_name,
+                const std::string &primary_key_name, const std::string &primary_key_value,
+                const std::string &proj = "")
+  {
+    Aws::DynamoDB::Model::GetItemRequest req;
+
+    Aws::DynamoDB::Model::AttributeValue primary_key;
+    primary_key.SetS(primary_key_value);
+    req.WithTableName(table_name).AddKey(primary_key_name, primary_key);
+
+    if (!proj.empty())
+      req.SetProjectionExpression(proj);
+
+    auto out = _client.GetItem(req);
+    if (!out.IsSuccess())
+    {
+      auto &e = out.GetError();
+      throw_request_error(e.GetResponseCode(), e.GetMessage());
+    }
+
+    f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue>&>(out.GetResult().GetItem())));
+  }
+
+  template <typename Fn>
+  void store_item(Fn serializer)
+  {
+    Aws::DynamoDB::Model::PutItemRequest req;
+    serializer(req);
+    auto out = _client.PutItem(req);
+    if (!out.IsSuccess())
+    {
+      auto &e = out.GetError();
+      throw_request_error(e.GetResponseCode(), e.GetMessage());
+    }
   }
 };
