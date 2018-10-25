@@ -60,7 +60,9 @@ public:
       return epc->second;
 
     auto lookup = [uri, key]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
+#if ANON_LOG_NET_TRAFFIC > 1
       anon_log("looking up sockaddr for " << key);
+#endif
       auto dnsl = dns_lookup::get_addrinfo(uri.GetAuthority().c_str(), uri.GetPort());
       std::vector<std::pair<int, sockaddr_in6>> addrs;
       if (dnsl.first == 0)
@@ -68,7 +70,9 @@ public:
         for (auto a : dnsl.second)
         {
           a.sin6_port = htons(uri.GetPort());
+#if ANON_LOG_NET_TRAFFIC > 1
           anon_log(" found: " << a);
+#endif
           addrs.push_back(std::make_pair(0 /*preference*/, a));
         }
       }
