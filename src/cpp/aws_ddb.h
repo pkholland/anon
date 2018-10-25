@@ -26,6 +26,7 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
+#include <aws/dynamodb/model/UpdateItemRequest.h>
 #include <aws/core/utils/Outcome.h>
 #include "http_error.h"
 
@@ -47,44 +48,20 @@ public:
   }
 
   template <typename Fn>
-  auto get_item(Fn deserializer, const std::string &table_name,
-                const std::string &primary_key_name, const std::string &primary_key_value,
-                const std::string &proj = "") -> decltype(deserializer(*_null_map))
-  {
-    Aws::DynamoDB::Model::GetItemRequest req;
-
-    Aws::DynamoDB::Model::AttributeValue primary_key;
-    primary_key.SetS(primary_key_value);
-    req.WithTableName(table_name).AddKey(primary_key_name, primary_key);
-
-    if (!proj.empty())
-      req.SetProjectionExpression(proj);
-
-    auto out = _client.GetItem(req);
-    if (!out.IsSuccess())
-    {
-      auto &e = out.GetError();
-      throw_request_error(e.GetResponseCode(), e.GetMessage());
-    }
-
-    auto items = out.GetResult().GetItem();
-    return deserializer(items);
-  }
-
-  template <typename Fn>
-  void with_item(const std::function<void(const decltype((*((Fn*)0))(*_null_map))& )>& f,
-                Fn deserializer, const std::string &table_name,
-                const std::string &primary_key_name, const std::string &primary_key_value,
-                const std::string &proj = "")
+  void with_item(const std::function<void(const decltype((*((Fn *)0))(*_null_map)) &)> &f,
+                 Fn deserializer, const std::string &table_name,
+                 const std::string &primary_key_name, const std::string &primary_key_value,
+                 const std::string &proj = "")
   {
     while (true)
     {
-      try {
+      try
+      {
         Aws::DynamoDB::Model::GetItemRequest req;
 
         Aws::DynamoDB::Model::AttributeValue primary_key;
         primary_key.SetS(primary_key_value);
-        req.WithTableName(table_name).AddKey(primary_key_name, primary_key);
+        req.WithTableName(table_name).AddKey(primary_key_name, primary_key).WithConsistentRead(true);
 
         if (!proj.empty())
           req.SetProjectionExpression(proj);
@@ -96,10 +73,10 @@ public:
           throw_request_error(e.GetResponseCode(), e.GetMessage());
         }
 
-        f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue>&>(out.GetResult().GetItem())));
+        f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> &>(out.GetResult().GetItem())));
         break;
       }
-      catch (const ddb_condition_failed&)
+      catch (const ddb_condition_failed &)
       {
         anon_log("ddb conditional write failed, retrying");
       }
@@ -112,6 +89,21 @@ public:
     Aws::DynamoDB::Model::PutItemRequest req;
     serializer(req);
     auto out = _client.PutItem(req);
+    if (!out.IsSuccess())
+    {
+      auto &e = out.GetError();
+      if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
+        throw ddb_condition_failed();
+      throw_request_error(e.GetResponseCode(), e.GetMessage());
+    }
+  }
+
+  template <typename Fn>
+  void update_item(Fn serializer)
+  {
+    Aws::DynamoDB::Model::UpdateItemRequest req;
+    serializer(req);
+    auto out = _client.UpdateItem(req);
     if (!out.IsSuccess())
     {
       auto &e = out.GetError();
