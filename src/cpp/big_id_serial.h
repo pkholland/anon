@@ -31,22 +31,22 @@ namespace priv
 {
 
 // Fill 'ascii' with the ascii/hex version of what it is 'id'.
-inline void to_ascii_hex(char (&ascii)[big_id::id_size * 2 + 1], const big_id &id)
+inline void to_ascii_hex(char *ascii, const uint8_t *id_buff, int id_len)
 {
-  for (int i = 0; i < big_id::id_size; i++)
+  for (int i = 0; i < id_len; i++)
   {
-    char nib = id.m_buf[i] >> 4;
+    char nib = id_buff[i] >> 4;
     if (nib < 10)
       ascii[i * 2] = '0' + nib;
     else
       ascii[i * 2] = 'a' + nib - 10;
-    nib = id.m_buf[i] & 15;
+    nib = id_buff[i] & 15;
     if (nib < 10)
       ascii[i * 2 + 1] = '0' + nib;
     else
       ascii[i * 2 + 1] = 'a' + nib - 10;
   }
-  ascii[sizeof(ascii) - 1] = 0;
+  ascii[id_len - 1] = 0;
 }
 
 // Convert one ascii/hex character to its integer value value.
@@ -80,7 +80,7 @@ template <typename T>
 T &operator<<(T &str, const long_big_id &id)
 {
   char ascii[big_id::id_size * 2 + 1];
-  priv::to_ascii_hex(ascii, id);
+  priv::to_ascii_hex(ascii, &id.m_buf[0], big_id::id_size);
   return str << &ascii[0];
 }
 
@@ -106,7 +106,7 @@ T &operator<<(T &str, const big_id &id)
 inline std::string toHexString(const big_id &id)
 {
   char ascii[big_id::id_size * 2 + 1];
-  priv::to_ascii_hex(ascii, id);
+  priv::to_ascii_hex(ascii, &id.m_buf[0], big_id::id_size);
   return &ascii[0];
 }
 
@@ -125,7 +125,7 @@ inline T &operator>>(T &str, big_id &id)
 }
 
 // function to return a big_id whose value is initialized from the given 'str' (must be 64 byte ascii/hex).
-inline big_id hexStringId(const std::string &str)
+inline big_id bigHexStringId(const std::string &str)
 {
   big_id id;
   const char *ss = str.c_str();
@@ -143,7 +143,92 @@ template <typename T>
 T &operator<<(T &str, const short_big_id &id)
 {
   char ascii[big_id::id_size * 2 + 1];
-  priv::to_ascii_hex(ascii, id);
+  priv::to_ascii_hex(ascii, &id.m_buf[0], big_id::id_size);
+  ascii[6] = ascii[7] = ascii[8] = '.';
+  ascii[9] = 0;
+  return str << &ascii[0];
+}
+
+// helper class for "long display" of a small_id.
+struct long_small_id : small_id
+{
+};
+
+// helper function for streaming out the "long display" form of a small_id.
+// Use this if you want to override the default streaming small_id format to always stream all 20 bytes.
+inline const long_small_id &ldisp(const small_id &id)
+{
+  return *static_cast<const long_small_id *>(&id);
+}
+
+template <typename T>
+T &operator<<(T &str, const long_small_id &id)
+{
+  char ascii[small_id::id_size * 2 + 1];
+  priv::to_ascii_hex(ascii, &id.m_buf[0], small_id::id_size);
+  return str << &ascii[0];
+}
+
+// helper class for "short display" of a small_id.
+struct short_small_id : small_id
+{
+};
+
+// helper function for streaming out the "short display" form of a small_id.
+inline const short_small_id &sdisp(const small_id &id)
+{
+  return *static_cast<const short_small_id *>(&id);
+}
+
+// template function to stream out a small_id, in ascii/hex form.  Will write 40 bytes to the given stream.
+template <typename T>
+T &operator<<(T &str, const small_id &id)
+{
+  return str << sdisp(id);
+}
+
+// function to return an std::string of the ascii/hex version of the given 'id'.
+inline std::string toHexString(const small_id &id)
+{
+  char ascii[small_id::id_size * 2 + 1];
+  priv::to_ascii_hex(ascii, &id.m_buf[0], small_id::id_size);
+  return &ascii[0];
+}
+
+// template function to fill a small_id by reading 40 ascii/hex bytes from the given stream.
+template <typename T>
+inline T &operator>>(T &str, small_id &id)
+{
+  for (int i = 0; i < small_id::id_size; i++)
+  {
+    char nib1, nib2;
+    str >> nib1;
+    str >> nib2;
+    id.m_buf[i] = (priv::hex_to_i(nib1) << 4) + priv::hex_to_i(nib2);
+  }
+  return str;
+}
+
+// function to return a small_id whose value is initialized from the given 'str' (must be 40 byte ascii/hex).
+inline small_id smallHexStringId(const std::string &str)
+{
+  small_id id;
+  const char *ss = str.c_str();
+  for (int i = 0; i < small_id::id_size; i++)
+  {
+    char nib1 = *ss++;
+    char nib2 = *ss++;
+    id.m_buf[i] = (priv::hex_to_i(nib1) << 4) + priv::hex_to_i(nib2);
+  }
+  return id;
+}
+
+// template function to stream out the "short display" form of a small_id.
+template <typename T>
+T &operator<<(T &str, const short_small_id &id)
+{
+  char ascii[small_id::id_size * 2 + 1];
+  priv::to_ascii_hex(ascii, &id.m_buf[0], small_id::id_size);
   ascii[6] = ascii[7] = ascii[8] = '.';
   ascii[9] = 0;
   return str << &ascii[0];

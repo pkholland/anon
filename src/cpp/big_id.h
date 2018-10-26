@@ -37,6 +37,18 @@ struct big_id
   uint8_t m_buf[id_size]; // storage
 };
 
+struct small_id
+{
+  small_id() {}                                                               // leaves data uninitialized
+  small_id(const uint8_t (&buf)[20]) { memcpy(&m_buf[0], &buf[0], id_size); } // copies the given 'buf'
+
+  enum
+  {
+    id_size = 20
+  };
+  uint8_t m_buf[id_size]; // storage
+};
+
 /** helper functions to make it easier to implement collections of big_id's */
 
 // Same
@@ -47,3 +59,12 @@ inline bool operator!=(const big_id &id1, const big_id &id2) { return ::memcmp(&
 
 // Less than, strictly for usage as a key in structures like std::map
 inline bool operator<(const big_id &id1, const big_id &id2) { return ::memcmp(&id1.m_buf[0], &id2.m_buf[0], big_id::id_size) < 0; }
+
+// Same
+inline bool operator==(const small_id &id1, const small_id &id2) { return ::memcmp(&id1.m_buf[0], &id2.m_buf[0], small_id::id_size) == 0; }
+
+// Not the same
+inline bool operator!=(const small_id &id1, const small_id &id2) { return ::memcmp(&id1.m_buf[0], &id2.m_buf[0], small_id::id_size) != 0; }
+
+// Less than, strictly for usage as a key in structures like std::map
+inline bool operator<(const small_id &id1, const small_id &id2) { return ::memcmp(&id1.m_buf[0], &id2.m_buf[0], small_id::id_size) < 0; }

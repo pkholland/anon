@@ -69,15 +69,24 @@ extern "C" int main(int argc, char **argv)
     return 1;
   }
 
-  uint8_t id_data[32] = {0, 1, 2, 3, 4, 5, 6, 7,
-                         8, 9, 10, 11, 12, 13, 14, 15,
-                         16, 17, 18, 19, 20, 21, 22, 23,
-                         24, 25, 26, 27, 28, 29, 30, 31};
-  big_id id(id_data);
-  anon_log("id: (short) " << id);
-  anon_log("id: (long) " << ldisp(id));
-  anon_log("random id: " << ldisp(rand_id()));
+  uint8_t big_id_data[32] = {0, 1, 2, 3, 4, 5, 6, 7,
+                             8, 9, 10, 11, 12, 13, 14, 15,
+                             16, 17, 18, 19, 20, 21, 22, 23,
+                             24, 25, 26, 27, 28, 29, 30, 31};
+  big_id id(big_id_data);
+  anon_log("big id: (short) " << id);
+  anon_log("big id: (long) " << ldisp(id));
+  anon_log("random big id: " << ldisp(big_rand_id()));
   anon_log("sha256 id: " << ldisp(sha256_id("hello world\n", strlen("hello world\n"))));
+
+  uint8_t small_id_data[20] = {0, 1, 2, 3, 4, 5, 6, 7,
+                               8, 9, 10, 11, 12, 13, 14, 15,
+                               16, 17, 18, 19};
+  small_id sid(small_id_data);
+  anon_log("small id: (short) " << sid);
+  anon_log("small id: (long) " << ldisp(sid));
+  anon_log("small random id: " << ldisp(small_rand_id()));
+  anon_log("sha1 id: " << ldisp(sha1_id("hello world\n", strlen("hello world\n"))));
 
   {
     int udp_port = 8617;

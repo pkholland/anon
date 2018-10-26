@@ -30,7 +30,7 @@ bool init_big_id_crypto(); // call this prior to any of the crypto functions, re
 void term_big_id_crypto(); // call this at the end of a process's lifetime to remove any resources allocated by init_big_id_crypto().
 
 // Function to return a big_id whose value is random (with crypto strengh randomness).
-big_id rand_id();
+big_id big_rand_id();
 
 // Function to return a big_id whose value is the SHA256 checksum value of the given 'buf'.
 big_id sha256_id(const char *buf, size_t len);
@@ -62,10 +62,63 @@ public:
     return *this;
   }
 
+  sha256_builder &operator<<(const small_id &id)
+  {
+    SHA256_Update(&sha256, &id.m_buf[0], sizeof(id.m_buf));
+    return *this;
+  }
+
   big_id id()
   {
     uint8_t hash[big_id::id_size];
     SHA256_Final(hash, &sha256);
     return big_id(hash);
+  }
+};
+
+// Function to return a big_id whose value is random (with crypto strengh randomness).
+small_id small_rand_id();
+
+// Function to return a big_id whose value is the SHA1 checksum value of the given 'buf'.
+small_id sha1_id(const char *buf, size_t len);
+
+inline small_id sha1_id(const std::string &str)
+{
+  return sha1_id(str.c_str(), str.size());
+}
+
+class sha1_builder
+{
+  SHA_CTX sha1;
+
+public:
+  sha1_builder()
+  {
+    SHA1_Init(&sha1);
+  }
+
+  sha1_builder &operator<<(const std::string &str)
+  {
+    SHA1_Update(&sha1, str.c_str(), str.size() + 1);
+    return *this;
+  }
+
+  sha1_builder &operator<<(const big_id &id)
+  {
+    SHA1_Update(&sha1, &id.m_buf[0], sizeof(id.m_buf));
+    return *this;
+  }
+
+  sha1_builder &operator<<(const small_id &id)
+  {
+    SHA1_Update(&sha1, &id.m_buf[0], sizeof(id.m_buf));
+    return *this;
+  }
+
+  small_id id()
+  {
+    uint8_t hash[small_id::id_size];
+    SHA1_Final(hash, &sha1);
+    return small_id(hash);
   }
 };

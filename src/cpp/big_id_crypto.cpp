@@ -48,7 +48,7 @@ void term_big_id_crypto()
   }
 }
 
-big_id rand_id()
+big_id big_rand_id()
 {
   uint8_t rid[big_id::id_size];
   if (read(rand_file, &rid[0], sizeof(rid)) != sizeof(rid))
@@ -65,4 +65,23 @@ big_id sha256_id(const char *buf, size_t len)
   SHA256_Update(&sha256, buf, len);
   SHA256_Final(hash, &sha256);
   return big_id(hash);
+}
+
+small_id small_rand_id()
+{
+  uint8_t rid[small_id::id_size];
+  if (read(rand_file, &rid[0], sizeof(rid)) != sizeof(rid))
+    anon_log_error("reading from rand_file (fd = " << rand_file << ") failed with errno: " << errno_string());
+  return small_id(rid);
+}
+
+// the sha1sum of the given 'buf' as a big_id
+small_id sha1_id(const char *buf, size_t len)
+{
+  uint8_t hash[small_id::id_size];
+  SHA_CTX sha1;
+  SHA1_Init(&sha1);
+  SHA1_Update(&sha1, buf, len);
+  SHA1_Final(hash, &sha1);
+  return small_id(hash);
 }
