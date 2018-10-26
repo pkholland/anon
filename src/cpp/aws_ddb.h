@@ -47,69 +47,54 @@ public:
   {
   }
 
-  template <typename Fn>
-  void with_item(const std::function<void(const decltype((*((Fn *)0))(*_null_map)) &)> &f,
-                 Fn deserializer, const std::string &table_name,
-                 const std::string &primary_key_name, const std::string &primary_key_value,
-                 const std::string &proj = "")
+  void with_item(const std::string &table_name, const std::string &primary_key_name, const std::string &primary_key_value,
+                 const std::function<void(const Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> &)> &f)
   {
+    auto attempts = 0;
     while (true)
     {
       try
       {
         Aws::DynamoDB::Model::GetItemRequest req;
-
         Aws::DynamoDB::Model::AttributeValue primary_key;
         primary_key.SetS(primary_key_value);
         req.WithTableName(table_name).AddKey(primary_key_name, primary_key).WithConsistentRead(true);
-
-        if (!proj.empty())
-          req.SetProjectionExpression(proj);
-
         auto out = _client.GetItem(req);
         if (!out.IsSuccess())
         {
           auto &e = out.GetError();
           throw_request_error(e.GetResponseCode(), e.GetMessage());
         }
-
-        f(deserializer(const_cast<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> &>(out.GetResult().GetItem())));
-        break;
+        f(out.GetResult().GetItem());
+        return;
       }
       catch (const ddb_condition_failed &)
       {
-        anon_log("ddb conditional write failed, retrying");
+        if (++attempts < 10)
+        {
+          anon_log("ddb conditional write failed, retrying, retry count: " << attempts);
+        }
+        else
+          break;
       }
     }
   }
 
-  template <typename Fn>
-  void store_item(Fn serializer)
+  void store_item(const std::function<void(Aws::DynamoDB::Model::PutItemRequest &)> &fn, bool ignore_write_failure = false)
   {
     Aws::DynamoDB::Model::PutItemRequest req;
-    serializer(req);
+    fn(req);
     auto out = _client.PutItem(req);
     if (!out.IsSuccess())
     {
       auto &e = out.GetError();
       if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
-        throw ddb_condition_failed();
-      throw_request_error(e.GetResponseCode(), e.GetMessage());
-    }
-  }
-
-  template <typename Fn>
-  void update_item(Fn serializer)
-  {
-    Aws::DynamoDB::Model::UpdateItemRequest req;
-    serializer(req);
-    auto out = _client.UpdateItem(req);
-    if (!out.IsSuccess())
-    {
-      auto &e = out.GetError();
-      if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
-        throw ddb_condition_failed();
-      throw_request_error(e.GetResponseCode(), e.GetMessage());
+      {
+        if (!ignore_write_failure)
+          throw ddb_condition_failed();
+      }
+      else
+        throw_request_error(e.GetResponseCode(), e.GetMessage());
     }
   }
 };
