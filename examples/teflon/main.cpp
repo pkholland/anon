@@ -33,6 +33,7 @@
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/config/AWSProfileConfigLoader.h>
 #include <aws/core/utils/logging/LogSystemInterface.h>
+#include <aws/core/utils/threading/Executor.h>
 #include "aws_http.h"
 #endif
 
@@ -73,7 +74,7 @@ static void show_help()
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
 }
 
-#include <aws/core/utils/threading/Executor.h>
+
 #include "fiber.h"
 
 #ifdef TEFLON_AWS
