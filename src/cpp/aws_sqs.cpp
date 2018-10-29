@@ -21,6 +21,7 @@
 */
 
 #include "aws_sqs.h"
+#include <aws/sqs/model/QueueAttributeName.h>
 
 using namespace Aws::SQS;
 using json = nlohmann::json;
@@ -69,7 +70,7 @@ aws_sqs_listener::~aws_sqs_listener()
   io_dispatch::remove_task(_timer_task);
 }
 
-std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
+std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
 {
   return [fn](const Aws::SQS::Model::Message &m) -> bool {
     std::string body = m.GetBody();
@@ -78,8 +79,7 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
       json body_js = json::parse(body.begin(), body.end());
       try
       {
-        fn(m, body_js);
-        return true;
+        return fn(m, body_js);
       }
       catch (const std::exception &exc)
       {
@@ -109,6 +109,9 @@ void aws_sqs_listener::start_listen()
 {
   Model::ReceiveMessageRequest req;
   req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(max_messages_per_read).WithWaitTimeSeconds(read_wait_time);
+  Aws::Vector<Model::QueueAttributeName> att;
+  att.push_back(Model::QueueAttributeName::All);
+  req.WithAttributeNames(std::move(att));
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
   _client.ReceiveMessageAsync(req, [wp](const SQSClient *, const Model::ReceiveMessageRequest &, const Model::ReceiveMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
     auto ths = wp.lock();
@@ -116,7 +119,8 @@ void aws_sqs_listener::start_listen()
       return;
     if (!out.IsSuccess())
     {
-      anon_log_error("SQS ReceiveMessage failed:\n" << out.GetError());
+      anon_log_error("SQS ReceiveMessage failed:\n"
+                     << out.GetError());
     }
     else
     {
@@ -225,7 +229,7 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
     _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
       if (out.IsSuccess())
       {
-        anon_log("reset message visibility near 0 for " << messageId);
+        // anon_log("reset message visibility near 0 for " << messageId);
       }
       else
       {

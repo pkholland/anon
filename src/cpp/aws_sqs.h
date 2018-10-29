@@ -53,7 +53,7 @@ public:
 
   ~aws_sqs_listener();
 
-  static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
+  static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
 
 private:
   void start();
@@ -72,7 +72,7 @@ private:
   {
     visibility_sweep_time = 30,
     visibility_time = 60,
-    visibility_immediate_retry_time = 2,
+    visibility_immediate_retry_time = 5,
     max_in_flight_fibers = 1000,
     read_wait_time = 10,
     max_messages_per_read = 10
@@ -89,7 +89,7 @@ private:
     return fn;
   }
 
-  static std::function<bool(const Aws::SQS::Model::Message &m)> wrap(const std::function<void(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
+  static std::function<bool(const Aws::SQS::Model::Message &m)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
   {
     return aws_sqs_listener::js_wrap(fn);
   }
