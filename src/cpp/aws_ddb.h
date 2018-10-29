@@ -50,6 +50,7 @@ public:
   void delete_item(const std::function<void(Aws::DynamoDB::Model::DeleteItemRequest &)> &fn, bool ignore_write_failure = false)
   {
     Aws::DynamoDB::Model::DeleteItemRequest req;
+    fn(req);
     auto out = _client.DeleteItem(req);
     if (!out.IsSuccess())
     {
@@ -97,21 +98,23 @@ public:
     }
   }
 
-  void store_item(const std::function<void(Aws::DynamoDB::Model::PutItemRequest &)> &fn, bool ignore_write_failure = false)
+  void store_item(const std::function<bool(Aws::DynamoDB::Model::PutItemRequest &)> &fn, bool ignore_write_failure = false)
   {
     Aws::DynamoDB::Model::PutItemRequest req;
-    fn(req);
-    auto out = _client.PutItem(req);
-    if (!out.IsSuccess())
+    if (fn(req))
     {
-      auto &e = out.GetError();
-      if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
+      auto out = _client.PutItem(req);
+      if (!out.IsSuccess())
       {
-        if (!ignore_write_failure)
-          throw ddb_condition_failed();
+        auto &e = out.GetError();
+        if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
+        {
+          if (!ignore_write_failure)
+            throw ddb_condition_failed();
+        }
+        else
+          throw_request_error(e.GetResponseCode(), e.GetMessage());
       }
-      else
-        throw_request_error(e.GetResponseCode(), e.GetMessage());
     }
   }
 };
