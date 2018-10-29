@@ -26,7 +26,7 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
-#include <aws/dynamodb/model/UpdateItemRequest.h>
+#include <aws/dynamodb/model/DeleteItemRequest.h>
 #include <aws/core/utils/Outcome.h>
 #include "http_error.h"
 
@@ -45,6 +45,23 @@ public:
       : _client(provider, client_config),
         _null_map(0)
   {
+  }
+
+  void delete_item(const std::function<void(Aws::DynamoDB::Model::DeleteItemRequest &)> &fn, bool ignore_write_failure = false)
+  {
+    Aws::DynamoDB::Model::DeleteItemRequest req;
+    auto out = _client.DeleteItem(req);
+    if (!out.IsSuccess())
+    {
+      auto &e = out.GetError();
+      if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
+      {
+        if (!ignore_write_failure)
+          throw ddb_condition_failed();
+      }
+      else
+        throw_request_error(e.GetResponseCode(), e.GetMessage());
+    }
   }
 
   void with_item(const std::string &table_name, const std::string &primary_key_name, const std::string &primary_key_value,
