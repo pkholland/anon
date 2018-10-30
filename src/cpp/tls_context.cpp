@@ -606,7 +606,7 @@ tls_context::tls_context(bool client,
                          const char *server_key,
                          int verify_depth)
 {
-  auto_ctx ctx(SSL_CTX_new(client ? DTLSv1_2_client_method() : SSLv23_server_method()));
+  auto_ctx ctx(SSL_CTX_new(client ? SSLv23_client_method() : SSLv23_server_method()));
 
 #ifdef PRINT_CERT_INFO
   if (!client)

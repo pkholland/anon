@@ -636,7 +636,7 @@ extern "C" int main(int argc, char **argv)
                                   0, 0, 5);
 
                   //anon_log("connected to \"" << host << "\", port " << port << ", (fd: " << fd << ") now starting tls handshake");
-                  tls_pipe p(std::move(pipe), true /*client*/, true /*verify_peer*/, host, ctx);
+                  tls_pipe p(std::move(pipe), true /*client*/, true /*verify_peer*/, false /* doSNI */, host, ctx);
 
                   ++num_tls;
 

@@ -419,6 +419,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
                 pipe = std::unique_ptr<pipe_t>(new tls_pipe(std::move(con.second),
                                                             true,                     // client (not server)
                                                             host_name_for_tls_ != "", // verify_peer
+                                                            host_name_for_tls_ != "", // doSNI
                                                             host_name_for_tls_.c_str(),
                                                             *tls_ctx_));
               else

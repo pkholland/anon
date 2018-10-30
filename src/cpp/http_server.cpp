@@ -159,6 +159,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
           tlspipe = std::unique_ptr<tls_pipe>(new tls_pipe(std::move(pipe),
                                                            false /*client - we are a server*/,
                                                            false /*don't verify_peer*/,
+                                                           false /*don't do SNI*/,
                                                            0 /*host_name*/,
                                                            *tls_ctx));
           http_pipe = tlspipe.get();

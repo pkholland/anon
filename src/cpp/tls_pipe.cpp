@@ -287,18 +287,22 @@ void throw_ssl_io_error_(BIO *fpb, unsigned long err)
 
 //////////////////////////////////////////////////////////////////////////////////
 
-tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe> &&pipe, bool client, bool verify_peer, const char *host_name, const tls_context &context)
+tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe> &&pipe, bool client, bool verify_peer,
+                   bool doSNI, const char *host_name, const tls_context &context)
     : fp_(pipe.get())
 {
   auto_bio fp_bio(BIO_new_fp(std::move(pipe)));
   auto_bio ssl_bio(BIO_new_ssl(context, client));
   BIO_push(ssl_bio, fp_bio);
 
-  if (BIO_do_handshake(ssl_bio) != 1)
-    throw_ssl_error_(fp_bio);
-
   BIO_get_ssl(ssl_bio, &ssl_);
   if (!ssl_)
+    throw_ssl_error_(fp_bio);
+
+  if (doSNI && host_name)
+    SSL_set_tlsext_host_name(ssl_, host_name);
+
+  if (BIO_do_handshake(ssl_bio) != 1)
     throw_ssl_error_(fp_bio);
 
   if (verify_peer)

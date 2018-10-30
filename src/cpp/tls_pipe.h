@@ -34,7 +34,7 @@ public:
   // (does not thow an exception) all future read and write
   // calls will be encrypted/decrypted and then sent over this pipe;
   tls_pipe(std::unique_ptr<fiber_pipe> &&pipe, bool client,
-           bool verify_peer, const char *host_name, const tls_context &context);
+           bool verify_peer, bool doSNI, const char *host_name, const tls_context &context);
 
   virtual ~tls_pipe();
 
