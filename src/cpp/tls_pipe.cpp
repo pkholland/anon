@@ -105,7 +105,8 @@ static int fp_read(BIO *b, char *out, int outl)
   {
     try
     {
-      return p->pipe_->read(out, outl);
+      int ret = p->pipe_->read(out, outl);
+      return ret;
     }
     catch (const fiber_io_error &)
     {
@@ -181,6 +182,21 @@ static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
     break;
   case BIO_CTRL_DUP:
     anon_log("fp_ctrl BIO_CTRL_DUP");
+    break;
+  case BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT:
+    // anon_log("fp_ctrl BIO_CTRL_DGRAM_SET_NEXT_TIMEOUT");
+    break;
+  case BIO_CTRL_DGRAM_GET_MTU_OVERHEAD:
+    ret = 28;
+    break;
+  case BIO_CTRL_DGRAM_QUERY_MTU:
+    ret = 1400;
+    break;
+  case BIO_CTRL_DGRAM_SET_MTU:
+    ret = num;
+    break;
+  case BIO_CTRL_WPENDING:
+    // anon_log("fp_ctl BIO_CTRL_WPENDING");
     break;
   default:
     anon_log("fp_ctrl unknown: " << cmd);

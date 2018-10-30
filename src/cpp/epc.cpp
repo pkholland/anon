@@ -391,6 +391,9 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
             try
             {
               con = tcp_client::connect((struct sockaddr *)&ep->addr_, ep->addr_.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+#if ANON_LOG_NET_TRAFFIC > 2
+              anon_log("epc connected to: " << ep->addr_);
+#endif
             }
             catch (...)
             {
