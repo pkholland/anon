@@ -194,7 +194,13 @@ extern "C" int main(int argc, char **argv)
   // the last 'true' parameter says that we will be using
   // this calling thread as one of the io threads (after
   // we are done completing our initialization)
-  io_dispatch::start(std::thread::hardware_concurrency(), true);
+  auto num_threads =
+#ifdef TEFLON_ONE_THREAD_ONLY
+      1;
+#else
+      std::thread::hardware_concurrency();
+#endif
+  io_dispatch::start(num_threads, true);
   fiber::initialize();
   init_big_id_crypto();
 
