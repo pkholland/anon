@@ -74,7 +74,6 @@ static void show_help()
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
 }
 
-
 #include "fiber.h"
 
 #ifdef TEFLON_AWS
@@ -195,7 +194,7 @@ extern "C" int main(int argc, char **argv)
   // the last 'true' parameter says that we will be using
   // this calling thread as one of the io threads (after
   // we are done completing our initialization)
-  io_dispatch::start(1 /*std::thread::hardware_concurrency()*/, true);
+  io_dispatch::start(std::thread::hardware_concurrency(), true);
   fiber::initialize();
   init_big_id_crypto();
 
