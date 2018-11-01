@@ -410,6 +410,8 @@ extern "C" int main(int argc, char **argv)
 
     // this call returns after the above call to io_dispatch::stop() has been
     // called -- meaning that some external command has told us to stop.
+    // Or, if we are directly launched (with cmd_pipe == -1), then this
+    // never returns and the process must be killed via external signal.
     io_dispatch::start_this_thread();
 
     // Whatever the app wants to do at termination time.
