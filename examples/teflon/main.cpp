@@ -272,12 +272,6 @@ extern "C" int main(int argc, char **argv)
   try
   {
 
-#ifdef TEFLON_AWS
-    server_init(aws_prov, client_cfg);
-#else
-    server_init();
-#endif
-
     // construct the server's ssl/tls context if we are
     // asked to use a tls port
     std::unique_ptr<tls_context> server_ctx;
@@ -295,7 +289,14 @@ extern "C" int main(int argc, char **argv)
     // and/or my_https
     std::unique_ptr<http_server> my_http;
     std::unique_ptr<http_server> my_https;
-    auto create_srvs_proc = [&my_http, &my_https, &server_ctx, http_port, https_port, port_is_fd, sport_is_fd] {
+    auto create_srvs_proc = [&] {
+
+#ifdef TEFLON_AWS
+      server_init(aws_prov, client_cfg);
+#else
+      server_init();
+#endif
+
       if (https_port > 0)
         my_https = std::unique_ptr<http_server>(new http_server(https_port,
                                                                 [](http_server::pipe_t &pipe, const http_request &request) {
@@ -404,7 +405,7 @@ extern "C" int main(int argc, char **argv)
     }
     else
     {
-      create_srvs_proc();
+      fiber::run_in_fiber([&create_srvs_proc] { create_srvs_proc(); });
     }
 
     // this call returns after the above call to io_dispatch::stop() has been
