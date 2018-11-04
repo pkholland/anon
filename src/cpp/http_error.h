@@ -90,6 +90,7 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
   }
   catch (const request_error &e)
   {
+    anon_log("request_wrap caught request_error - " << e.reason);
     http_response response;
     response.add_header("Content-Type", "text/plain");
     response.set_status_code(e.code);
@@ -98,6 +99,7 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
   }
   catch (const std::exception &e)
   {
+    anon_log("request_wrap caught std::exception - " << e.what());
     http_response response;
     response.add_header("Content-Type", "text/plain");
     response.set_status_code("500");
@@ -106,6 +108,7 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
   }
   catch (...)
   {
+    anon_log("request_wrap caught unknown exception");
     http_response response;
     response.add_header("Content-Type", "text/plain");
     response.set_status_code("500");
