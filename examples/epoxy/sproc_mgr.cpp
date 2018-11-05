@@ -187,7 +187,7 @@ int start_child(proc_info &pi)
 
     if (!read_ok(pi.cmd_pipe[0], pi.cmd_pipe[1]))
     {
-      anon_log("child process " << pid << " started, but did not reply correctly, so was killed");
+      anon_log_error("child process " << pid << " started, but did not reply correctly, so was killed");
       kill(pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
@@ -256,7 +256,7 @@ void handle_sigchld(int sig)
       auto written = ::write(death_pipe[0], &data[tot_bytes], sizeof(chld) - tot_bytes);
       if (written < 0)
       {
-        anon_log("couldn't write to death pipe");
+        anon_log_error("couldn't write to death pipe");
         exit(1);
       }
       tot_bytes += written;
@@ -311,7 +311,7 @@ void sproc_mgr_init(int port)
         auto bytes_read = ::read(death_pipe[1], &data[tot_bytes], sizeof(chld) - tot_bytes);
         if (bytes_read <= 0)
         {
-          anon_log("couldn't read from the death pipe");
+          anon_log_error("couldn't read from the death pipe");
           exit(1);
         }
         tot_bytes += bytes_read;
@@ -319,10 +319,7 @@ void sproc_mgr_init(int port)
 
       // you stop this thread by writting 0 into death_pipe[0];
       if (chld == 0)
-      {
-        anon_log("self exit, chld == 0");
         return;
-      }
 
       std::unique_lock<std::mutex> lock(proc_map_mutex);
       auto p = proc_map.find(chld);
@@ -346,11 +343,11 @@ void sproc_mgr_init(int port)
           }
           catch (const std::exception &err)
           {
-            anon_log("caught exception: " << err.what());
+            anon_log_error("caught exception: " << err.what());
           }
           catch (...)
           {
-            anon_log("caught unknown exception trying to launch new server process");
+            anon_log_error("caught unknown exception trying to launch new server process");
           }
         }
       }
@@ -382,7 +379,7 @@ void sproc_mgr_term()
     auto written = ::write(death_pipe[0], &data[tot_bytes], sizeof(chld) - tot_bytes);
     if (written < 0)
     {
-      anon_log("couldn't write to death pipe");
+      anon_log_error("couldn't write to death pipe");
       exit(1);
     }
     tot_bytes += written;

@@ -213,14 +213,14 @@ void dns_entry::resolve_complete(union sigval sv)
   if (ret == EAI_INPROGRESS)
   {
 
-    anon_log("strange call to resolve_complete with gai_error returning EAI_INPROGRESS");
+    anon_log_error("strange call to resolve_complete with gai_error returning EAI_INPROGRESS");
     return;
   }
   else if (ret != 0)
   {
 
 #if defined(ANON_LOG_DNS_LOOKUP)
-    anon_log("getaddrinfo_a completed with error: " << gai_strerror(ret));
+    anon_log_error("getaddrinfo_a completed with error: " << gai_strerror(ret));
 #endif
 
     nc->entry_->state_ = k_failed_resolve;

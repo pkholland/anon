@@ -347,12 +347,12 @@ extern "C" int main(int argc, char **argv)
             }
             catch (const std::exception &err)
             {
-              anon_log("command pipe unexpectedly failed: " << err.what());
+              anon_log_error("command pipe unexpectedly failed: " << err.what());
               exit(1);
             }
             catch (...)
             {
-              anon_log("command pipe unexpectedly failed");
+              anon_log_error("command pipe unexpectedly failed");
               exit(1);
             }
             if (cmd == 0)
@@ -360,12 +360,12 @@ extern "C" int main(int argc, char **argv)
               if (!my_http && !my_https)
                 create_srvs_proc();
               else
-                anon_log("start command already processed");
+                anon_log_error("start command already processed");
             }
             else if (cmd == 1)
               break;
             else
-              anon_log("unknown command: " << (int)cmd);
+              anon_log_error("unknown command: " << (int)cmd);
           }
 
           // tell the tcp server(s) to stop calling 'accept'
@@ -431,12 +431,12 @@ extern "C" int main(int argc, char **argv)
   }
   catch (const std::exception &exc)
   {
-    anon_log("caught exception: " << exc.what());
+    anon_log_error("caught exception: " << exc.what());
     ret = 1;
   }
   catch (...)
   {
-    anon_log("caught unknown exception");
+    anon_log_error("caught unknown exception");
     ret = 1;
   }
 

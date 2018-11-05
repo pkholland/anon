@@ -61,11 +61,11 @@ static void validate_command_file()
   }
   else if (S_ISDIR(st.st_mode))
   {
-    anon_log("\"" << &cmd_path[0] << "\" is a directory and must be manually deleted for this program to run");
+    anon_log_error("\"" << &cmd_path[0] << "\" is a directory and must be manually deleted for this program to run");
     exit(1);
   }
 
-  anon_log("\"" << &cmd_path[0] << "\" is an unknown file type and must be manually deleted for this program to run");
+  anon_log_error("\"" << &cmd_path[0] << "\" is an unknown file type and must be manually deleted for this program to run");
   exit(1);
 }
 
@@ -210,12 +210,12 @@ extern "C" int main(int argc, char **argv)
   }
   catch (const std::exception &err)
   {
-    anon_log("unable to initialize: " << err.what());
+    anon_log_error("unable to initialize: " << err.what());
     return 1;
   }
   catch (...)
   {
-    anon_log("unable to initialize");
+    anon_log_error("unable to initialize");
     return 1;
   }
 
@@ -238,7 +238,7 @@ extern "C" int main(int argc, char **argv)
     if (bytes == sizeof(cmd_buf))
     {
       cmd_buf[20] = 0;
-      anon_log("command too big, ignoring - starts with: \"" << &cmd_buf[0] << "...\"");
+      anon_log_error("command too big, ignoring - starts with: \"" << &cmd_buf[0] << "...\"");
     }
     else
     {

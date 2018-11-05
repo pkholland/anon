@@ -58,7 +58,7 @@ inline uint8_t hex_to_i(char nib)
     return nib - 'a' + 10;
   if (nib >= 'A' && nib <= 'F')
     return nib - 'A' + 10;
-  anon_log_error("invalid hex value! " << nib);
+  anon_log("invalid hex value! " << nib);
   return 0;
 }
 
