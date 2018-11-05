@@ -25,6 +25,7 @@
 #include "http_server.h"
 #include <map>
 #include <string>
+#include "nlohmann/json.hpp"
 
 class response_strings
 {
@@ -97,6 +98,15 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
     response << e.reason << "\n";
     pipe.respond(response);
   }
+  catch (const nlohmann::json::exception& e)
+  {
+    anon_log("request_wrap caught json exception - " << e.what());
+    http_response response;
+    response.add_header("Content-Type", "text/plain");
+    response.set_status_code("400");
+    response << e.what() << "\n";
+    pipe.respond(response);
+  }
   catch (const std::exception &e)
   {
     anon_log("request_wrap caught std::exception - " << e.what());
@@ -112,7 +122,7 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
     http_response response;
     response.add_header("Content-Type", "text/plain");
     response.set_status_code("500");
-    response << "caugh unknown exception\n";
+    response << "caught unknown exception\n";
     pipe.respond(response);
   }
 }
