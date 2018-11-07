@@ -299,60 +299,62 @@ void sproc_mgr_init(int port)
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0])");
   }
 
-  death_thread = std::thread([] {
-    while (true)
-    {
-      // read a pid for a child that has died
-      pid_t chld;
-      char *data = (char *)&chld;
-      size_t tot_bytes = 0;
-      while (tot_bytes < sizeof(chld))
-      {
-        auto bytes_read = ::read(death_pipe[1], &data[tot_bytes], sizeof(chld) - tot_bytes);
-        if (bytes_read <= 0)
+  death_thread = std::thread(
+      [] {
+        while (true)
         {
-          anon_log_error("couldn't read from the death pipe");
-          exit(1);
-        }
-        tot_bytes += bytes_read;
-      }
-
-      // you stop this thread by writting 0 into death_pipe[0];
-      if (chld == 0)
-        return;
-
-      std::unique_lock<std::mutex> lock(proc_map_mutex);
-      auto p = proc_map.find(chld);
-      if (p == proc_map.end())
-        anon_log("ignoring unregistered child process id: " << chld);
-      else
-      {
-        auto pi = std::move(p->second);
-        proc_map.erase(p);
-        if (chld == current_srv_pid)
-        {
-          try
+          // read a pid for a child that has died
+          pid_t chld;
+          char *data = (char *)&chld;
+          size_t tot_bytes = 0;
+          while (tot_bytes < sizeof(chld))
           {
-            current_srv_pid = 0;
-            auto new_chld = start_child(*pi);
-            if (write_cmd(pi->cmd_pipe[0], k_start))
+            auto bytes_read = ::read(death_pipe[1], &data[tot_bytes], sizeof(chld) - tot_bytes);
+            if (bytes_read <= 0)
             {
+              anon_log_error("couldn't read from the death pipe");
+              exit(1);
             }
-            proc_map.insert(std::make_pair(new_chld, std::move(pi)));
-            current_srv_pid = new_chld;
+            tot_bytes += bytes_read;
           }
-          catch (const std::exception &err)
+
+          // you stop this thread by writting 0 into death_pipe[0];
+          if (chld == 0)
+            return;
+
+          std::unique_lock<std::mutex> lock(proc_map_mutex);
+          auto p = proc_map.find(chld);
+          if (p == proc_map.end())
+            anon_log("ignoring unregistered child process id: " << chld);
+          else
           {
-            anon_log_error("caught exception: " << err.what());
-          }
-          catch (...)
-          {
-            anon_log_error("caught unknown exception trying to launch new server process");
+            auto pi = std::move(p->second);
+            proc_map.erase(p);
+            if (chld == current_srv_pid)
+            {
+              try
+              {
+                current_srv_pid = 0;
+                anon_log_error("child process " << p->first << " unexpectedly exited, restarting");
+                auto new_chld = start_child(*pi);
+                if (write_cmd(pi->cmd_pipe[0], k_start))
+                {
+                }
+                proc_map.insert(std::make_pair(new_chld, std::move(pi)));
+                current_srv_pid = new_chld;
+              }
+              catch (const std::exception &err)
+              {
+                anon_log_error("caught exception: " << err.what());
+              }
+              catch (...)
+              {
+                anon_log_error("caught unknown exception trying to launch new server process");
+              }
+            }
           }
         }
-      }
-    }
-  });
+      });
 
   struct sigaction sa;
   sa.sa_handler = &handle_sigchld;
