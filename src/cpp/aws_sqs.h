@@ -67,6 +67,7 @@ private:
   std::function<bool(const Aws::SQS::Model::Message &m)> _process_msg;
   std::map<Aws::String, Aws::String> _alive_set;
   io_dispatch::scheduled_task _timer_task;
+  int _consecutive_errors;
 
   enum
   {

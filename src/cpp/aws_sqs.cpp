@@ -34,7 +34,8 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _queue_url(queue_url),
       _num_fibers(0),
       _exit_now(false),
-      _process_msg(handler)
+      _process_msg(handler),
+      _consecutive_errors(0)
 {
 }
 
@@ -119,11 +120,14 @@ void aws_sqs_listener::start_listen()
       return;
     if (!out.IsSuccess())
     {
-      anon_log_error("SQS ReceiveMessage failed:\n"
+      ++ths->_consecutive_errors;
+      anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << "\n"
                      << out.GetError());
+      fiber::msleep(1000);
     }
     else
     {
+      ths->_consecutive_errors = 0;
       auto &messages = out.GetResult().GetMessages();
       auto num_messages = messages.size();
 
@@ -142,7 +146,10 @@ void aws_sqs_listener::start_listen()
               ths->remove_from_keep_alive(m, true);
           });
       }
+    }
 
+    if (ths->_consecutive_errors < 100)
+    {
       if (!ths->_exit_now)
       {
         fiber_lock l(ths->_mtx);
@@ -155,6 +162,8 @@ void aws_sqs_listener::start_listen()
         });
       }
     }
+    else
+      anon_log_error("too many consecutive errors, giving up...");
   });
 }
 
