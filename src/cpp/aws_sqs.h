@@ -44,9 +44,10 @@ public:
   static std::shared_ptr<aws_sqs_listener> new_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                                         const Aws::Client::ClientConfiguration &client_config,
                                                         const Aws::String &queue_url,
-                                                        const Fn &handler)
+                                                        const Fn &handler,
+                                                        size_t stack_size = _default_process_message_stack_size)
   {
-    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler));
+    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler), stack_size);
     ths->start();
     return ths;
   }
@@ -56,6 +57,10 @@ public:
   static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
 
 private:
+  enum {
+    _default_process_message_stack_size = 48 * 1024 - 256
+  };
+
   void start();
 
   Aws::SQS::SQSClient _client;
@@ -68,6 +73,7 @@ private:
   std::map<Aws::String, Aws::String> _alive_set;
   io_dispatch::scheduled_task _timer_task;
   int _consecutive_errors;
+  size_t _stack_size;
 
   enum
   {
@@ -99,5 +105,6 @@ public:
   aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
-                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler);
+                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                   size_t stack_size);
 };

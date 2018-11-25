@@ -29,13 +29,15 @@ using json = nlohmann::json;
 aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
-                                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler)
+                                   const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                                   size_t stack_size)
     : _client(provider, client_config),
       _queue_url(queue_url),
       _num_fibers(0),
       _exit_now(false),
       _process_msg(handler),
-      _consecutive_errors(0)
+      _consecutive_errors(0),
+      _stack_size(stack_size)
 {
 }
 
@@ -144,7 +146,7 @@ void aws_sqs_listener::start_listen()
               ths->delete_message(m);
             else
               ths->remove_from_keep_alive(m, true);
-          });
+          }, ths->_stack_size);
       }
     }
 
