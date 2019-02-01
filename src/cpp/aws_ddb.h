@@ -76,11 +76,13 @@ public:
         Aws::DynamoDB::Model::GetItemRequest req;
         Aws::DynamoDB::Model::AttributeValue primary_key;
         primary_key.SetS(primary_key_value);
+        anon_log("with_item setting primary key to " << primary_key_value << ", table_name: " << table_name);
         req.WithTableName(table_name).AddKey(primary_key_name, primary_key).WithConsistentRead(true);
         auto out = _client.GetItem(req);
         if (!out.IsSuccess())
         {
           auto &e = out.GetError();
+          anon_log("getItem failed, error: " << e.GetMessage());
           throw_request_error(e.GetResponseCode(), e.GetMessage());
         }
         f(out.GetResult().GetItem());
