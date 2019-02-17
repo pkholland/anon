@@ -81,6 +81,7 @@ public:
         if (!out.IsSuccess())
         {
           auto &e = out.GetError();
+          anon_log("getItem failed, error: " << e.GetMessage());
           throw_request_error(e.GetResponseCode(), e.GetMessage());
         }
         f(out.GetResult().GetItem());
