@@ -22,6 +22,7 @@
 
 #include "aws_sqs.h"
 #include <aws/sqs/model/QueueAttributeName.h>
+#include <aws/sqs/model/SendMessageRequest.h>
 
 using namespace Aws::SQS;
 using json = nlohmann::json;
@@ -265,5 +266,24 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     {
       do_error("delete SQS message " << messageId << ", " << out.GetError().GetMessage());
     }
+  });
+}
+
+aws_sqs_sender::aws_sqs_sender(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
+                  const Aws::Client::ClientConfiguration &client_config,
+                  const Aws::String &queue_url)
+    : _client(provider, client_config),
+      _queue_url(queue_url)
+{}
+
+void aws_sqs_sender::send(const json &body,
+          const std::function<void(const bool success, const std::string& id, const std::string& errorReason)>& response)
+{
+  Model::SendMessageRequest req;
+  req.WithQueueUrl(_queue_url).WithMessageBody(Aws::String(body.dump()));
+  _client.SendMessageAsync(req, [response](const SQSClient*, const Model::SendMessageRequest&, const Model::SendMessageOutcome& outcome, const std::shared_ptr<const Aws::Client::AsyncCallerContext>&) {
+    response(outcome.IsSuccess(),
+      std::string(outcome.GetResult().GetMessageId()),
+      std::string(outcome.GetError().GetMessage()));
   });
 }

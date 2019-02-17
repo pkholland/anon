@@ -108,3 +108,19 @@ public:
                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
                    size_t stack_size);
 };
+
+class aws_sqs_sender : public std::enable_shared_from_this<aws_sqs_sender>
+{
+  Aws::SQS::SQSClient _client;
+  Aws::String _queue_url;
+
+public:
+  aws_sqs_sender(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
+                  const Aws::Client::ClientConfiguration &client_config,
+                  const Aws::String &queue_url);
+
+  void send(const nlohmann::json &body,
+          const std::function<void(const bool success, const std::string& id, const std::string& errorReason)>& response);
+
+};
+
