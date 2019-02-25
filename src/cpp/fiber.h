@@ -187,7 +187,7 @@ public:
       int *se = s + (stack_size_ / sizeof(int));
       while (s < se && *s == 0xbaadf00d)
         ++s;
-      anon_log_error("fiber consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)stack_ << " untouched");
+      anon_log("fiber consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)stack_ << " untouched");
     }
 #endif
     ::operator delete(stack_);
