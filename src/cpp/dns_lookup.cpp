@@ -30,9 +30,11 @@ namespace
 
 void inform_in_fiber(const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &dnsc, int err)
 {
-  fiber::run_in_fiber([dnsc, err] {
-    dnsc(err, std::vector<sockaddr_in6>());
-  });
+  fiber::run_in_fiber(
+      [dnsc, err] {
+        dnsc(err, std::vector<sockaddr_in6>());
+      },
+      fiber::k_default_stack_size, "dns_lookup failure");
 }
 
 // structure used to hold state data
@@ -165,9 +167,11 @@ void notify_complete::resolve_complete(union sigval sv)
     freeaddrinfo(ths->cb_.ar_result);
 
     auto dnsc = ths->dnsc_;
-    fiber::run_in_fiber([dnsc, addrs] {
-      dnsc(0, addrs);
-    });
+    fiber::run_in_fiber(
+        [dnsc, addrs] {
+          dnsc(0, addrs);
+        },
+        fiber::k_default_stack_size, "dns lookup complete");
   }
 }
 

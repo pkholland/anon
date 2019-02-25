@@ -46,19 +46,23 @@ void aws_sqs_listener::start()
 {
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
 
-  fiber::run_in_fiber([wp] {
-    auto ths = wp.lock();
-    if (ths)
-      ths->start_listen();
-  });
+  fiber::run_in_fiber(
+      [wp] {
+        auto ths = wp.lock();
+        if (ths)
+          ths->start_listen();
+      },
+      aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener::aws_sqs_listener, start_listen");
 
   _timer_task = io_dispatch::schedule_task(
       [wp] {
-        fiber::run_in_fiber([wp] {
-          auto ths = wp.lock();
-          if (ths)
-            ths->set_visibility_timeout();
-        });
+        fiber::run_in_fiber(
+            [wp] {
+              auto ths = wp.lock();
+              if (ths)
+                ths->set_visibility_timeout();
+            },
+            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout");
       },
       cur_time() + visibility_sweep_time);
 }
@@ -125,7 +129,7 @@ void aws_sqs_listener::start_listen()
     {
       ++ths->_consecutive_errors;
       anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << "\n"
-                     << out.GetError());
+                                                                        << out.GetError());
       fiber::msleep(1000);
     }
     else
@@ -138,16 +142,18 @@ void aws_sqs_listener::start_listen()
       {
         ths->_num_fibers += num_messages;
         for (auto &m : messages)
-          fiber::run_in_fiber([wp, m] {
-            auto ths = wp.lock();
-            if (!ths)
-              return;
-            ths->add_to_keep_alive(m);
-            if (ths->_process_msg(m))
-              ths->delete_message(m);
-            else
-              ths->remove_from_keep_alive(m, true);
-          }, ths->_stack_size);
+          fiber::run_in_fiber(
+              [wp, m] {
+                auto ths = wp.lock();
+                if (!ths)
+                  return;
+                ths->add_to_keep_alive(m);
+                if (ths->_process_msg(m))
+                  ths->delete_message(m);
+                else
+                  ths->remove_from_keep_alive(m, true);
+              },
+              ths->_stack_size, "aws_sqs_listener, process_msg");
       }
     }
 
@@ -158,11 +164,13 @@ void aws_sqs_listener::start_listen()
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)
           ths->_num_fibers_cond.wait(l);
-        fiber::run_in_fiber([wp] {
-          auto ths = wp.lock();
-          if (ths)
-            ths->start_listen();
-        });
+        fiber::run_in_fiber(
+            [wp] {
+              auto ths = wp.lock();
+              if (ths)
+                ths->start_listen();
+            },
+            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, restart_listen");
       }
     }
     else
@@ -215,7 +223,8 @@ void aws_sqs_listener::set_visibility_timeout()
               auto ths = wp.lock();
               if (ths)
                 ths->set_visibility_timeout();
-            });
+            },
+            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, reset_visibility_timeout");
       },
       cur_time() + visibility_sweep_time);
 }
@@ -270,20 +279,21 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
 }
 
 aws_sqs_sender::aws_sqs_sender(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
-                  const Aws::Client::ClientConfiguration &client_config,
-                  const Aws::String &queue_url)
+                               const Aws::Client::ClientConfiguration &client_config,
+                               const Aws::String &queue_url)
     : _client(provider, client_config),
       _queue_url(queue_url)
-{}
+{
+}
 
 void aws_sqs_sender::send(const json &body,
-          const std::function<void(const bool success, const std::string& id, const std::string& errorReason)>& response)
+                          const std::function<void(const bool success, const std::string &id, const std::string &errorReason)> &response)
 {
   Model::SendMessageRequest req;
   req.WithQueueUrl(_queue_url).WithMessageBody(Aws::String(body.dump()));
-  _client.SendMessageAsync(req, [response](const SQSClient*, const Model::SendMessageRequest&, const Model::SendMessageOutcome& outcome, const std::shared_ptr<const Aws::Client::AsyncCallerContext>&) {
+  _client.SendMessageAsync(req, [response](const SQSClient *, const Model::SendMessageRequest &, const Model::SendMessageOutcome &outcome, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
     response(outcome.IsSuccess(),
-      std::string(outcome.GetResult().GetMessageId()),
-      std::string(outcome.GetError().GetMessage()));
+             std::string(outcome.GetResult().GetMessageId()),
+             std::string(outcome.GetError().GetMessage()));
   });
 }

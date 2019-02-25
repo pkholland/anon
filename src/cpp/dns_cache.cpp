@@ -83,9 +83,11 @@ private:
   // and then delete the callback object
   static void inform_in_fiber(const std::function<void(int err_code, const struct sockaddr *addr, socklen_t addrlen)> &dnsc, int err)
   {
-    fiber::run_in_fiber([dnsc, err] {
-      dnsc(err, 0, 0);
-    });
+    fiber::run_in_fiber(
+        [dnsc, err] {
+          dnsc(err, 0, 0);
+        },
+        fiber::k_default_stack_size, "dns_cache failure");
   }
 
   void inform_in_fiber(int err)
@@ -274,14 +276,15 @@ void dns_entry::resolve_complete(union sigval sv)
       auto pc = ths->pending_callers_.back();
       auto addr = ths->addrs_[i % ths->addrs_.size()].addr_;
 
-      fiber::run_in_fiber([pc, addr] {
-        if (addr.sin6_family == AF_INET6)
-          ((struct sockaddr_in6 *)&addr)->sin6_port = htons(pc.port_);
-        else
-          ((struct sockaddr_in *)&addr)->sin_port = htons(pc.port_);
-        pc.dnsc_(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
-      },
-                          pc.stack_size_);
+      fiber::run_in_fiber(
+          [pc, addr] {
+            if (addr.sin6_family == AF_INET6)
+              ((struct sockaddr_in6 *)&addr)->sin6_port = htons(pc.port_);
+            else
+              ((struct sockaddr_in *)&addr)->sin_port = htons(pc.port_);
+            pc.dnsc_(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+          },
+          pc.stack_size_, "dns cache resolution complete");
 
       ths->pending_callers_.pop_back();
       ++i;
@@ -434,13 +437,15 @@ void lookup_and_run(const char *host, int port, const std::function<void(int err
   }
   if (immediate)
   {
-    fiber::run_in_fiber([port, dnsc, addr] {
-      if (addr.sin6_family == AF_INET6)
-        ((struct sockaddr_in6 *)&addr)->sin6_port = htons(port);
-      else
-        ((struct sockaddr_in *)&addr)->sin_port = htons(port);
-      dnsc(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
-    });
+    fiber::run_in_fiber(
+        [port, dnsc, addr] {
+          if (addr.sin6_family == AF_INET6)
+            ((struct sockaddr_in6 *)&addr)->sin6_port = htons(port);
+          else
+            ((struct sockaddr_in *)&addr)->sin_port = htons(port);
+          dnsc(0, (struct sockaddr *)&addr, addr.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+        },
+        fiber::k_default_stack_size, "lookup_and_run immediate call");
   }
 }
 

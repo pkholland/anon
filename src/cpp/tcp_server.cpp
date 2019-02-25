@@ -94,7 +94,7 @@ void tcp_server::io_avail(const struct epoll_event &event)
 #if ANON_LOG_NET_TRAFFIC > 2
       anon_log("new tcp connection on socket: " << conn << ", from addr: " << addr);
 #endif
-      fiber::run_in_fiber([conn, addr, addr_len, this] { new_conn_->exec(conn, (struct sockaddr *)&addr, addr_len); }, stack_size_);
+      fiber::run_in_fiber([conn, addr, addr_len, this] { new_conn_->exec(conn, (struct sockaddr *)&addr, addr_len); }, stack_size_, "tcp_server::io_avail");
     }
   }
   else

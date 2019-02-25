@@ -145,7 +145,8 @@ public:
   // then the code will automatically (attempt to) call 'delete' on
   // this fiber after 'fn' returns.
   template <typename Fn>
-  fiber(Fn fn, size_t stack_size = k_default_stack_size, bool auto_free = false)
+  fiber(Fn fn, size_t stack_size = k_default_stack_size, bool auto_free = false,
+        const char *fiber_name = "unknown")
       : auto_free_(auto_free),
         running_(true),
         stack_(::operator new(stack_size)),
@@ -153,7 +154,8 @@ public:
         timout_pipe_(0)
 #if defined(ANON_RUNTIME_CHECKS)
         ,
-        stack_size_(stack_size)
+        stack_size_(stack_size),
+        fiber_name_(fiber_name)
 #endif
   {
     if (!auto_free_)
@@ -187,7 +189,7 @@ public:
       int *se = s + (stack_size_ / sizeof(int));
       while (s < se && *s == 0xbaadf00d)
         ++s;
-      anon_log("fiber consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)stack_ << " untouched");
+      anon_log("fiber \"" << fiber_name_ << "\" consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)stack_ << " untouched");
     }
 #endif
     ::operator delete(stack_);
@@ -207,7 +209,7 @@ public:
   // on one of the io threads of the io_dispatch passed to attach.
   // The fiber will automatically be deleted when 'fn' returns.
   template <typename Fn>
-  static void run_in_fiber(Fn fn, size_t stack_size = k_default_stack_size)
+  static void run_in_fiber(Fn fn, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown")
   {
 #if defined(ANON_RUNTIME_CHECKS)
     if (!on_one_pipe_)
@@ -218,7 +220,7 @@ public:
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
       ++num_running_fibers_;
     }
-    auto oo_fn = [fn, stack_size] { new fiber(fn, stack_size, true /*auto_free*/); };
+    auto oo_fn = [fn, stack_size, fiber_name] { new fiber(fn, stack_size, true /*auto_free*/, fiber_name); };
     if (get_current_fiber_id() == 0)
       io_dispatch::on_one(oo_fn);
     else
@@ -324,6 +326,7 @@ private:
 
 #if defined(ANON_RUNTIME_CHECKS)
   size_t stack_size_;
+  const char *fiber_name_;
 #endif
 
   static int num_running_fibers_;
