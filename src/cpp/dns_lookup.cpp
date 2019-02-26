@@ -189,30 +189,39 @@ void lookup_and_run(const char *host, int port, const std::function<void(int err
   anon_log("starting dns lookup for \"" << host << "\", port " << port);
 #endif
 
-  // The info we will need when resolve_complete is called.
-  // Also, while the man pages for getaddrinfo_a aren't
-  // particularly clear on this, the pointers given to it
-  // in the various data structures need to _stay valid_
-  // until the callback function is called.  So we can't
-  // put these data structures on the stack.  They are members
-  // of the notify_complete object, which is kept around until
-  // we are called back.
-  std::unique_ptr<notify_complete> nc(new notify_complete(host, port, dnsc, stack_size));
+  std::string host_ = host;
 
-  // this one is ok to put on the stack
-  struct gaicb *cba = &nc->cb_;
+  // there is some evidence that getaddrinfo_a is unhappy if we
+  // run it from one of our fibers.  It is also going to create a few
+  // of its own threads when it executes.  So we start by creating
+  // a thread on which we will call getaddrinfo_a.
+  std::thread(
+      [host_, port, dnsc, stack_size] {
+        // The info we will need when resolve_complete is called.
+        // Also, while the man pages for getaddrinfo_a aren't
+        // particularly clear on this, the pointers given to it
+        // in the various data structures need to _stay valid_
+        // until the callback function is called.  So we can't
+        // put these data structures on the stack.  They are members
+        // of the notify_complete object, which is kept around until
+        // we are called back.
+        std::unique_ptr<notify_complete> nc(new notify_complete(host_.c_str(), port, dnsc, stack_size));
 
-  // start the async getaddrinfo lookup
-  int ret = getaddrinfo_a(GAI_NOWAIT, &cba, 1, &nc->se_);
+        // this one is ok to put on the stack
+        struct gaicb *cba = &nc->cb_;
 
-  if (ret != 0)
-  {
-    anon_log_error("getaddrinfo_a(GAI_NOWAIT, &cba, 1, &se) failed with error: " << gai_strerror(ret));
-    inform_in_fiber(dnsc, ret);
-    throw std::runtime_error(gai_strerror(ret));
-  }
-  else
-    nc.release(); // if getaddrinfo_a succeeded then nc is "owned" by notify_complete::resolve_complete
+        // start the async getaddrinfo lookup
+        int ret = getaddrinfo_a(GAI_NOWAIT, &cba, 1, &nc->se_);
+
+        if (ret != 0)
+        {
+          anon_log_error("getaddrinfo_a(GAI_NOWAIT, &cba, 1, &se) failed with error: " << gai_strerror(ret));
+          inform_in_fiber(dnsc, ret);
+        }
+        else
+          nc.release(); // if getaddrinfo_a succeeded then nc is "owned" by notify_complete::resolve_complete
+      })
+      .detach();
 }
 
 std::pair<int, std::vector<sockaddr_in6>> get_addrinfo(const char *host, int port)
