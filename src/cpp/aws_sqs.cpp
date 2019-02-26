@@ -52,7 +52,7 @@ void aws_sqs_listener::start()
         if (ths)
           ths->start_listen();
       },
-      aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener::aws_sqs_listener, start_listen");
+      aws_sqs_listener::_simple_stack_size, "aws_sqs_listener::aws_sqs_listener, start_listen");
 
   _timer_task = io_dispatch::schedule_task(
       [wp] {
@@ -62,7 +62,7 @@ void aws_sqs_listener::start()
               if (ths)
                 ths->set_visibility_timeout();
             },
-            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
+            aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
       },
       cur_time() + visibility_sweep_time);
 }
@@ -170,7 +170,7 @@ void aws_sqs_listener::start_listen()
               if (ths)
                 ths->start_listen();
             },
-            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, restart_listen");
+            aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, restart_listen");
       }
     }
     else
@@ -224,7 +224,7 @@ void aws_sqs_listener::set_visibility_timeout()
               if (ths)
                 ths->set_visibility_timeout();
             },
-            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
+            aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
       },
       cur_time() + visibility_sweep_time);
 }

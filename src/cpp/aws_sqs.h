@@ -57,8 +57,10 @@ public:
   static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
 
 private:
-  enum {
-    _default_process_message_stack_size = 48 * 1024 - 256
+  enum
+  {
+    _default_process_message_stack_size = 48 * 1024 - 256,
+    _simple_stack_size = 16 * 1024 - 256
   };
 
   void start();
@@ -116,11 +118,9 @@ class aws_sqs_sender : public std::enable_shared_from_this<aws_sqs_sender>
 
 public:
   aws_sqs_sender(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
-                  const Aws::Client::ClientConfiguration &client_config,
-                  const Aws::String &queue_url);
+                 const Aws::Client::ClientConfiguration &client_config,
+                 const Aws::String &queue_url);
 
   void send(const nlohmann::json &body,
-          const std::function<void(const bool success, const std::string& id, const std::string& errorReason)>& response);
-
+            const std::function<void(const bool success, const std::string &id, const std::string &errorReason)> &response);
 };
-

@@ -128,13 +128,14 @@ void endpoint_cluster::update_endpoints()
     std::weak_ptr<endpoint_cluster> wp = shared_from_this();
     update_task_ = io_dispatch::schedule_task(
         [wp] {
+          auto stack_size = 16 * 1024 - 256;
           fiber::run_in_fiber(
               [wp] {
                 auto ths = wp.lock();
                 if (ths)
                   ths->update_endpoints();
               },
-              fiber::k_default_stack_size, "endpoint_cluster, update_endpoints");
+              stack_size, "endpoint_cluster, update_endpoints");
         },
         cur_time() + lookup_frequency_seconds_);
   }

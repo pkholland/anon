@@ -171,7 +171,7 @@ void notify_complete::resolve_complete(union sigval sv)
         [dnsc, addrs] {
           dnsc(0, addrs);
         },
-        fiber::k_default_stack_size, "dns lookup complete");
+        ths->stack_size_, "dns lookup complete");
   }
 }
 
@@ -222,16 +222,19 @@ std::pair<int, std::vector<sockaddr_in6>> get_addrinfo(const char *host, int por
   bool done = false;
   int ret;
   std::vector<sockaddr_in6> addrs;
+  auto stack_size = 16 * 1024 - 256;
 
-  lookup_and_run(host, port, [&ret, &addrs, &done, &mtx, &cond](int err_code, const std::vector<sockaddr_in6> &addrsp) {
-    ret = err_code;
-    if (ret == 0)
-      addrs = addrsp;
+  lookup_and_run(host, port,
+                 [&ret, &addrs, &done, &mtx, &cond](int err_code, const std::vector<sockaddr_in6> &addrsp) {
+                   ret = err_code;
+                   if (ret == 0)
+                     addrs = addrsp;
 
-    fiber_lock lock(mtx);
-    done = true;
-    cond.notify_all();
-  });
+                   fiber_lock lock(mtx);
+                   done = true;
+                   cond.notify_all();
+                 },
+                 stack_size);
 
   fiber_lock lock(mtx);
   while (!done)
