@@ -90,7 +90,8 @@ endif
 #
 # compiler flags that are used in release and debug builds
 #
-CFLAGS_release+=-O2 -DNDEBUG
+#CFLAGS_release+=-O2 -DNDEBUG
+CFLAGS_release+=-ggdb -O0 -DDEBUG
 CFLAGS_debug+=-ggdb -O0 -DDEBUG
 
 ifneq (clean,$(MAKECMDGOALS))
