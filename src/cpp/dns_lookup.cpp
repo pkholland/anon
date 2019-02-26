@@ -50,14 +50,14 @@ struct notify_complete
     // thread that libanl will use to call us
     // back on, so set the pthread stack size
     // small here
-    int rslt = pthread_attr_init(&ptattr_);
-    if (rslt != 0)
-    {
-      // note this is almost "do_error" except that macro uses errno instead of a provided rslt, so we do it manually here...
-      anon_log_error("pthread_attr_init(&ptattr_) failed with result: " << error_string(rslt));
-      inform_in_fiber(dnsc, rslt);
-      throw std::system_error(rslt, std::system_category());
-    }
+    // int rslt = pthread_attr_init(&ptattr_);
+    // if (rslt != 0)
+    // {
+    //   // note this is almost "do_error" except that macro uses errno instead of a provided rslt, so we do it manually here...
+    //   anon_log_error("pthread_attr_init(&ptattr_) failed with result: " << error_string(rslt));
+    //   inform_in_fiber(dnsc, rslt);
+    //   throw std::system_error(rslt, std::system_category());
+    // }
     //rslt = pthread_attr_setstacksize(&ptattr_, 128 * 1024);
     // if (rslt != 0)
     // {
@@ -87,12 +87,12 @@ struct notify_complete
     se_.sigev_notify = SIGEV_THREAD;
     se_.sigev_value.sival_ptr = this;
     se_.sigev_notify_function = &resolve_complete;
-    se_.sigev_notify_attributes = &ptattr_;
+    //se_.sigev_notify_attributes = &ptattr_;
   }
 
   ~notify_complete()
   {
-    pthread_attr_destroy(&ptattr_);
+    //pthread_attr_destroy(&ptattr_);
   }
 
   static void resolve_complete(union sigval sv);
