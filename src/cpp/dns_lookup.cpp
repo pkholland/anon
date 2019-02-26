@@ -58,15 +58,15 @@ struct notify_complete
       inform_in_fiber(dnsc, rslt);
       throw std::system_error(rslt, std::system_category());
     }
-    rslt = pthread_attr_setstacksize(&ptattr_, 128 * 1024);
-    if (rslt != 0)
-    {
-      // note this is almost "do_error" except that macro uses errno instead of a provided rslt, so we do it manually here...
-      anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, 128*1024) failed with result: " << error_string(rslt));
-      pthread_attr_destroy(&ptattr_);
-      inform_in_fiber(dnsc, rslt);
-      throw std::system_error(rslt, std::system_category());
-    }
+    //rslt = pthread_attr_setstacksize(&ptattr_, 128 * 1024);
+    // if (rslt != 0)
+    // {
+    //   // note this is almost "do_error" except that macro uses errno instead of a provided rslt, so we do it manually here...
+    //   anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, 128*1024) failed with result: " << error_string(rslt));
+    //   pthread_attr_destroy(&ptattr_);
+    //   inform_in_fiber(dnsc, rslt);
+    //   throw std::system_error(rslt, std::system_category());
+    // }
 
     // gai takes the port parameter as a string
     sprintf(&portString_[0], "%d", port);
@@ -104,7 +104,7 @@ struct notify_complete
   struct addrinfo hints_;
   struct sigevent se_;
   pthread_attr_t ptattr_;
-  char portString_[8];
+  char portString_[32];
 };
 
 // callback that getaddrinfo_a calls when
