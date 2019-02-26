@@ -88,10 +88,13 @@ protected:
   bool SubmitToThread(std::function<void()> &&f) override
   {
     fiber::run_in_fiber(
+        auto stack_size = 64 * 1024 - 256;
         [f] {
+          anon_log("running aws task");
           f();
+          anon_log("done running aws task");
         },
-        fiber::k_default_stack_size, "aws SubmitToThread");
+        stack_size, "aws SubmitToThread");
   }
 };
 std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
