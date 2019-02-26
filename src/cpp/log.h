@@ -133,7 +133,7 @@ static void output(const char *file_name, int line_num, Func func, bool err)
 #endif
   if (write(err ? 2 : 1, s.c_str(), s.length()))
     ;
-} // namespace Log
+}
 }; // namespace Log
 
 inline std::string error_string2(int err)
@@ -233,3 +233,16 @@ inline std::string errno_string()
     anon_log_error(fn << " failed with errno: " << errno_string()); \
     throw std::system_error(errno, std::system_category());         \
   } while (0)
+
+namespace Log
+{
+template <typename Func>
+std::string fmt(Func func)
+{
+  std::ostringstream msg;
+  func(msg);
+  return msg.str();
+}
+}; // namespace Log
+
+#define anon_throw(_exc_type, _body) throw _exc_type(Log::fmt([&](std::ostream &msg) { msg << _body; }))

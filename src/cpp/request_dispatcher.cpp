@@ -32,17 +32,11 @@ request_helper request_mapping_helper(const std::string &path_spec)
   std::string path, query, headers;
   pcrecpp::RE split_at_q("([^?]*)(.*)");
   if (!split_at_q.FullMatch(path_spec, &path, &query))
-  {
-    anon_log_error("request_mapping failed, invalid path: " << path_spec);
-    throw std::runtime_error("request_mapping failed, invalid path");
-  }
+    anon_throw(std::runtime_error, "request_mapping failed, invalid path: " << path_spec);
   if (query.size() > 0)
   {
     if (!split_at_q.FullMatch(query.substr(1), &query, &headers))
-    {
-      anon_log_error("request_mapping failed, invalid path: " << path);
-      throw std::runtime_error("request_mapping failed, invalid path");
-    }
+      anon_throw(std::runtime_error, "request_mapping failed, invalid path: " << path);
     if (headers.size() > 0)
       headers = headers.substr(1);
   }

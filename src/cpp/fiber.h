@@ -559,6 +559,12 @@ public:
   {
   }
 
+  fiber_io_error(const std::string &what_arg)
+      : std::runtime_error(what_arg),
+        backoff_(false)
+  {
+  }
+
   fiber_io_error(const char *what_arg, int backoff_seconds, bool close_socket_hint = false)
       : std::runtime_error(what_arg),
         backoff_seconds_(backoff_seconds),

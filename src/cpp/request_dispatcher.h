@@ -257,10 +257,7 @@ public:
     auto full_path_spec = _root_path + path_spec;
     std::string non_var, var;
     if (!_split_at_var.FullMatch(full_path_spec, &non_var, &var))
-    {
-      anon_log_error("path split failed, invalid path: " << full_path_spec);
-      throw std::runtime_error("request_mapping failed, invalid path");
-    }
+      anon_throw(std::runtime_error, "path split failed, invalid path: " << full_path_spec);
     _map[method][non_var].push_back(get_map_responder(f, request_mapping_helper(full_path_spec)));
   }
 
@@ -270,10 +267,7 @@ public:
     auto full_path_spec = _root_path + path_spec;
     std::string non_var, var;
     if (!_split_at_var.FullMatch(full_path_spec, &non_var, &var))
-    {
-      anon_log_error("path split failed, invalid path: " << full_path_spec);
-      throw std::runtime_error("request_mapping failed, invalid path");
-    }
+      anon_throw(std::runtime_error, "path split failed, invalid path: " << full_path_spec);
     _map[method][non_var].push_back(get_map_responder_body(f, request_mapping_helper(full_path_spec)));
   }
 

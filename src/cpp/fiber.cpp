@@ -257,27 +257,18 @@ size_t fiber_pipe::read(void *buf, size_t count) const
     {
       if (remote_hangup_)
       {
-#if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
-#endif
-        throw fiber_io_error("read(fd_, buf, count) detected remote hangup");
+        anon_throw(fiber_io_error, "read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
       }
       else if (errno == EAGAIN)
         tls_io_params.sleep_until_data_available(const_cast<fiber_pipe *>(this));
       else
       {
-#if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("read(" << fd_ << ", <ptr>, " << count << ") failed with errno: " << errno_string());
-#endif
-        throw fiber_io_error("read(fd_, buf, count)");
+        anon_throw(fiber_io_error, "read(" << fd_ << ", <ptr>, " << count << ") failed with errno: " << errno_string());
       }
     }
     else if (num_bytes_read == 0 && count != 0)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
-#endif
-      throw fiber_io_error("read(fd_, buf, count) returned 0, other end probably closed");
+      anon_throw(fiber_io_error, "read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
     }
     else
       break;
@@ -295,10 +286,7 @@ void fiber_pipe::write(const void *buf, size_t count) const
   {
     if (remote_hangup_)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("remote hangup detected on write, fd: " << fd_);
-#endif
-      throw fiber_io_error("remote hangup detected on write");
+      anon_throw(fiber_io_error, "remote hangup detected on write, fd: " << fd_);
     }
     auto bytes_written = ::write(fd_, &p[total_bytes_written], count - total_bytes_written);
     if (bytes_written == -1)
@@ -307,18 +295,12 @@ void fiber_pipe::write(const void *buf, size_t count) const
         tls_io_params.sleep_until_write_possible(const_cast<fiber_pipe *>(this));
       else
       {
-#if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") failed with errno: " << errno_string());
-#endif
-        throw fiber_io_error("write(fd_, &p[total_bytes_written], count - total_bytes_written)");
+        anon_throw(fiber_io_error, "write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") failed with errno: " << errno_string());
       }
     }
     else if (bytes_written == 0 && count != 0)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") returned 0, other end probably closed");
-#endif
-      throw fiber_io_error("write(fd_, &p[total_bytes_written], count - total_bytes_written)");
+      anon_throw(fiber_io_error, "write(" << fd_ << ", <ptr>, " << count - total_bytes_written << ") returned 0, other end probably closed");
     }
     else
       total_bytes_written += bytes_written;
@@ -493,10 +475,7 @@ void io_params::sleep_until_data_available(fiber_pipe *pipe)
   if (tls_io_params.timeout_expired_)
   {
     tls_io_params.timeout_expired_ = false;
-#if ANON_LOG_NET_TRAFFIC > 0
-    anon_log("throwing read io timeout for fd: " << pipe->get_fd());
-#endif
-    throw std::runtime_error("io timeout");
+    anon_throw(std::runtime_error, "throwing read io timeout for fd: " << pipe->get_fd());
   }
 }
 
@@ -513,10 +492,7 @@ void io_params::sleep_until_write_possible(fiber_pipe *pipe)
   if (tls_io_params.timeout_expired_)
   {
     tls_io_params.timeout_expired_ = false;
-#if ANON_LOG_NET_TRAFFIC > 0
-    anon_log("throwing write io timeout for fd: " << pipe->get_fd());
-#endif
-    throw std::runtime_error("io timeout");
+    anon_throw(std::runtime_error, "throwing write io timeout for fd: " << pipe->get_fd());
   }
 }
 

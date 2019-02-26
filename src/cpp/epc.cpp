@@ -297,10 +297,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
         }
         else
         {
-#if ANON_LOG_NET_TRAFFIC > 0
-          anon_log("endpoint_cluster lookup failed: " << gai_strerror(lookup_error_));
-#endif
-          throw std::runtime_error("endpoint_cluster lookup");
+          anon_throw(std::runtime_error, "endpoint_cluster lookup failed: " << gai_strerror(lookup_error_));
         }
       }
 
@@ -492,10 +489,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
               }
               else
               {
-#if ANON_LOG_NET_TRAFFIC > 0
-                anon_log("tcp_client::connect(" << ep->addr_ << "): " << gai_strerror(con.first));
-#endif
-                throw std::runtime_error("tcp_client::connect");
+                anon_throw(std::runtime_error, "tcp_client::connect(" << ep->addr_ << "): " << gai_strerror(con.first));
               }
             }
           }

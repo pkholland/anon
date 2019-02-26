@@ -103,10 +103,7 @@ struct http_request
     }
     if (required)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("missing, required querystring field: \"" << field << "\"");
-#endif
-      throw std::runtime_error("missing, required querystring field");
+      anon_throw(std::runtime_error, "missing, required querystring field: \"" << field << "\"");
     }
     return dflt;
   }

@@ -123,8 +123,7 @@ static unsigned char b64_index(unsigned char code)
   char str[2];
   str[0] = code;
   str[1] = 0;
-  anon_log("invalid character in b64 string: (" << (int)code << ") \"" << &str[0] << "\"");
-  throw std::runtime_error("");
+  anon_throw(std::runtime_error, "invalid character in b64 string: (" << (int)code << ") \"" << &str[0] << "\"");
 }
 
 std::string b64url_decode(const char *data, size_t len, char pad)
@@ -133,16 +132,14 @@ std::string b64url_decode(const char *data, size_t len, char pad)
   {
     if (len % 4)
     {
-      anon_log("illegal base64 length - must be a multiple of 4, was: " << len);
-      throw std::runtime_error("illegal base64 length");
+      anon_throw(std::runtime_error, "illegal base64 length - must be a multiple of 4, was: " << len);
     }
   }
   else
   {
     if ((len % 4) == 1)
     {
-      anon_log("illegal unpadded base64 length - (len % 4) cannot == 1, len: " << len);
-      throw std::runtime_error("illegal base64 length");
+      anon_throw(std::runtime_error, "illegal unpadded base64 length - (len % 4) cannot == 1, len: " << len);
     }
   }
   int num_pads = 0;

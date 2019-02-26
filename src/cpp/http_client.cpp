@@ -231,10 +231,7 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
       // have we already filled all of header_buf_ without seeing the end of the headers?
       if (!pcallback.headers_complete_ && (bsp == sizeof(header_buf_)))
       {
-#if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("invalid http response - headers bigger than " << sizeof(header_buf_) << " bytes");
-#endif
-        throw std::runtime_error("http headers too big");
+        anon_throw(std::runtime_error, "invalid http response - headers bigger than " << sizeof(header_buf_) << " bytes");
       }
 
       // if there is no un-parsed data in our read buffer then read more
@@ -255,13 +252,10 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
 
     if (!pcallback.message_complete && parser.http_errno)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
-      anon_log("invalid http received, error: " << http_errno_description((enum http_errno)parser.http_errno));
-#endif
       //anon_log("bsp: " << bsp << ", bep: " << bep);
       //header_buf_[bep] = 0;
       //anon_log("http data:\n" << &header_buf_[bsp]);
-      throw fiber_io_error("http parser error");
+      anon_throw(fiber_io_error, "invalid http received, error: " << http_errno_description((enum http_errno)parser.http_errno));
     }
 
     // check for some standard error codes that we handle with special logic
