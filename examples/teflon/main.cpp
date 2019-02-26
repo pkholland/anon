@@ -87,9 +87,11 @@ public:
 protected:
   bool SubmitToThread(std::function<void()> &&f) override
   {
-    fiber::run_in_fiber([f] {
-      f();
-    });
+    fiber::run_in_fiber(
+        [f] {
+          f();
+        },
+        fiber::k_default_stack_size, "aws SubmitToThread");
   }
 };
 std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
@@ -407,7 +409,11 @@ extern "C" int main(int argc, char **argv)
     }
     else
     {
-      fiber::run_in_fiber([&create_srvs_proc] { create_srvs_proc(); });
+      fiber::run_in_fiber(
+          [&create_srvs_proc] {
+            create_srvs_proc();
+          },
+          fiber::k_default_stack_size, "teflon direct");
     }
 
     // this call returns after the above call to io_dispatch::stop() has been

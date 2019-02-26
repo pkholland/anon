@@ -146,7 +146,7 @@ public:
   // this fiber after 'fn' returns.
   template <typename Fn>
   fiber(Fn fn, size_t stack_size = k_default_stack_size, bool auto_free = false,
-        const char *fiber_name = "unknown")
+        const char *fiber_name = "unknown1")
       : auto_free_(auto_free),
         running_(true),
         stack_(::operator new(stack_size)),
@@ -209,7 +209,7 @@ public:
   // on one of the io threads of the io_dispatch passed to attach.
   // The fiber will automatically be deleted when 'fn' returns.
   template <typename Fn>
-  static void run_in_fiber(Fn fn, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown")
+  static void run_in_fiber(Fn fn, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown2")
   {
 #if defined(ANON_RUNTIME_CHECKS)
     if (!on_one_pipe_)
