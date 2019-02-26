@@ -68,7 +68,7 @@ public:
                                                   const char *host_name_for_tls = "",
                                                   const tls_context *ctx = 0,
                                                   int max_conn_per_ep = 20,
-                                                  int lookup_frequency_in_seconds = 120)
+                                                  int lookup_frequency_in_seconds = 2)
   {
     auto ths = std::make_shared<endpoint_cluster>(lookup, do_tls, host_name_for_tls, ctx, max_conn_per_ep, lookup_frequency_in_seconds);
 
@@ -99,11 +99,11 @@ public:
   }
 
   endpoint_cluster(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
-                   bool do_tls = false,
-                   const char *host_name_for_tls = "",
-                   const tls_context *ctx = 0,
-                   int max_conn_per_ep = 20,
-                   int lookup_frequency_in_seconds = 120)
+                   bool do_tls,
+                   const char *host_name_for_tls,
+                   const tls_context *ctx,
+                   int max_conn_per_ep,
+                   int lookup_frequency_in_seconds)
       : lookup_(lookup),
         shutting_down_(false),
         do_tls_(do_tls),

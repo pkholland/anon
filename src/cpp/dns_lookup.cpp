@@ -58,11 +58,11 @@ struct notify_complete
       inform_in_fiber(dnsc, rslt);
       throw std::system_error(rslt, std::system_category());
     }
-    rslt = pthread_attr_setstacksize(&ptattr_, 32 * 1024);
+    rslt = pthread_attr_setstacksize(&ptattr_, 128 * 1024);
     if (rslt != 0)
     {
       // note this is almost "do_error" except that macro uses errno instead of a provided rslt, so we do it manually here...
-      anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, 64*1024) failed with result: " << error_string(rslt));
+      anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, 128*1024) failed with result: " << error_string(rslt));
       pthread_attr_destroy(&ptattr_);
       inform_in_fiber(dnsc, rslt);
       throw std::system_error(rslt, std::system_category());
