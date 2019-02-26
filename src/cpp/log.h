@@ -56,6 +56,7 @@ struct recent_logs
   static recent_logs singleton;
   std::mutex mutex;
 };
+
 inline void add_to_recent_logs(const std::string &line)
 {
   std::unique_lock<std::mutex> l(recent_logs::singleton.mutex);
@@ -63,6 +64,7 @@ inline void add_to_recent_logs(const std::string &line)
   recent_logs::singleton.lines[indx] = line;
   ++recent_logs::singleton.current;
 }
+
 template <typename T>
 T &operator<<(T &t, const recent_logs &r)
 {
@@ -70,10 +72,8 @@ T &operator<<(T &t, const recent_logs &r)
   auto start_indx = r.current - recent_logs::num_kept;
   if (start_indx < 0)
     start_indx = 0;
-  start_indx = start_indx % recent_logs::num_kept;
-  auto end_indx = r.current % recent_logs::num_kept;
-  for (auto i = start_indx; i < end_indx; i++)
-    t << r.lines[i];
+  for (auto i = start_indx; i < r.current; i++)
+    t << r.lines[i % recent_logs::num_kept];
   return t;
 }
 #endif
