@@ -404,8 +404,9 @@ extern "C" int main(int argc, char **argv)
               // terminate.
               io_dispatch::stop();
             },
-            fiber::k_default_stack_size, false, "teflon"));
-      });
+            fiber::k_default_stack_size, false, "teflon1"));
+      },
+      fiber::k_default_stack_size, "teflon2");
     }
     else
     {

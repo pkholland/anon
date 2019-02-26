@@ -83,7 +83,8 @@ public:
                 auto ths = wp.lock();
                 if (ths)
                   ths->update_endpoints();
-              });
+              },
+              fiber::k_default_stack_size, "epc, update_endpoints");
         },
         cur_time());
 
@@ -93,6 +94,7 @@ public:
                                              if (ths)
                                                ths->idle_socket_sweep();
                                            });
+    return ths;
   }
 
   endpoint_cluster(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
