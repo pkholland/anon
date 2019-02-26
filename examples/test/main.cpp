@@ -365,14 +365,16 @@ extern "C" int main(int argc, char **argv)
               anon_log("locking mutex " << &mutex);
               fiber_lock lock(mutex);
               anon_log("locked mutex, now unlocking and exiting");
-            });
+            },
+                      fiber::k_default_stack_size, false, "sf1");
 
             // "in-fiber" start sf2
             fiber sf2([&mutex] {
               anon_log("locking mutex " << &mutex);
               fiber_lock lock(mutex);
               anon_log("locked mutex, now unlocking and exiting");
-            });
+            },
+                      fiber::k_default_stack_size, false, "sf2");
 
             anon_log("fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " both running, now unlocking mutex " << &mutex);
             mutex.unlock();

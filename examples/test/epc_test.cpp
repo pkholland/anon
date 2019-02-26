@@ -69,7 +69,7 @@ void epc_test()
   fiber::run_in_fiber([] {
     auto start_time = cur_time();
 
-    auto epc = std::make_shared<endpoint_cluster>(
+    auto epc = endpoint_cluster::create(
         []() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
           // "address lookup" function that simply returns
           // localhost with each port number currently in port_nums

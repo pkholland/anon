@@ -62,7 +62,7 @@ void aws_sqs_listener::start()
               if (ths)
                 ths->set_visibility_timeout();
             },
-            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout");
+            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
       },
       cur_time() + visibility_sweep_time);
 }
@@ -214,7 +214,7 @@ void aws_sqs_listener::set_visibility_timeout()
     }
   }
 
-  // schedule the sweap to run again in visibility_sweep_time seconds
+  // schedule the sweep to run again in visibility_sweep_time seconds
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
   _timer_task = io_dispatch::schedule_task(
       [wp] {
@@ -224,7 +224,7 @@ void aws_sqs_listener::set_visibility_timeout()
               if (ths)
                 ths->set_visibility_timeout();
             },
-            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, reset_visibility_timeout");
+            aws_sqs_listener::_default_process_message_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
       },
       cur_time() + visibility_sweep_time);
 }

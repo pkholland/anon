@@ -79,7 +79,7 @@ public:
       return std::make_pair(dnsl.first, addrs);
     };
 
-    return m[key] = std::make_shared<endpoint_cluster>(lookup, uri.GetScheme() == Scheme::HTTPS, uri.GetAuthority().c_str(), _tls.get());
+    return m[key] = endpoint_cluster::create(lookup, uri.GetScheme() == Scheme::HTTPS, uri.GetAuthority().c_str(), _tls.get());
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,

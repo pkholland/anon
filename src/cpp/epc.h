@@ -63,6 +63,38 @@ public:
   //  executing in other fibers at the time that a new call to with_connected_pipe
   //  is made.  It can also happen if certain "back off" strategies are currently in
   //  effect for that ip address at the time that with_connected_pipe is called.
+  static std::shared_ptr<endpoint_cluster> create(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
+                                                  bool do_tls = false,
+                                                  const char *host_name_for_tls = "",
+                                                  const tls_context *ctx = 0,
+                                                  int max_conn_per_ep = 20,
+                                                  int lookup_frequency_in_seconds = 120)
+  {
+    auto ths = std::make_shared<endpoint_cluster>(lookup, do_tls, host_name_for_tls, ctx, max_conn_per_ep, lookup_frequency_in_seconds);
+
+    // run as a task (right now) instead of directly starting
+    // the fiber so the destructor (actually, do_shutdown) can
+    // reliably wait for proper exit.
+    std::weak_ptr<endpoint_cluster> wp = ths->shared_from_this();
+    ths->update_task_ = io_dispatch::schedule_task(
+        [wp] {
+          fiber::run_in_fiber(
+              [wp] {
+                auto ths = wp.lock();
+                if (ths)
+                  ths->update_endpoints();
+              });
+        },
+        cur_time());
+
+    fiber_pipe::register_idle_socket_sweep(ths.get(),
+                                           [wp] {
+                                             auto ths = wp.lock();
+                                             if (ths)
+                                               ths->idle_socket_sweep();
+                                           });
+  }
+
   endpoint_cluster(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
                    bool do_tls = false,
                    const char *host_name_for_tls = "",
@@ -83,18 +115,9 @@ public:
         lookup_frequency_seconds_(lookup_frequency_in_seconds),
         update_running_(false)
   {
-    // run as a task (right now) instead of directly starting
-    // the fiber so the destructor (actually, do_shutdown) can
-    // reliably wait for proper exit.
-    update_task_ = io_dispatch::schedule_task(
-        [this] {
-          fiber::run_in_fiber([this] { update_endpoints(); });
-        },
-        cur_time());
-
-    fiber_pipe::register_idle_socket_sweep(this, [this] { idle_socket_sweep(); });
   }
 
+public:
   //  call the given 'f' with a pipe containing a socket that is
   //  connected to one of the ip address returned by the 'lookup'
   //  parameter given to the constructor of this endpoint_cluster.

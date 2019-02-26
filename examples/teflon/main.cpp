@@ -322,85 +322,87 @@ extern "C" int main(int argc, char **argv)
     {
 
       fiber::run_in_fiber([cmd_pipe, &my_http, &my_https, &cmd_fiber, &create_srvs_proc] {
-        cmd_fiber = std::unique_ptr<fiber>(new fiber([cmd_pipe, &my_http, &my_https, &create_srvs_proc] {
-          // the command parser itself
-          if (fcntl(cmd_pipe, F_SETFL, fcntl(cmd_pipe, F_GETFL) | O_NONBLOCK) != 0)
-            do_error("fcntl(cmd_pipe, F_SETFL, O_NONBLOCK)");
+        cmd_fiber = std::unique_ptr<fiber>(new fiber(
+            [cmd_pipe, &my_http, &my_https, &create_srvs_proc] {
+              // the command parser itself
+              if (fcntl(cmd_pipe, F_SETFL, fcntl(cmd_pipe, F_GETFL) | O_NONBLOCK) != 0)
+                do_error("fcntl(cmd_pipe, F_SETFL, O_NONBLOCK)");
 
-          fiber_pipe pipe(cmd_pipe, fiber_pipe::unix_domain);
-          char cmd;
-          char ok = 1;
+              fiber_pipe pipe(cmd_pipe, fiber_pipe::unix_domain);
+              char cmd;
+              char ok = 1;
 
-          // tell the caller we are fully initialized and
-          // ready to accept commands
-          anon_log("ready to start http server");
-          pipe.write(&ok, sizeof(ok));
+              // tell the caller we are fully initialized and
+              // ready to accept commands
+              anon_log("ready to start http server");
+              pipe.write(&ok, sizeof(ok));
 
-          // continue to parse commands
-          // until we get one that tells us to stop
-          while (true)
-          {
+              // continue to parse commands
+              // until we get one that tells us to stop
+              while (true)
+              {
 
-            try
-            {
-              pipe.read(&cmd, 1);
-            }
-            catch (const std::exception &err)
-            {
-              anon_log_error("command pipe unexpectedly failed: " << err.what());
-              exit(1);
-            }
-            catch (...)
-            {
-              anon_log_error("command pipe unexpectedly failed");
-              exit(1);
-            }
-            if (cmd == 0)
-            {
-              if (!my_http && !my_https)
-                create_srvs_proc();
-              else
-                anon_log_error("start command already processed");
-            }
-            else if (cmd == 1)
-              break;
-            else
-              anon_log_error("unknown command: " << (int)cmd);
-          }
+                try
+                {
+                  pipe.read(&cmd, 1);
+                }
+                catch (const std::exception &err)
+                {
+                  anon_log_error("command pipe unexpectedly failed: " << err.what());
+                  exit(1);
+                }
+                catch (...)
+                {
+                  anon_log_error("command pipe unexpectedly failed");
+                  exit(1);
+                }
+                if (cmd == 0)
+                {
+                  if (!my_http && !my_https)
+                    create_srvs_proc();
+                  else
+                    anon_log_error("start command already processed");
+                }
+                else if (cmd == 1)
+                  break;
+                else
+                  anon_log_error("unknown command: " << (int)cmd);
+              }
 
-          // tell the tcp server(s) to stop calling 'accept'
-          // these functions return once it is in a
-          // state of no longer calling accept on any thread
-          // and the listening socket is disconnected from the
-          // io dispatch mechanism, so no new thread will respond
-          // even if a client calls connect.
-          if (my_http)
-            my_http->stop();
-          if (my_https)
-            my_https->stop();
-          anon_log("http server stopped");
+              // tell the tcp server(s) to stop calling 'accept'
+              // these functions return once it is in a
+              // state of no longer calling accept on any thread
+              // and the listening socket is disconnected from the
+              // io dispatch mechanism, so no new thread will respond
+              // even if a client calls connect.
+              if (my_http)
+                my_http->stop();
+              if (my_https)
+                my_https->stop();
+              anon_log("http server stopped");
 
-          // tell the caller we have stopped calling accept
-          // on the listening socket(s).  It is now free to
-          // let some other process start calling it if it
-          // wishes.
-          pipe.write(&ok, sizeof(ok));
+              // tell the caller we have stopped calling accept
+              // on the listening socket(s).  It is now free to
+              // let some other process start calling it if it
+              // wishes.
+              pipe.write(&ok, sizeof(ok));
 
-          // tell the app to close any outgoing (they might be
-          // cached) connections, since the next step is to
-          // wait for all connections be to closed
-          server_close_outgoing();
+              // tell the app to close any outgoing (they might be
+              // cached) connections, since the next step is to
+              // wait for all connections be to closed
+              server_close_outgoing();
 
-          // there may have been active network sessions because
-          // of previous calls to accept.  So wait here until
-          // they have all closed.  Note that in certain cases
-          // this may wait until the network io timeout has expired
-          fiber_pipe::wait_for_zero_net_pipes();
+              // there may have been active network sessions because
+              // of previous calls to accept.  So wait here until
+              // they have all closed.  Note that in certain cases
+              // this may wait until the network io timeout has expired
+              fiber_pipe::wait_for_zero_net_pipes();
 
-          // instruct the io dispatch threads to all wake up and
-          // terminate.
-          io_dispatch::stop();
-        }));
+              // instruct the io dispatch threads to all wake up and
+              // terminate.
+              io_dispatch::stop();
+            },
+            fiber::k_default_stack_size, false, "teflon"));
       });
     }
     else
