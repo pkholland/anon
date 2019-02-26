@@ -125,11 +125,16 @@ void endpoint_cluster::update_endpoints()
 
   if (!shutting_down_ && lookup_frequency_seconds_ > 0)
   {
+    std::weak_ptr<endpoint_cluster> wp = shared_from_this();
     update_task_ = io_dispatch::schedule_task(
-        [this] {
-          fiber::run_in_fiber([this] {
-            update_endpoints();
-          });
+        [wp] {
+          fiber::run_in_fiber(
+              [wp] {
+                auto ths = wp.lock();
+                if (ths)
+                  ths->update_endpoints();
+              },
+              fiber::k_default_stack_size, "endpoint_cluster, update_endpoints");
         },
         cur_time() + lookup_frequency_seconds_);
   }
@@ -199,31 +204,38 @@ void endpoint_cluster::backoff(endpoint *ep, const struct timespec &start_time, 
   // in a fiber.  So here the functor creates a fiber and executes
   // notify_all in there.  It is the fiber exiting condition that
   // actually schedules the notified fibers to run.
+  std::weak_ptr<endpoint_cluster> wp = shared_from_this();
   auto wakeup_task = io_dispatch::schedule_task(
-      [this] {
-        fiber::run_in_fiber([this] {
-          fiber_lock lock(mtx_);
+      [wp] {
+        fiber::run_in_fiber(
+            [wp] {
+              auto ths = wp.lock();
+              if (ths)
+              {
+                fiber_lock lock(ths->mtx_);
 
-          // TODO: fix this
-          int cur_outstanding_requests = 0;
-          for (auto ep = endpoints_.begin(); ep != endpoints_.end(); ep++)
-          {
-            if (!ep->second->is_detached_)
-              cur_outstanding_requests += ep->second->outstanding_requests_;
-          }
+                // TODO: fix this
+                int cur_outstanding_requests = 0;
+                for (auto ep = ths->endpoints_.begin(); ep != ths->endpoints_.end(); ep++)
+                {
+                  if (!ep->second->is_detached_)
+                    cur_outstanding_requests += ep->second->outstanding_requests_;
+                }
 
-          cur_avail_requests_ = total_possible_requests_ - cur_outstanding_requests;
-          if (cur_avail_requests_ > 0)
-            connections_possible_cond_.notify_all();
+                ths->cur_avail_requests_ = ths->total_possible_requests_ - cur_outstanding_requests;
+                if (ths->cur_avail_requests_ > 0)
+                  ths->connections_possible_cond_.notify_all();
 
-          auto ct = cur_time();
-          auto it = io_retry_tasks_.begin();
-          while (it != io_retry_tasks_.end() && it->first <= ct)
-          {
-            io_dispatch::remove_task(it->second);
-            io_retry_tasks_.erase(it++);
-          }
-        });
+                auto ct = cur_time();
+                auto it = ths->io_retry_tasks_.begin();
+                while (it != ths->io_retry_tasks_.end() && it->first <= ct)
+                {
+                  io_dispatch::remove_task(it->second);
+                  ths->io_retry_tasks_.erase(it++);
+                }
+              }
+            },
+            fiber::k_default_stack_size, "endpoint_cluster::backoff");
       },
       ep->next_avail_time_);
   io_retry_tasks_.insert(std::make_pair(ep->next_avail_time_, wakeup_task));

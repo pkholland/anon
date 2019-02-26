@@ -69,22 +69,23 @@ void epc_test()
   fiber::run_in_fiber([] {
     auto start_time = cur_time();
 
-    endpoint_cluster epc([]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
-      // "address lookup" function that simply returns
-      // localhost with each port number currently in port_nums
-      // all using "preference" 0
-      sockaddr_in6 lh = {0};
-      lh.sin6_family = AF_INET6;
-      lh.sin6_addr = in6addr_loopback;
-      std::vector<std::pair<int, sockaddr_in6>> addrs;
-      for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
-      {
-        lh.sin6_port = htons(port_nums[i]);
-        addrs.push_back(std::make_pair(0 /*preference*/, lh));
-      }
-      return std::make_pair(0 /*err_code*/, addrs);
-    },
-                         false /*do_tls*/, "" /*host_name_for_tls*/, 0 /*tls_ctx*/, 20 /*max_conn_per_ep*/);
+    auto epc = std::make_shared<endpoint_cluster>(
+        []() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
+          // "address lookup" function that simply returns
+          // localhost with each port number currently in port_nums
+          // all using "preference" 0
+          sockaddr_in6 lh = {0};
+          lh.sin6_family = AF_INET6;
+          lh.sin6_addr = in6addr_loopback;
+          std::vector<std::pair<int, sockaddr_in6>> addrs;
+          for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
+          {
+            lh.sin6_port = htons(port_nums[i]);
+            addrs.push_back(std::make_pair(0 /*preference*/, lh));
+          }
+          return std::make_pair(0 /*err_code*/, addrs);
+        },
+        false /*do_tls*/, "" /*host_name_for_tls*/, nullptr /*tls_ctx*/, 20 /*max_conn_per_ep*/);
 
     fiber_mutex mtx;
     fiber_cond cond;
@@ -96,7 +97,7 @@ void epc_test()
 
       fiber::run_in_fiber([&mtx, &cond, &remaining, &epc] {
         for (int j = 0; j < 100; j++)
-          epc.with_connected_pipe([](const pipe_t *pipe) {
+          epc->with_connected_pipe([](const pipe_t *pipe) {
             const char *msg = "hello";
             //anon_log("sending epc test message \"" << msg << "\"");
             pipe->write(msg, strlen(msg) + 1);

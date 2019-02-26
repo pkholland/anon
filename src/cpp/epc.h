@@ -27,7 +27,7 @@
 #include "tls_context.h"
 #include <list>
 
-class endpoint_cluster
+class endpoint_cluster : public std::enable_shared_from_this<endpoint_cluster>
 {
 public:
   // given a function 'lookup', construct an endpoint_cluster
