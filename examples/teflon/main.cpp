@@ -87,8 +87,8 @@ public:
 protected:
   bool SubmitToThread(std::function<void()> &&f) override
   {
+    auto stack_size = 64 * 1024 - 256;
     fiber::run_in_fiber(
-        auto stack_size = 64 * 1024 - 256;
         [f] {
           anon_log("running aws task");
           f();
