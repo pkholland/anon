@@ -32,6 +32,7 @@
 #include <atomic>
 #include <sys/epoll.h>
 #include <string.h>
+#include <signal.h>
 
 class io_ctl_handler;
 
@@ -49,7 +50,17 @@ public:
   // after this call to start returns.  This is done to permit
   // further initialization prior to having the calling thread
   // join the pool of io threads.
-  static void start(int num_threads, bool use_this_thread);
+  //
+  // numSigFds is intended to support applications that want
+  // to use signal handling from within fibers.  Typically this
+  // implies that the signal(s) need to be blocked for all threads
+  // and fibers in the app, and since the signal disposition for
+  // each thread and fiber is inherited from whatever thread
+  // created that fiber, we set the signal disposition to
+  // SIG_BLOCK for each signal from firstSig to
+  // (firstSig + numSigs - 1).
+  static void start(int num_threads, bool use_this_thread,
+                    int numSigs = 0, int firstSig = SIGRTMIN);
 
   static void start_this_thread();
 
@@ -154,6 +165,20 @@ public:
 
     io_d.num_paused_threads_ = 0;
     io_d.resume_cond_.notify_all();
+  }
+
+  // if you have passed numSigs > 0 to io_dispatch::start
+  // then this routine can be called to "retrieve" the
+  // signal numbers.  It is assumed that each client that
+  // is interested in using its own signal number would call
+  // this method once to get that signal number and then use
+  // it as appropriate.
+  static int getSigNum()
+  {
+    int sig = io_d.curSig_++;
+    if (sig >= io_d.endSig_)
+      do_error("no more available masked signals");
+    return sig;
   }
 
   // execute the given function on (exactly) one
@@ -319,6 +344,8 @@ private:
 
   std::mutex task_mutex_;
   std::multimap<struct timespec, std::unique_ptr<virt_caller_>> task_map_;
+  std::atomic_int curSig_;
+  int endSig_;
 
   static io_dispatch io_d;
 };

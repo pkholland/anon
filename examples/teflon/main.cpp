@@ -90,9 +90,7 @@ protected:
     auto stack_size = 64 * 1024 - 256;
     fiber::run_in_fiber(
         [f] {
-          anon_log("running aws task");
           f();
-          anon_log("done running aws task");
         },
         stack_size, "aws SubmitToThread");
   }
@@ -205,7 +203,13 @@ extern "C" int main(int argc, char **argv)
 #else
       std::thread::hardware_concurrency();
 #endif
-  io_dispatch::start(num_threads, true);
+  auto numSigFds =
+#ifdef TEFLON_SIGFD
+      TEFLON_SIGFD;
+#else
+      0;
+#endif
+  io_dispatch::start(num_threads, true, numSigFds);
   fiber::initialize();
   init_big_id_crypto();
 

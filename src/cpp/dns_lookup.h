@@ -28,11 +28,6 @@
 namespace dns_lookup
 {
 
-// perform an async dns lookup of host/port, and when
-// complete execute f(err_code, addrs) in a newly created
-// fiber using the given stack_size
-void lookup_and_run(const char *host, int port, const std::function<void(int err_code, const std::vector<sockaddr_in6> &addrs)> &f, size_t stack_size = fiber::k_default_stack_size);
-
 // stall this fiber and initiate an async dns lookup,
 // once that dns lookup completes resume this fiber
 // and return the looked up information.  .first is the

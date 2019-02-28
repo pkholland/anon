@@ -28,6 +28,7 @@
 #include <sys/socket.h>
 #include <sys/timerfd.h>
 #include <openssl/err.h>
+#include <sys/signalfd.h>
 
 class io_ctl_handler : public io_dispatch::handler
 {
@@ -203,12 +204,23 @@ io_dispatch::~io_dispatch()
 {
 }
 
-void io_dispatch::start(int num_threads, bool use_this_thread)
+void io_dispatch::start(int num_threads, bool use_this_thread, int numSigFds, int firstSigFdSig)
 {
 #if defined(ANON_RUNTIME_CHECKS)
   if (io_d.running_)
     throw std::runtime_error("io_dispatch::start already called");
 #endif
+
+  if (numSigFds)
+  {
+    io_d.curSig_ = firstSigFdSig;
+    io_d.endSig_ = firstSigFdSig + numSigFds;
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    for (auto sfd = 0; sfd < numSigFds; sfd++)
+      sigaddset(&sigs, firstSigFdSig + sfd);
+    pthread_sigmask(SIG_BLOCK, &sigs, NULL);
+  }
 
   io_d.running_ = true;
   io_d.num_threads_ = num_threads;

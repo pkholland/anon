@@ -64,10 +64,11 @@ public:
       anon_log("looking up sockaddr for " << key);
 #endif
       auto dnsl = dns_lookup::get_addrinfo(uri.GetAuthority().c_str(), uri.GetPort());
+
       std::vector<std::pair<int, sockaddr_in6>> addrs;
       if (dnsl.first == 0)
       {
-        for (auto a : dnsl.second)
+        for (auto &a : dnsl.second)
         {
           a.sin6_port = htons(uri.GetPort());
 #if ANON_LOG_NET_TRAFFIC > 1
