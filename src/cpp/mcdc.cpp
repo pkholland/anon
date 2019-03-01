@@ -28,19 +28,21 @@ mcd_cluster::mcd_cluster(const char *host, int port,
                          int lookup_frequency_in_seconds)
     : host_(host),
       port_(port),
-      clstr_([this]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
-        auto rslt = dns_lookup::get_addrinfo(host_.c_str(), port_);
-        if (rslt.first)
-          return std::make_pair(rslt.first, std::vector<std::pair<int, sockaddr_in6>>());
-        std::vector<std::pair<int, sockaddr_in6>> addrs;
-        for (auto i = 0; i < rslt.second.size(); i++)
-          addrs.push_back(std::make_pair(0, rslt.second[i]));
-        return std::make_pair(0, addrs);
-      },
-             false, // do_tls - memcached never runs over tls
-             "",    // host_name_for_tls
-             0,     // tls_context
-             max_conn_per_ep, lookup_frequency_in_seconds)
+      clstr_(endpoint_cluster::create(
+          [this]() -> std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> {
+            auto rslt = dns_lookup::get_addrinfo(host_.c_str(), port_);
+            std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> ret(new std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>());
+            ret->first = rslt.first;
+            if (rslt.first)
+              return std::move(ret);
+            for (auto i = 0; i < rslt.second.size(); i++)
+              ret->second.push_back(std::make_pair(0, rslt.second[i]));
+            return std::move(ret);
+          },
+          false, // do_tls - memcached never runs over tls
+          "",    // host_name_for_tls
+          0,     // tls_context
+          max_conn_per_ep, lookup_frequency_in_seconds))
 {
 }
 
@@ -64,7 +66,7 @@ void mcd_cluster::set(const std::string &key, const std::string &val, int expira
   memcpy(&pkt[32 + key.size()], val.c_str(), val.size());
 
   std::vector<unsigned char> reply(24);
-  clstr_.with_connected_pipe([&pkt, &reply](const pipe_t *pipe) {
+  clstr_->with_connected_pipe([&pkt, &reply](const pipe_t *pipe) {
     pipe->write(&pkt[0], pkt.size());
     int bytes_read = 0;
     while (bytes_read < 24)
@@ -112,7 +114,7 @@ std::string mcd_cluster::get(const std::string &key, int vbucket)
 
   std::vector<unsigned char> reply(24);
   std::string ret;
-  clstr_.with_connected_pipe([&pkt, &reply, &ret](const pipe_t *pipe) {
+  clstr_->with_connected_pipe([&pkt, &reply, &ret](const pipe_t *pipe) {
     pipe->write(&pkt[0], pkt.size());
     int bytes_read = 0;
     while (bytes_read < 24)

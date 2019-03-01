@@ -34,13 +34,13 @@ void endpoint_cluster::update_endpoints()
 
   // call the lookup function to get
   // the list of ip addrs
-  auto endpoints = lookup_();
+  auto endpoints = std::move(lookup_());
 
   fiber_lock lock(mtx_);
 
-  int err = endpoints.first;
+  int err = endpoints->first;
 
-  if (err != 0 || endpoints.second.empty())
+  if (err != 0 || endpoints->second.empty())
   {
     // if this lookup failed (for example there was a problem reaching dns),
     // but we previously were able to look things up and so have a non-empty
@@ -62,7 +62,7 @@ void endpoint_cluster::update_endpoints()
     lookup_error_ = 0;
 
     // for less typing...
-    std::vector<std::pair<int, sockaddr_in6>> &eps = endpoints.second;
+    const auto &eps = endpoints->second;
 
     total_possible_requests_ = eps.size() * max_conn_per_ep_;
 

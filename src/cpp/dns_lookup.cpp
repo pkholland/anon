@@ -25,6 +25,8 @@
 #include "tcp_utils.h"
 #include <netdb.h>
 #include <sys/signalfd.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 // getaddrinfo_a is buggy!
 // it's not even clear that it has advantages over just
@@ -219,23 +221,177 @@ fiber_mutex pipe_reader::mtx;
 } // namespace
 #endif
 
+namespace
+{
+
+class addrinfo_service
+{
+public:
+  static void create()
+  {
+    std::unique_lock<std::mutex> l(mtx);
+    if (!singleton)
+    {
+      int cmdFds[2];
+      if (socketpair(AF_UNIX, SOCK_STREAM, 0, &cmdFds[0]) != 0)
+        do_error("socketpair(AF_UNIX, SOCK_STREAM, 0, &pipe[0])");
+
+      singleton = std::make_shared<addrinfo_service>(cmdFds[0], cmdFds[1]);
+      singleton->start();
+    }
+  }
+
+  static void stop()
+  {
+    anon_log("addrinfo_service::stop");
+    singleton.reset();
+  }
+
+  addrinfo_service(int cmd_readFd, int cmd_writeFd)
+      : cmd_readFd(cmd_readFd),
+        cmd_writeFd(cmd_writeFd)
+  {
+  }
+
+  // runs in a fiber
+  static void lookup(const char *host, int port, const std::function<void(int, const std::vector<sockaddr_in6> &)> &fn)
+  {
+    if (!singleton)
+    {
+      anon_log_error("dns_lookup service not started");
+      throw std::runtime_error("dns_lookup service not started");
+    }
+
+    cmd_rec *cr = new cmd_rec;
+    cr->host_name = host;
+    cr->port = port;
+    cr->fn = fn;
+    write(singleton->cmd_writeFd, &cr, sizeof(cr));
+  }
+
+  ~addrinfo_service()
+  {
+    anon_log("addrinfo_service::~addrinfo_service");
+    cmd_rec *cr = 0;
+    write(cmd_writeFd, &cr, sizeof(cr));
+    read_thread.join();
+    close(cmd_readFd);
+    close(cmd_writeFd);
+  }
+
+private:
+  struct cmd_rec
+  {
+    std::string host_name;
+    int port;
+    std::function<void(int, const std::vector<sockaddr_in6> &)> fn;
+  };
+
+  struct reply_rec
+  {
+    int err;
+    std::vector<sockaddr_in6> addrs;
+    std::function<void(int, const std::vector<sockaddr_in6> &)> fn;
+  };
+
+  void start()
+  {
+    // load the libs into our process first...
+    struct addrinfo hints = {};
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    struct addrinfo *result;
+    if (getaddrinfo("127.0.0.1", "8080", &hints, &result) == 0)
+      freeaddrinfo(result);
+
+    read_thread = std::thread(
+        [this] {
+          while (true)
+          {
+            cmd_rec *cr;
+            auto bytes_read = read(cmd_readFd, &cr, sizeof(cr));
+            if (bytes_read != sizeof(cr))
+            {
+              anon_log("unexpected number of bytes read: " << bytes_read);
+              return;
+            }
+            if (cr == 0)
+            {
+              anon_log("terminating addrinfo thread");
+              return;
+            }
+            std::unique_ptr<cmd_rec> crp(cr);
+
+            struct addrinfo hints = {};
+            hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6, whichever
+            hints.ai_socktype = SOCK_STREAM;
+            char portString[8];
+            sprintf(&portString[0], "%d", cr->port);
+            struct addrinfo *result;
+            auto err = getaddrinfo(cr->host_name.c_str(), &portString[0], &hints, &result);
+            std::vector<sockaddr_in6> addrs;
+            if (err == 0)
+            {
+              auto addinf = result;
+              while (addinf)
+              {
+                sockaddr_in6 addr;
+                size_t addrlen = (addinf->ai_addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+                memcpy(&addr, addinf->ai_addr, addrlen);
+                addrs.push_back(addr);
+                addinf = addinf->ai_next;
+              }
+              freeaddrinfo(result);
+            }
+            auto fn = cr->fn;
+            auto stack_size = 8 * 1024 - 256;
+            fiber::run_in_fiber(
+                [err, addrs, fn] {
+                  fn(err, addrs);
+                },
+                stack_size, "getaddr_notifictaion");
+          }
+        });
+  }
+
+  int cmd_readFd;
+  int cmd_writeFd;
+  std::thread read_thread;
+
+  static std::shared_ptr<addrinfo_service> singleton;
+  static std::mutex mtx;
+};
+
+std::shared_ptr<addrinfo_service> addrinfo_service::singleton;
+std::mutex addrinfo_service::mtx;
+
+} // namespace
+
 ////////////////////////////////////////////////////////
 
 namespace dns_lookup
 {
+
+void start_service()
+{
+  addrinfo_service::create();
+}
+
+void end_service()
+{
+  addrinfo_service::stop();
+}
 
 std::pair<int, std::vector<sockaddr_in6>> get_addrinfo(const char *host, int port)
 {
   int err;
   std::vector<sockaddr_in6> addrs;
 
-#ifdef USE_GETADDRINFO_A
-
   fiber_cond cond;
   fiber_mutex mtx;
   bool done = false;
 
-  pipe_reader::lookup(host, port, [&](int _err, const std::vector<sockaddr_in6> &_addrs) {
+  addrinfo_service::lookup(host, port, [&](int _err, const std::vector<sockaddr_in6> &_addrs) {
     fiber_lock l(mtx);
     err = _err;
     addrs = _addrs;
@@ -246,47 +402,6 @@ std::pair<int, std::vector<sockaddr_in6>> get_addrinfo(const char *host, int por
   fiber_lock l(mtx);
   while (!done)
     cond.wait(l);
-
-#else
-
-  std::string host_ = host;
-  int pipe[2];
-  if (socketpair(AF_UNIX, SOCK_STREAM, 0, &pipe[0]) != 0)
-    do_error("socketpair(AF_UNIX, SOCK_STREAM, 0, &pipe[0])");
-
-  std::thread t(
-      [host_, port, &pipe, &err, &addrs] {
-        struct addrinfo hints = {};
-        hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6, whichever
-        hints.ai_socktype = SOCK_STREAM;
-        char portString[8];
-        sprintf(&portString[0], "%d", port);
-        struct addrinfo *result;
-        err = getaddrinfo(host_.c_str(), &portString[0], &hints, &result);
-        if (err == 0)
-        {
-          auto addinf = result;
-          while (addinf)
-          {
-            sockaddr_in6 addr;
-            size_t addrlen = (addinf->ai_addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
-            memcpy(&addr, addinf->ai_addr, addrlen);
-            addrs.push_back(addr);
-            addinf = addinf->ai_next;
-          }
-          freeaddrinfo(result);
-          write(pipe[0], "done", 5);
-          close(pipe[0]);
-        }
-      });
-
-  fiber_pipe fp(pipe[1], fiber_pipe::unix_domain);
-  char buff[10];
-  fp.read(&buff[0], sizeof(buff));
-
-  t.join();
-
-#endif
 
   return std::make_pair(err, addrs);
 }

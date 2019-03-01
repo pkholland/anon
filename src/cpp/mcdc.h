@@ -39,5 +39,5 @@ private:
 
   std::string host_;
   int port_;
-  endpoint_cluster clstr_;
+  std::shared_ptr<endpoint_cluster> clstr_;
 };

@@ -63,12 +63,12 @@ public:
   //  executing in other fibers at the time that a new call to with_connected_pipe
   //  is made.  It can also happen if certain "back off" strategies are currently in
   //  effect for that ip address at the time that with_connected_pipe is called.
-  static std::shared_ptr<endpoint_cluster> create(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
+  static std::shared_ptr<endpoint_cluster> create(const std::function<std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>>()> &lookup,
                                                   bool do_tls = false,
                                                   const char *host_name_for_tls = "",
                                                   const tls_context *ctx = 0,
                                                   int max_conn_per_ep = 20,
-                                                  int lookup_frequency_in_seconds = 30)
+                                                  int lookup_frequency_in_seconds = 20)
   {
     auto ths = std::make_shared<endpoint_cluster>(lookup, do_tls, host_name_for_tls, ctx, max_conn_per_ep, lookup_frequency_in_seconds);
 
@@ -98,7 +98,7 @@ public:
     return ths;
   }
 
-  endpoint_cluster(const std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> &lookup,
+  endpoint_cluster(const std::function<std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>>()> &lookup,
                    bool do_tls,
                    const char *host_name_for_tls,
                    const tls_context *ctx,
@@ -244,7 +244,7 @@ private:
   };
   friend struct fiber_counter;
 
-  std::function<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>()> lookup_;
+  std::function<std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>>()> lookup_;
 
   // each 'endpoint' is a single ip address
   // and a collection of 1 or more (up to max_conn_per_ep_)

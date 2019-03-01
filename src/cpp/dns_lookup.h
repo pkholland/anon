@@ -28,6 +28,9 @@
 namespace dns_lookup
 {
 
+void start_service();
+void end_service();
+
 // stall this fiber and initiate an async dns lookup,
 // once that dns lookup completes resume this fiber
 // and return the looked up information.  .first is the

@@ -145,7 +145,7 @@ public:
   // then the code will automatically (attempt to) call 'delete' on
   // this fiber after 'fn' returns.
   template <typename Fn>
-  fiber(Fn fn, size_t stack_size = k_default_stack_size, bool auto_free = false,
+  fiber(const Fn &fn, size_t stack_size = k_default_stack_size, bool auto_free = false,
         const char *fiber_name = "unknown1")
       : auto_free_(auto_free),
         running_(true),
@@ -209,7 +209,7 @@ public:
   // on one of the io threads of the io_dispatch passed to attach.
   // The fiber will automatically be deleted when 'fn' returns.
   template <typename Fn>
-  static void run_in_fiber(Fn fn, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown2")
+  static void run_in_fiber(const Fn &fn, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown2")
   {
 #if defined(ANON_RUNTIME_CHECKS)
     if (!on_one_pipe_)
@@ -275,7 +275,7 @@ private:
   struct start_mediator : public start_mediator_
   {
   public:
-    start_mediator(Fn fn) : fn_(fn) {}
+    start_mediator(const Fn &fn) : fn_(fn) {}
     virtual void exec() { fn_(); }
     Fn fn_;
   };

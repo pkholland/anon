@@ -184,7 +184,7 @@ public:
   // execute the given function on (exactly) one
   // of the io threads
   template <typename Fn>
-  static void on_one(Fn f)
+  static void on_one(const Fn &f)
   {
     // if this is an io thread we can just call it here
     // note that this means that if you happen to be calling
@@ -207,7 +207,7 @@ public:
   };
 
   template <typename Fn>
-  static void on_one_command(Fn f, char (&buf)[1 + sizeof(void *)])
+  static void on_one_command(const Fn &f, char (&buf)[1 + sizeof(void *)])
   {
     auto tc = new virt_caller<Fn>(f);
     buf[0] = k_on_one;
@@ -294,7 +294,7 @@ private:
   struct virt_caller : public virt_caller_
   {
   public:
-    virt_caller(Fn f)
+    virt_caller(const Fn &f)
         : f_(f)
     {
     }

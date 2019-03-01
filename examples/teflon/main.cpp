@@ -24,6 +24,7 @@
 #include "fiber.h"
 #include "tls_context.h"
 #include "big_id_crypto.h"
+#include "dns_lookup.h"
 #include "http_server.h"
 
 #ifdef TEFLON_AWS
@@ -209,6 +210,7 @@ extern "C" int main(int argc, char **argv)
 #else
       0;
 #endif
+  dns_lookup::start_service();
   io_dispatch::start(num_threads, true, numSigFds);
   fiber::initialize();
   init_big_id_crypto();
@@ -437,6 +439,9 @@ extern "C" int main(int argc, char **argv)
     // created as a consequence of clients calling
     // 'connect' to this server, have been closed
     server_term();
+
+    // shut down the dns_lookup thread
+    dns_lookup::end_service();
 
     // wait for all io threads to terminate (other than this one)
     io_dispatch::join();

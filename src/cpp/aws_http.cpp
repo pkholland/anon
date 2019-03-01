@@ -59,25 +59,26 @@ public:
     if (epc != m.end())
       return epc->second;
 
-    auto lookup = [uri, key]() -> std::pair<int, std::vector<std::pair<int, sockaddr_in6>>> {
+    auto lookup = [uri, key]() -> std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> {
 #if ANON_LOG_NET_TRAFFIC > 1
       anon_log("looking up sockaddr for " << key);
 #endif
       auto dnsl = dns_lookup::get_addrinfo(uri.GetAuthority().c_str(), uri.GetPort());
 
-      std::vector<std::pair<int, sockaddr_in6>> addrs;
+      std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> ret(new std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>());
+      ret->first = dnsl.first;
       if (dnsl.first == 0)
       {
-        for (auto &a : dnsl.second)
+        for (auto a : dnsl.second)
         {
           a.sin6_port = htons(uri.GetPort());
 #if ANON_LOG_NET_TRAFFIC > 1
           anon_log(" found: " << a);
 #endif
-          addrs.push_back(std::make_pair(0 /*preference*/, a));
+          ret->second.push_back(std::make_pair(0 /*preference*/, a));
         }
       }
-      return std::make_pair(dnsl.first, addrs);
+      return std::move(ret);
     };
 
     return m[key] = endpoint_cluster::create(lookup, uri.GetScheme() == Scheme::HTTPS, uri.GetAuthority().c_str(), _tls.get());
