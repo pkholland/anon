@@ -58,6 +58,8 @@ void endpoint_cluster::update_endpoints()
   else
   {
 
+    if (endpoints_.size() == 0) {
+
     // in case we were previously in an error state
     lookup_error_ = 0;
 
@@ -121,6 +123,8 @@ void endpoint_cluster::update_endpoints()
     cur_avail_requests_ = total_possible_requests_ - cur_outstanding_requests;
     if (cur_avail_requests_ > 0)
       connections_possible_cond_.notify_all();
+
+    }
   }
 
   if (!shutting_down_ && lookup_frequency_seconds_ > 0)

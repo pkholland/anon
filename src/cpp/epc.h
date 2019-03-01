@@ -68,7 +68,7 @@ public:
                                                   const char *host_name_for_tls = "",
                                                   const tls_context *ctx = 0,
                                                   int max_conn_per_ep = 20,
-                                                  int lookup_frequency_in_seconds = 20)
+                                                  int lookup_frequency_in_seconds = 1)
   {
     auto ths = std::make_shared<endpoint_cluster>(lookup, do_tls, host_name_for_tls, ctx, max_conn_per_ep, lookup_frequency_in_seconds);
 
