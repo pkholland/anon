@@ -113,19 +113,40 @@ private:
 struct fiber_lock
 {
   fiber_lock(fiber_mutex &mutex)
-      : mutex_(mutex)
+      : mutex_(mutex),
+        is_locked_(true)
   {
     mutex_.lock();
   }
 
   ~fiber_lock()
   {
-    mutex_.unlock();
+    if (is_locked_)
+      mutex_.unlock();
+  }
+
+  void lock()
+  {
+    if (!is_locked_)
+    {
+      mutex_.lock();
+      is_locked_ = true;
+    }
+  }
+
+  void unlock()
+  {
+    if (is_locked_)
+    {
+      mutex_.unlock();
+      is_locked_ = false;
+    }
   }
 
 private:
   friend struct fiber_cond;
   fiber_mutex &mutex_;
+  bool is_locked_;
 };
 
 class fiber
