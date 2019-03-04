@@ -99,7 +99,7 @@ private:
 // their side of a socket without telling us first.
 // So we log that only at pretty high levels of logging
 #if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("uncaught eggception in tcp, what() = " << ex.what());
+        anon_log("uncaught exception in tcp, what() = " << ex.what());
 #endif
       }
     }
