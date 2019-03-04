@@ -96,6 +96,7 @@ extern "C" int main(int argc, char **argv)
     io_dispatch::start(std::thread::hardware_concurrency(), false);
 
     dns_cache::initialize();
+    dns_lookup::start_service();
     fiber::initialize();
 
     epc_test_init();
@@ -597,7 +598,6 @@ extern "C" int main(int argc, char **argv)
         }
         else if (!strcmp(&msgBuff[0], "et"))
         {
-
           epc_test();
         }
         else if (!strncmp(&msgBuff[0], "ss", 2))
@@ -763,6 +763,7 @@ extern "C" int main(int argc, char **argv)
 
   epc_test_term();
 
+  dns_lookup::end_service();
   dns_cache::terminate();
   io_dispatch::join();
   fiber::terminate();

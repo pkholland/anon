@@ -266,6 +266,9 @@ public:
     cr->host_name = host;
     cr->port = port;
     cr->fn = fn;
+#if ANON_LOG_NET_TRAFFIC > 0
+    anon_log("looking up " << host << ":" << port);
+#endif
     write(singleton->cmd_writeFd, &cr, sizeof(cr));
   }
 
@@ -335,6 +338,9 @@ private:
               auto addinf = result;
               while (addinf)
               {
+#if ANON_LOG_NET_TRAFFIC > 0
+                anon_log(" found " << *addinf->ai_addr);
+#endif
                 sockaddr_in6 addr;
                 size_t addrlen = (addinf->ai_addr->sa_family == AF_INET6) ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
                 memcpy(&addr, addinf->ai_addr, addrlen);
