@@ -575,28 +575,14 @@ class fiber_io_error : public std::runtime_error
 {
 public:
   fiber_io_error(const char *what_arg)
-      : std::runtime_error(what_arg),
-        backoff_(false)
+      : std::runtime_error(what_arg)
   {
   }
 
   fiber_io_error(const std::string &what_arg)
-      : std::runtime_error(what_arg),
-        backoff_(false)
+      : std::runtime_error(what_arg)
   {
   }
-
-  fiber_io_error(const char *what_arg, int backoff_seconds, bool close_socket_hint = false)
-      : std::runtime_error(what_arg),
-        backoff_seconds_(backoff_seconds),
-        backoff_(true),
-        close_socket_hint_(close_socket_hint)
-  {
-  }
-
-  int backoff_seconds_;
-  bool backoff_;
-  bool close_socket_hint_;
 };
 
 ////////////////////////////////////////////////////////////////

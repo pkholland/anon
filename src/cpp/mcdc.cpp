@@ -28,21 +28,7 @@ mcd_cluster::mcd_cluster(const char *host, int port,
                          int lookup_frequency_in_seconds)
     : host_(host),
       port_(port),
-      clstr_(endpoint_cluster::create(
-          [this]() -> std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> {
-            auto rslt = dns_lookup::get_addrinfo(host_.c_str(), port_);
-            std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> ret(new std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>());
-            ret->first = rslt.first;
-            if (rslt.first)
-              return std::move(ret);
-            for (auto i = 0; i < rslt.second.size(); i++)
-              ret->second.push_back(std::make_pair(0, rslt.second[i]));
-            return std::move(ret);
-          },
-          false, // do_tls - memcached never runs over tls
-          "",    // host_name_for_tls
-          0,     // tls_context
-          max_conn_per_ep, lookup_frequency_in_seconds))
+      clstr_(endpoint_cluster::create(host_.c_str(), port_))
 {
 }
 
@@ -192,10 +178,10 @@ void mcd_cluster::status_check(uint16_t status)
     err = "Internal error";
     break;
   case 0x0085:
-    throw fiber_io_error("Busy", 4 /*back off seconds*/, true /*close_socket_hint*/);
+    throw fiber_io_error("Busy");
   case 0x0086:
     err = "Temporary failure";
-    throw fiber_io_error("Temporary failure", 4 /*back off seconds*/, true /*close_socket_hint*/);
+    throw fiber_io_error("Temporary failure");
   default:
     err = "unknown status";
     break;

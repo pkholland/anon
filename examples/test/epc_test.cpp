@@ -69,23 +69,7 @@ void epc_test()
   fiber::run_in_fiber([] {
     auto start_time = cur_time();
 
-    auto epc = endpoint_cluster::create(
-        []() -> std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> {
-          // "address lookup" function that simply returns
-          // localhost with each port number currently in port_nums
-          // all using "preference" 0
-          sockaddr_in6 lh = {0};
-          lh.sin6_family = AF_INET6;
-          lh.sin6_addr = in6addr_loopback;
-          std::unique_ptr<std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>> ret(new std::pair<int, std::vector<std::pair<int, sockaddr_in6>>>());
-          for (int i = 0; i < sizeof(port_nums) / sizeof(port_nums[0]); i++)
-          {
-            lh.sin6_port = htons(port_nums[i]);
-            ret->second.push_back(std::make_pair(0 /*preference*/, lh));
-          }
-          return std::move(ret);
-        },
-        false /*do_tls*/, "" /*host_name_for_tls*/, nullptr /*tls_ctx*/, 20 /*max_conn_per_ep*/);
+    auto epc = endpoint_cluster::create("127.0.0.1", port_nums[0]);
 
     fiber_mutex mtx;
     fiber_cond cond;
@@ -94,12 +78,11 @@ void epc_test()
 
     for (int i = 0; i < num_fibers; i++)
     {
-
-      fiber::run_in_fiber([&mtx, &cond, &remaining, &epc] {
+      fiber::run_in_fiber([&mtx, &cond, &remaining, &epc, i] {
         for (int j = 0; j < 100; j++)
-          epc->with_connected_pipe([](const pipe_t *pipe) {
+          epc->with_connected_pipe([j](const pipe_t *pipe) {
             const char *msg = "hello";
-            //anon_log("sending epc test message \"" << msg << "\"");
+            //anon_log("sending " << j << "th epc test message \"" << msg << "\"");
             pipe->write(msg, strlen(msg) + 1);
             char response[100];
             int bytes_read = 0;
@@ -117,6 +100,6 @@ void epc_test()
     while (remaining)
       cond.wait(lock);
 
-    anon_log("finished in " << to_seconds(cur_time() - start_time) << " seconds");
+    anon_log("finished " << num_fibers * 100 << " connections in " << to_seconds(cur_time() - start_time) << " seconds");
   });
 }

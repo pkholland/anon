@@ -269,33 +269,13 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
     if (parser.status_code == 408)
       throw fiber_io_error("408 server response");
     if (parser.status_code == 500)
-      throw fiber_io_error("500 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("500 server response");
     if (parser.status_code == 502)
-      throw fiber_io_error("502 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("502 server response");
     if (parser.status_code == 503)
-    {
-      // lame TODO note: 503's are allowed to have a Retry-After header containing
-      // the server's hint about when a good time would be to try again.  Retry-After
-      // can either specify a HTTP-date or a number of seconds.  This code doesn't
-      // support the HTTP-date case, and will end up behaving as if there were no
-      // Retry-After specified in that case.
-      int secs;
-      if (headers.contains_header("Retry-After"))
-      {
-        auto h = headers.get_header("Retry-After");
-        auto p = h.ptr();
-        if (h.len() > 0 && *p >= '0' && *p <= '9')
-          secs = atoi(p);
-        else
-          secs = 2;
-        anon_log("got 503 with retry-after " << secs);
-      }
-      else
-        secs = 2;
-      throw fiber_io_error("503 server response", secs, true /*close_socket_hint*/);
-    }
+      throw fiber_io_error("503 server response");
     if (parser.status_code == 504)
-      throw fiber_io_error("504 server response", 2 /*backoff seconds*/, true /*close_socket_hint*/);
+      throw fiber_io_error("504 server response");
 
     // response is good enough to return
     status_code = parser.status_code;
