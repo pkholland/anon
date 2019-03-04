@@ -93,7 +93,7 @@ void endpoint_cluster::update_endpoints()
       next++;
       if (it->second->last_lookup_time_ < oldest)
       {
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
         anon_log("aging out endpoint " << it->second->addr_ << ", because it was " << to_seconds(now - it->second->last_lookup_time_) << " seconds old");
 #endif
         endpoints.erase(it);
@@ -104,7 +104,7 @@ void endpoint_cluster::update_endpoints()
     int indx = 0;
     for (auto &p : endpoints)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log(" using " << p.second->addr_ << ", lookup age: " << to_seconds(now - p.second->last_lookup_time_) << " seconds");
 #endif
       endpoints_[indx++] = p.second;
@@ -131,14 +131,14 @@ void endpoint_cluster::update_endpoints()
 // returned it.
 void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
 {
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
   anon_log("endpoint_cluster::erase_if_empty");
 #endif
   {
     fiber_lock l(ep->mtx_);
     if (ep->socks_.size() != 0 || ep->outstanding_requests_ != 1)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("endpoint_cluster::erase_if_empty, not emptying, ep->socks_.size(): " << ep->socks_.size() << ", ep->outstanding_requests_: " << ep->outstanding_requests_);
 #endif
       return;
@@ -151,7 +151,7 @@ void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
   {
     if (*it == ep)
     {
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("endpoint_cluster::erase_if_empty emptying");
 #endif
       endpoints_.erase(it);
@@ -211,7 +211,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     {
       sock = ep->socks_.front();
       ep->socks_.pop();
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc reused connection to " << ep->addr_);
 #endif
     }
@@ -236,7 +236,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       else
         pipe = std::unique_ptr<pipe_t>(conn.second.release());
       sock = std::shared_ptr<endpoint::sock>(new endpoint::sock(std::move(pipe)));
-#if ANON_LOG_NET_TRAFFIC > 1
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc established new connection to " << ep->addr_);
 #endif
     }
@@ -266,13 +266,19 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       ep->cond_.notify_all();
     }
     else
+    {
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc, appears that endpoint was deleted prior to callback returning");
+#endif
+    }
   }
   catch (...)
   {
     // if an exception was thrown we still need to
     // decrement the number of outstanding_requests_
+#ifdef ANON_LOG_DNS_LOOKUP
     anon_log("exception thrown when executing with_connected_pipe call");
+#endif
     ep = wep.lock();
     if (ep)
     {
@@ -281,7 +287,11 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       ep->cond_.notify_all();
     }
     else
+    {
+#ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc, appears that endpoint was deleted prior to callback throwing");
+#endif
+    }
     throw;
   }
 }

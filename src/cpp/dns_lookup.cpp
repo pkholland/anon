@@ -266,7 +266,7 @@ public:
     cr->host_name = host;
     cr->port = port;
     cr->fn = fn;
-#if ANON_LOG_NET_TRAFFIC > 0
+#ifdef ANON_LOG_DNS_LOOKUP
     anon_log("looking up " << host << ":" << port);
 #endif
     write(singleton->cmd_writeFd, &cr, sizeof(cr));
@@ -338,7 +338,7 @@ private:
               auto addinf = result;
               while (addinf)
               {
-#if ANON_LOG_NET_TRAFFIC > 0
+#ifdef ANON_LOG_DNS_LOOKUP
                 anon_log(" found " << *addinf->ai_addr);
 #endif
                 sockaddr_in6 addr;
