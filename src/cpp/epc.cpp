@@ -116,6 +116,30 @@ void endpoint_cluster::update_endpoints()
   cond_.notify_all();
 }
 
+// This is called either by erase_if_empty ep has only one open
+// socket (erase_if_empty is called if there is a problem with
+// that socket) - or if we get a connection error trying to
+// open a new socket for this endpoint.  We delete the endpoint
+// from our list to force dns to run again next time we try
+// to get a functional pipe
+void endpoint_cluster::erase(const std::shared_ptr<endpoint> &ep)
+{
+  fiber_lock l(mtx_);
+  auto it = endpoints_.begin();
+  while (it != endpoints_.end())
+  {
+    if (*it == ep)
+    {
+#ifdef ANON_LOG_DNS_LOOKUP
+      anon_log("endpoint_cluster::erase emptying");
+#endif
+      endpoints_.erase(it);
+      return;
+    }
+    it++;
+  }
+}
+
 // This is called when there is some error that has occurred
 // on a socket related to this endpoint.  If it turns out that
 // that socket was the only one in existence for this endpoint
@@ -131,9 +155,6 @@ void endpoint_cluster::update_endpoints()
 // returned it.
 void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
 {
-#ifdef ANON_LOG_DNS_LOOKUP
-  anon_log("endpoint_cluster::erase_if_empty");
-#endif
   {
     fiber_lock l(ep->mtx_);
     if (ep->socks_.size() != 0 || ep->outstanding_requests_ != 1)
@@ -145,20 +166,7 @@ void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
     }
   }
 
-  fiber_lock l(mtx_);
-  auto it = endpoints_.begin();
-  while (it != endpoints_.end())
-  {
-    if (*it == ep)
-    {
-#ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("endpoint_cluster::erase_if_empty emptying");
-#endif
-      endpoints_.erase(it);
-      return;
-    }
-    it++;
-  }
+  erase(ep);
 }
 
 void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
@@ -221,7 +229,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       auto conn = tcp_client::connect((struct sockaddr *)&ep->addr_, ep->addr_.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
       if (conn.first != 0)
       {
-        erase_if_empty(ep);
+        erase(ep);
         anon_throw(fiber_io_error, "tcp connect failed for " << ep->addr_ << ", error: " << error_string(conn.first));
       }
 
@@ -242,7 +250,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     }
   }
 
-  // we let go of the endpoint itself and only hole
+  // we let go of the endpoint itself and only hold
   // the weak pointer to it across the call.  This
   // lets it timeout and get deleted more smoothly.
   ep.reset();
@@ -255,8 +263,9 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     // if that function did not throw an exception
     // cache the socket/pipe for next time, but since
     // it is also possible that the endpoint itself was
-    // deleted, we check for that.  If the end point was
-    // deleted we just let the socket/pipe close/delete
+    // timed out and been deleted, we check for that.
+    // If the end point was deleted we just let the
+    // socket/pipe close/delete
     ep = wep.lock();
     if (ep)
     {

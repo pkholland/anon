@@ -104,6 +104,7 @@ private:
     struct timespec last_lookup_time_;
   };
 
+  void erase(const std::shared_ptr<endpoint> &ep);
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
   std::string host_;
