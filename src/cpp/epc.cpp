@@ -263,7 +263,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     // if that function did not throw an exception
     // cache the socket/pipe for next time, but since
     // it is also possible that the endpoint itself was
-    // timed out and been deleted, we check for that.
+    // timed out and deleted, we check for that.
     // If the end point was deleted we just let the
     // socket/pipe close/delete
     ep = wep.lock();
