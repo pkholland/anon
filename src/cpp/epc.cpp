@@ -78,13 +78,11 @@ void endpoint_cluster::update_endpoints()
     // we use a simple policy rule that we are willing to
     // keep attempting to use any ip address that was returned
     // by getaddrinfo up to 10 times whatever the
-    // lookup_frequency_in_seconds_ is.  Any time we throw
-    // an exception due to either failure to connect or
-    // call an endpoint, if the socket in question is the
-    // only one for that endpoint, we delete the endpoint.
-    // So this will end up deleting endpoints that truly
-    // become invalid after lookup_frequency_in_seconds_
-    // and before lookup_frequency_in_seconds_ * 10
+    // dns lookup_frequency_in_seconds_ is.  If any cached
+    // open sockets become unusable they will be deleted.
+    // If new connection attempts fail to one of these
+    // "slighly old" endpoints we will delete that endpoint
+    // from our list.
     auto oldest = now - lookup_frequency_in_seconds_ * 10;
     auto it = endpoints.begin();
     while (it != endpoints.end())
