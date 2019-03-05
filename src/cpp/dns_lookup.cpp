@@ -243,7 +243,9 @@ public:
 
   static void stop()
   {
+#ifdef ANON_LOG_DNS_LOOKUP
     anon_log("addrinfo_service::stop");
+#endif
     singleton.reset();
   }
 
@@ -320,7 +322,9 @@ private:
             }
             if (cr == 0)
             {
+#ifdef ANON_LOG_DNS_LOOKUP
               anon_log("terminating addrinfo thread");
+#endif
               return;
             }
             std::unique_ptr<cmd_rec> crp(cr);

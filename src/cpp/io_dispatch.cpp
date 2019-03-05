@@ -211,6 +211,10 @@ void io_dispatch::start(int num_threads, bool use_this_thread, int numSigFds, in
     throw std::runtime_error("io_dispatch::start already called");
 #endif
 
+  // we never want to have the process terminated
+  // due to pipe errors.  Always ignore these.
+  signal(SIGPIPE, SIG_IGN);
+
   if (numSigFds)
   {
     io_d.curSig_ = firstSigFdSig;
