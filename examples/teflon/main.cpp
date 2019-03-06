@@ -210,8 +210,8 @@ extern "C" int main(int argc, char **argv)
 #else
       0;
 #endif
-  dns_lookup::start_service();
   io_dispatch::start(num_threads, true, numSigFds);
+  dns_lookup::start_service();
   fiber::initialize();
   init_big_id_crypto();
 

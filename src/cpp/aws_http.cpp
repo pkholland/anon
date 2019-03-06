@@ -96,18 +96,31 @@ public:
 
     std::shared_ptr<Standard::StandardHttpResponse> resp;
     auto read_body = method != HttpMethod::HTTP_HEAD;
-    get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message, read_body](const pipe_t *pipe) {
-      // anon_log("sending...\n\n" << message << "\n");
-      pipe->write(message.c_str(), message.size());
-      http_client_response re;
-      re.parse(*pipe, read_body);
-      resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
-      for (auto &h : re.headers.headers)
-        resp->AddHeader(h.first.str(), h.second.str());
-      for (auto &data : re.body)
-        resp->GetResponseBody().write(&data[0], data.size());
-    });
+    try
+    {
+      get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message, read_body](const pipe_t *pipe) {
+        // anon_log("sending...\n\n" << message << "\n");
+        pipe->write(message.c_str(), message.size());
+        http_client_response re;
+        re.parse(*pipe, read_body);
+        resp = std::make_shared<Standard::StandardHttpResponse>(request);
+        resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
+        for (auto &h : re.headers.headers)
+          resp->AddHeader(h.first.str(), h.second.str());
+        for (auto &data : re.body)
+          resp->GetResponseBody().write(&data[0], data.size());
+      });
+    }
+    catch (const std::exception &exc)
+    {
+      anon_log_error("failure to write request: " << exc.what());
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
+    catch (...)
+    {
+      anon_log_error("unknown failure to write request");
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
 
     // anon_log("time for transfer: " << cur_time() - start_time);
 
