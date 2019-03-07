@@ -176,7 +176,7 @@ public:
         fiber_name_(fiber_name)
 #if defined(ANON_RUNTIME_CHECKS)
         ,
-        stack_size_(stack_size),
+        stack_size_(stack_size)
 #endif
   {
     if (!auto_free_)

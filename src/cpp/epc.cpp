@@ -186,13 +186,16 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
         looking_up_endpoints_ = true;
         lookup_err_.reset();
         std::weak_ptr<endpoint_cluster> wp = shared_from_this();
-        fiber::run_in_fiber([wp] {
-          auto ths = wp.lock();
-          if (ths)
-          {
-            ths->update_endpoints();
-          }
-        });
+        auto stack_size = 16 * 1024;
+        fiber::run_in_fiber(
+            [wp] {
+              auto ths = wp.lock();
+              if (ths)
+              {
+                ths->update_endpoints();
+              }
+            },
+            stack_size, "epc, update_endpoints");
       }
       while (endpoints_.size() == 0)
       {
