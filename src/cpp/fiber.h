@@ -172,11 +172,11 @@ public:
         running_(true),
         stack_(::operator new(stack_size)),
         fiber_id_(++next_fiber_id_),
-        timout_pipe_(0)
+        timout_pipe_(0),
+        fiber_name_(fiber_name)
 #if defined(ANON_RUNTIME_CHECKS)
         ,
         stack_size_(stack_size),
-        fiber_name_(fiber_name)
 #endif
   {
     if (!auto_free_)
@@ -274,6 +274,13 @@ public:
 
   static void msleep(int milliseconds);
 
+  static void rename_fiber(const char *new_name)
+  {
+    fiber *f = (fiber *)get_current_fiber();
+    if (f)
+      f->fiber_name_ = new_name;
+  }
+
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
   // this is the kind that live in io_params.iod_fiber_
@@ -310,11 +317,15 @@ private:
     }
     catch (std::exception &ex)
     {
-      anon_log_error("uncaught exception in fiber, what() = " << ex.what());
+      fiber *f = (fiber *)get_current_fiber();
+      std::string fiber_name = f ? f->fiber_name_ : "...";
+      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught exception, what() = " << ex.what());
     }
     catch (...)
     {
-      anon_log_error("uncaught exception in fiber");
+      fiber *f = (fiber *)get_current_fiber();
+      std::string fiber_name = f ? f->fiber_name_ : "...";
+      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught, unknown exception");
     }
     delete sm;
     stop_fiber();
@@ -347,8 +358,8 @@ private:
 
 #if defined(ANON_RUNTIME_CHECKS)
   size_t stack_size_;
-  const char *fiber_name_;
 #endif
+  std::string fiber_name_;
 
   static int num_running_fibers_;
   static std::mutex zero_fiber_mutex_;

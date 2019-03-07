@@ -125,6 +125,7 @@ void aws_sqs_listener::start_listen()
     auto ths = wp.lock();
     if (!ths)
       return;
+    fiber::rename_fiber("aws_sqs_listener::start_listen, ReceiveMessageAsync");
     if (!out.IsSuccess())
     {
       ++ths->_consecutive_errors;
@@ -202,6 +203,7 @@ void aws_sqs_listener::set_visibility_timeout()
       req.WithQueueUrl(_queue_url).WithEntries(entries);
       auto nMessages = entries.size();
       _client.ChangeMessageVisibilityBatchAsync(req, [nMessages](const SQSClient *, const Model::ChangeMessageVisibilityBatchRequest &, const Model::ChangeMessageVisibilityBatchOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+        fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
           // anon_log("batch visibilty reset for " << nMessages << " messages");
@@ -248,6 +250,7 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
     req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_immediate_retry_time);
     auto messageId = m.GetMessageId();
     _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+      fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
       if (out.IsSuccess())
       {
         // anon_log("reset message visibility near 0 for " << messageId);
@@ -267,6 +270,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
   req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle());
   auto messageId = m.GetMessageId();
   _client.DeleteMessageAsync(req, [messageId](const SQSClient *, const Model::DeleteMessageRequest &, const Model::DeleteMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+    fiber::rename_fiber("aws_sqs_listener::delete_message, DeleteMessageAsync");
     if (out.IsSuccess())
     {
       // anon_log("deleted SQS message " << messageId);
@@ -292,6 +296,7 @@ void aws_sqs_sender::send(const json &body,
   Model::SendMessageRequest req;
   req.WithQueueUrl(_queue_url).WithMessageBody(Aws::String(body.dump()));
   _client.SendMessageAsync(req, [response](const SQSClient *, const Model::SendMessageRequest &, const Model::SendMessageOutcome &outcome, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+    fiber::rename_fiber("aws_sqs_sender::send, SendMessageAsync");
     response(outcome.IsSuccess(),
              std::string(outcome.GetResult().GetMessageId()),
              std::string(outcome.GetError().GetMessage()));
