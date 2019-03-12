@@ -36,7 +36,8 @@ endpoint_cluster::endpoint_cluster(const char *host, int port,
       lookup_frequency_in_seconds_(lookup_frequency_in_seconds),
       last_lookup_time_((struct timespec){}),
       round_robin_index_(0),
-      looking_up_endpoints_(false)
+      looking_up_endpoints_(false),
+      max_io_block_time_(k_default_io_block_time)
 {
 }
 
@@ -167,6 +168,40 @@ void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
   erase(ep);
 }
 
+namespace {
+
+class cleanup {
+  public:
+    cleanup(const std::weak_ptr<endpoint_cluster::endpoint>& wep,
+            const std::shared_ptr<endpoint_cluster::endpoint::sock>& sock)
+      : wep(wep),
+        sock(sock),
+        success(false)
+    {}
+
+    ~cleanup()
+    {
+      auto ep = wep.lock();
+      if (ep) {
+        fiber_lock l(ep->mtx_);
+        --ep->outstanding_requests_;
+        if (success)
+          ep->socks_.push(sock);
+        ep->cond_.notify_all();
+      } else {
+#ifdef ANON_LOG_DNS_LOOKUP
+      anon_log("epc, appears that endpoint was deleted prior to callback returning");
+#endif
+      }
+    }
+
+    std::weak_ptr<endpoint_cluster::endpoint> wep;
+    std::shared_ptr<endpoint_cluster::endpoint::sock> sock;
+    bool success;
+};
+
+}
+
 void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
 {
   // if there are currently no available endpoints, or if it has been too long since we have
@@ -233,6 +268,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
         erase(ep);
         anon_throw(fiber_io_error, "tcp connect failed for " << ep->addr_ << ", error: " << error_string(conn.first));
       }
+      conn.second->limit_io_block_time(max_io_block_time_);
 
       std::unique_ptr<pipe_t> pipe;
       if (do_tls_)
@@ -255,53 +291,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
   // the weak pointer to it across the call.  This
   // lets it timeout and get deleted more smoothly.
   ep.reset();
-
-  try
-  {
-    // call the function with the connected pipe
-    f(sock->pipe_.get());
-
-    // if that function did not throw an exception
-    // cache the socket/pipe for next time, but since
-    // it is also possible that the endpoint itself was
-    // timed out and deleted, we check for that.
-    // If the end point was deleted we just let the
-    // socket/pipe close/delete
-    ep = wep.lock();
-    if (ep)
-    {
-      fiber_lock l(ep->mtx_);
-      --ep->outstanding_requests_;
-      ep->socks_.push(sock);
-      ep->cond_.notify_all();
-    }
-    else
-    {
-#ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc, appears that endpoint was deleted prior to callback returning");
-#endif
-    }
-  }
-  catch (...)
-  {
-    // if an exception was thrown we still need to
-    // decrement the number of outstanding_requests_
-#ifdef ANON_LOG_DNS_LOOKUP
-    anon_log("exception thrown when executing with_connected_pipe call");
-#endif
-    ep = wep.lock();
-    if (ep)
-    {
-      erase_if_empty(ep);
-      --ep->outstanding_requests_;
-      ep->cond_.notify_all();
-    }
-    else
-    {
-#ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc, appears that endpoint was deleted prior to callback throwing");
-#endif
-    }
-    throw;
-  }
+  cleanup cu(wep, sock);
+  f(sock->pipe_.get());
+  cu.success = true;
 }

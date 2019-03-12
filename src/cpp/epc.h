@@ -47,6 +47,10 @@ public:
                    int max_conn_per_ep,
                    int lookup_frequency_in_seconds);
 
+  void set_max_io_block_time(int max_io_block_time) {
+    max_io_block_time_ = max_io_block_time;
+  }
+
   void with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
   {
     int sleepMs = 50;
@@ -57,29 +61,31 @@ public:
         do_with_connected_pipe(f);
         return;
       }
-      catch (const fiber_io_error &)
+      catch (const fiber_io_error &e)
       {
-#ifdef ANON_LOG_DNS_LOOKUP
-        anon_log("with_connected_pipe hit exception, sleeping for " << sleepMs / 1000.0 << " seconds before trying again");
-#endif
+//#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << sleepMs / 1000.0 << " seconds before trying again");
+//#endif
         fiber::msleep(sleepMs);
         sleepMs *= 2;
         if (sleepMs > 30 * 1000)
           throw;
       }
+      catch (const fiber_io_timeout_error &e)
+      {
+//#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("with_connected_pipe hit fiber_io_timeout_error, what() = " << e.what());
+//#endif
+        sleepMs = 50;
+      }
     }
   }
-
-private:
-  void do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f);
-  void update_endpoints();
 
   // each 'endpoint' is a single ip address
   // and a collection of 1 or more (up to max_conn_per_ep_)
   // open, connected sockets to that endpoint
   struct endpoint
   {
-
     endpoint(const struct sockaddr_in6 &addr)
         : addr_(addr),
           outstanding_requests_(0),
@@ -104,6 +110,10 @@ private:
     struct timespec last_lookup_time_;
   };
 
+private:
+  void do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f);
+  void update_endpoints();
+
   void erase(const std::shared_ptr<endpoint> &ep);
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
@@ -121,4 +131,10 @@ private:
   struct timespec last_lookup_time_;
   int round_robin_index_;
   std::unique_ptr<fiber_io_error> lookup_err_;
+  int max_io_block_time_;
+
+  enum {
+    k_default_io_block_time = 30
+  };
+
 };

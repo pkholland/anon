@@ -114,11 +114,13 @@ public:
     catch (const std::exception &exc)
     {
       anon_log_error("failure to write request: " << exc.what());
+      resp = std::make_shared<Standard::StandardHttpResponse>(request);
       resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
     }
     catch (...)
     {
       anon_log_error("unknown failure to write request");
+      resp = std::make_shared<Standard::StandardHttpResponse>(request);
       resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
     }
 

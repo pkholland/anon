@@ -172,7 +172,7 @@ public:
         running_(true),
         stack_(::operator new(stack_size)),
         fiber_id_(++next_fiber_id_),
-        timout_pipe_(0),
+        timeout_pipe_(0),
         fiber_name_(fiber_name)
 #if defined(ANON_RUNTIME_CHECKS)
         ,
@@ -354,7 +354,7 @@ private:
   void *stack_;
   ucontext_t ucontext_;
   int fiber_id_;
-  fiber_pipe *timout_pipe_;
+  fiber_pipe *timeout_pipe_;
 
 #if defined(ANON_RUNTIME_CHECKS)
   size_t stack_size_;
@@ -370,22 +370,6 @@ private:
 
   friend void sweep_timed_out_pipes();
 
-// there are a few places where the runtime checks are
-// too agressive, and the lock checking performed cannot
-// be warning about something bad.  The primary issue being
-// reported is that locking a fiber mutex can cause you
-// to come back from the lock in a different os thread
-// (although obviously in the same fiber).  So it would
-// be a disaster if there were an std mutex locked in that
-// os thread at the time this thread switch occurred.
-// But this os switch is not possible on the fiber locks
-// that are protected with this "while_paused_" logic in
-// the case where "while_paused_" is true.  We test for,
-// and skip the fiber lock in these cases just to avoid
-// the runtime assertion.
-#if defined(ANON_RUNTIME_CHECKS)
-  static bool while_paused_;
-#endif
 };
 
 extern int get_current_fiber_id();
@@ -402,68 +386,8 @@ public:
     network = 1
   };
 
-  fiber_pipe(int socket_fd, pipe_sock_t socket_type)
-      : fd_(socket_fd),
-        socket_type_(socket_type),
-        io_fiber_(0),
-        max_io_block_time_(0),
-        io_timeout_(forever),
-        attached_(false),
-        remote_hangup_(false)
-  {
-    bool start_sweep = false;
-    if (socket_type == network)
-    {
-      fiber_lock lock(zero_net_pipes_mutex_);
-      start_sweep = num_net_pipes_ == 0;
-      ++num_net_pipes_;
-    }
-
-    if (start_sweep)
-      start_sweeping();
-
-    std::lock_guard<std::mutex> lock(list_mutex_);
-    next_ = first_;
-    if (next_)
-      next_->prev_ = this;
-    prev_ = 0;
-    first_ = this;
-  }
-
-  virtual ~fiber_pipe()
-  {
-    if (fd_ != -1)
-    {
-      if (socket_type_ == network)
-      {
-        shutdown(fd_, 2 /*both*/);
-#if defined(ANON_RUNTIME_CHECKS)
-        if (fiber::while_paused_)
-        {
-          if (--num_net_pipes_ == 0)
-            zero_net_pipes_cond_.notify_all();
-        }
-        else
-#endif
-        {
-          fiber_lock lock(zero_net_pipes_mutex_);
-          if (--num_net_pipes_ == 0)
-            zero_net_pipes_cond_.notify_all();
-        }
-      }
-      if (close(fd_) != 0)
-      {
-        anon_log("close(" << fd_ << ") failed with errno: " << errno);
-      }
-    }
-    std::lock_guard<std::mutex> lock(list_mutex_);
-    if (next_)
-      next_->prev_ = prev_;
-    if (prev_)
-      prev_->next_ = next_;
-    else
-      first_ = next_;
-  }
+  fiber_pipe(int socket_fd, pipe_sock_t socket_type);
+  virtual ~fiber_pipe();
 
   virtual void io_avail(const struct epoll_event &event);
 
@@ -507,26 +431,15 @@ public:
       zero_net_pipes_cond_.wait(lock);
   }
 
-  template <typename Fn>
-  static void register_idle_socket_sweep(void *key, Fn f)
-  {
-    fiber_lock lock(zero_net_pipes_mutex_);
-    sweepers_.insert(std::make_pair(key, std::unique_ptr<sweeper_>(new sweeper<Fn>(f))));
-  }
-
-  static void remove_idle_socket_sweep(void *key)
-  {
-    fiber_lock lock(zero_net_pipes_mutex_);
-    sweepers_.erase(key);
-  }
-
 private:
+  enum {
+    k_net_io_sweep_time = 15
+  };
+
   // fiber_pipe's are neither movable, nor copyable.
   // the address of the pipe is regestered in epoll
   fiber_pipe(const fiber_pipe &);
   fiber_pipe(fiber_pipe &&);
-
-  static void start_sweeping();
 
   friend struct io_params;
 
@@ -548,22 +461,6 @@ private:
   static fiber_cond zero_net_pipes_cond_;
 
   static const struct timespec forever;
-
-  struct sweeper_
-  {
-    virtual ~sweeper_() {}
-    virtual void sweep() = 0;
-  };
-
-  template <typename Fn>
-  struct sweeper : public sweeper_
-  {
-    sweeper(Fn f) : f_(f) {}
-    virtual void sweep() { f_(); }
-    Fn f_;
-  };
-
-  static std::map<void *, std::unique_ptr<sweeper_>> sweepers_;
 };
 
 /*
@@ -591,6 +488,20 @@ public:
   }
 
   fiber_io_error(const std::string &what_arg)
+      : std::runtime_error(what_arg)
+  {
+  }
+};
+
+class fiber_io_timeout_error : public std::runtime_error
+{
+public:
+  fiber_io_timeout_error(const char *what_arg)
+      : std::runtime_error(what_arg)
+  {
+  }
+
+  fiber_io_timeout_error(const std::string &what_arg)
       : std::runtime_error(what_arg)
   {
   }

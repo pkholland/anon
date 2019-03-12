@@ -30,6 +30,22 @@
 #include <openssl/err.h>
 #include <sys/signalfd.h>
 
+namespace {
+
+struct iod_params {
+
+  iod_params()
+    : countdown_(false)
+  {}
+
+  bool countdown_;
+
+};
+
+thread_local iod_params tls_iod_params;
+
+}
+
 class io_ctl_handler : public io_dispatch::handler
 {
 public:
@@ -55,13 +71,11 @@ public:
 
       if (cmd == io_dispatch::k_wake)
       {
-
         io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
         io_d.wake_next_thread();
       }
       else if (cmd == io_dispatch::k_pause)
       {
-
         anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
 
@@ -82,10 +96,13 @@ public:
         // continue
         while (io_d.num_paused_threads_ != 0)
           io_d.resume_cond_.wait(lock);
+
+        // signal this thread to execute the "countdown"
+        // when it is ready to call epoll_wait again
+        tls_iod_params.countdown_ = true;
       }
       else if (cmd == io_dispatch::k_on_each)
       {
-
         anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
 
         io_dispatch::virt_caller_ *tc;
@@ -117,7 +134,6 @@ public:
       }
       else if (cmd == io_dispatch::k_on_one)
       {
-
         io_dispatch::virt_caller_ *tc;
         if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
           do_error("read(ctl_fd_, &tc, sizeof(tc))");
@@ -196,7 +212,8 @@ io_dispatch io_dispatch::io_d;
 std::atomic<int> io_dispatch::virt_caller_::next_id_;
 
 io_dispatch::io_dispatch()
-    : running_(false)
+    : running_(false),
+      thread_countdown_(0)
 {
 }
 
@@ -318,6 +335,16 @@ void io_dispatch::wake_next_thread()
 
 int guess_fd(io_dispatch::handler *ioh);
 
+void io_dispatch::add_at_rest_fn(const std::function<void(void)>& fn)
+{
+  at_rest_functions_.push_front(fn);
+}
+
+void io_dispatch::set_this_thread_countdown()
+{
+  tls_iod_params.countdown_ = true;
+};
+
 void io_dispatch::epoll_loop()
 {
   anon_log("starting io_dispatch::epoll_loop");
@@ -333,6 +360,30 @@ void io_dispatch::epoll_loop()
 
   while (running_)
   {
+    // deal with any "stage2" at_rest
+    // while_paused operations that may have
+    // been registered
+    if (tls_iod_params.countdown_) {
+      tls_iod_params.countdown_ = false;
+      std::unique_lock<std::mutex> lock(thread_countdown_mtx_);
+      if (--thread_countdown_ == 0) {
+        // we execute all at_rest functions with
+        // thread_countdown_mtx_ locked.  That keeps
+        // any other io threads blocked in the while
+        // statement below, which ensures that only
+        // this thread is running while these functions
+        // execute
+        for (auto &arf : at_rest_functions_)
+          arf();
+        at_rest_functions_.clear();
+        thread_countdown_cond_.notify_all();
+      }
+      else
+      {
+        while (thread_countdown_ != 0)
+          thread_countdown_cond_.wait(lock);
+      }
+    }
 
     struct epoll_event event[8];
     int ret;

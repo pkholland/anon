@@ -27,6 +27,7 @@
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <list>
 #include <condition_variable>
 #include <map>
 #include <atomic>
@@ -103,8 +104,7 @@ public:
   // pause all io threads (other than the one calling this function
   // if it happens to be called from an io thread) and execute 'f'
   // while they are paused. Once 'f' returns resume all io threads.
-  template <typename Fn>
-  static void while_paused(Fn f)
+  static void while_paused(const std::function<void(void)>& f)
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to pause
@@ -128,6 +128,53 @@ public:
 
     f();
 
+    io_d.num_paused_threads_ = 0;
+    io_d.resume_cond_.notify_all();
+  }
+
+  // similar to the above while_paused, except called with a
+  // a function which returns another function object.  That
+  // returned function will be called all io threads have
+  // returned at least once from epoll_wait, processed whatever
+  // events that returned, and are all just about to call epoll_wait
+  // again.  This can be used to "flush" io events from the system
+  static void while_paused2(const std::function<std::function<void(void)>(void)>& f)
+  {
+    // if this is called from an io thread, then there
+    // is one less io thread we have to pause
+    bool is_io_thread = io_d.on_io_thread();
+    if (!is_io_thread)
+      throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
+
+    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    io_d.num_paused_threads_ = 1;
+
+    // if there is already at least one add_at_rest_fn
+    // then we don't need to re-awaken the threads
+    // (and it would be messy to try).  All we do
+    // in that case is add this fn to the list so
+    // it will get executed when the threads all
+    // get back to their epoll_wait call.
+    if (io_d.thread_countdown_ == 0) {
+
+      // if there is only one io thread, and
+      // we are called from that thread, then
+      // we don't want to write a k_pause command
+      if (io_d.num_paused_threads_ < io_d.num_threads_)
+      {
+        char cmd = k_pause;
+        if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
+          do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
+      }
+
+      while (io_d.num_paused_threads_ != io_d.num_threads_)
+        io_d.pause_cond_.wait(lock);
+
+      io_d.thread_countdown_ = io_d.num_threads_;
+    }
+    
+    io_d.add_at_rest_fn(f());
+    set_this_thread_countdown();
     io_d.num_paused_threads_ = 0;
     io_d.resume_cond_.notify_all();
   }
@@ -326,6 +373,13 @@ private:
 
   void epoll_loop();
   void wake_next_thread();
+  void add_at_rest_fn(const std::function<void(void)>& fn);
+  static void set_this_thread_countdown();
+
+  std::mutex thread_countdown_mtx_;
+  std::condition_variable thread_countdown_cond_;
+  int thread_countdown_;
+  std::list<std::function<void(void)>> at_rest_functions_;
 
   bool running_;
   int ep_fd_;

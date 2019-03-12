@@ -61,12 +61,14 @@ class fp_pipe
 public:
   fp_pipe(std::unique_ptr<fiber_pipe> &&pipe)
       : pipe_(std::move(pipe)),
-        hit_fiber_io_error_(false)
+        hit_fiber_io_error_(false),
+        hit_fiber_io_timeout_error_(false)
   {
   }
 
   std::unique_ptr<fiber_pipe> pipe_;
   bool hit_fiber_io_error_;
+  bool hit_fiber_io_timeout_error_;
 };
 
 } // namespace
@@ -112,6 +114,10 @@ static int fp_read(BIO *b, char *out, int outl)
     {
       p->hit_fiber_io_error_ = true;
     }
+    catch(const fiber_io_timeout_error &)
+    {
+      p->hit_fiber_io_timeout_error_ = true;
+    }
     catch (...)
     {
     }
@@ -132,6 +138,10 @@ static int fp_write(BIO *b, const char *in, int inl)
     catch (const fiber_io_error &)
     {
       p->hit_fiber_io_error_ = true;
+    }
+    catch (const fiber_io_timeout_error &)
+    {
+      p->hit_fiber_io_timeout_error_ = true;
     }
     catch (...)
     {
@@ -261,6 +271,8 @@ void throw_ssl_error_(BIO *fpb)
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 1");
+  else if (p->hit_fiber_io_timeout_error_)
+    throw fiber_io_timeout_error("fiber io timeout error during tls 1");
   else
     throw_ssl_error();
 }
@@ -270,6 +282,8 @@ static void throw_ssl_error_(BIO *fpb, unsigned long err)
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 2");
+  else if (p->hit_fiber_io_timeout_error_)
+    throw fiber_io_timeout_error("fiber io timeout error during tls 2");
   else
     throw_ssl_error(err);
 }
@@ -279,6 +293,8 @@ void throw_ssl_io_error_(BIO *fpb, unsigned long err)
   auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 3");
+  else if (p->hit_fiber_io_timeout_error_)
+    throw fiber_io_timeout_error("fiber io timeout error during tls 3");
   else
     throw_ssl_io_error(err);
 }
