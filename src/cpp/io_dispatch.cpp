@@ -76,6 +76,9 @@ public:
       }
       else if (cmd == io_dispatch::k_pause)
       {
+        #if defined(ANON_DEBUG_PAUSED)
+        anon_log("handling io_dispatch::k_pause");
+        #endif
         anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
         io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
 
@@ -84,9 +87,17 @@ public:
         // io_dispatch::while_paused, otherwise get the
         // next io thread to pause
         if (++io_d.num_paused_threads_ == io_d.num_threads_)
+        {
+          #if defined(ANON_DEBUG_PAUSED)
+          anon_log(" notifying all paused");
+          #endif
           io_d.pause_cond_.notify_one();
+        }
         else
         {
+          #if defined(ANON_DEBUG_PAUSED)
+          anon_log(" pausing another");
+          #endif
           if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
             do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
         }
@@ -96,6 +107,15 @@ public:
         // continue
         while (io_d.num_paused_threads_ != 0)
           io_d.resume_cond_.wait(lock);
+
+        // tell while_paused2 that everyone has made it past
+        // the wait immediately above
+        if (++io_d.num_pause_done_threads_ == io_d.num_threads_) {
+          #if defined(ANON_DEBUG_PAUSED)
+          anon_log("all io threads have resumed, notifying while_paused2");
+          #endif
+          io_d.resume2_cond_.notify_all();
+        }
 
         // signal this thread to execute the "countdown"
         // when it is ready to call epoll_wait again
@@ -365,18 +385,24 @@ void io_dispatch::epoll_loop()
     // been registered
     if (tls_iod_params.countdown_) {
       tls_iod_params.countdown_ = false;
-      std::unique_lock<std::mutex> lock(thread_countdown_mtx_);
+      std::unique_lock<std::mutex> lock(pause_mutex_);
       if (--thread_countdown_ == 0) {
         // we execute all at_rest functions with
-        // thread_countdown_mtx_ locked.  That keeps
+        // pause_mutex_ locked.  That keeps
         // any other io threads blocked in the while
         // statement below, which ensures that only
         // this thread is running while these functions
         // execute
+        #if defined(ANON_DEBUG_PAUSED)
+        auto num_at_rest = at_rest_functions_.size();
+        #endif
         for (auto &arf : at_rest_functions_)
           arf();
         at_rest_functions_.clear();
         thread_countdown_cond_.notify_all();
+        #if defined(ANON_DEBUG_PAUSED)
+        anon_log("executed " << num_at_rest << " at rest function" << (num_at_rest == 1 ? "" : "s") << ", continuing to epoll_wait");
+        #endif
       }
       else
       {

@@ -131,7 +131,7 @@ void aws_sqs_listener::start_listen()
       ++ths->_consecutive_errors;
       anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << "\n"
                                                                         << out.GetError());
-      fiber::msleep(1000);
+      fiber::msleep(2000);
     }
     else
     {
@@ -158,7 +158,7 @@ void aws_sqs_listener::start_listen()
       }
     }
 
-    if (ths->_consecutive_errors < 100)
+    if (ths->_consecutive_errors < 1000)
     {
       if (!ths->_exit_now)
       {

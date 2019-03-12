@@ -147,36 +147,47 @@ public:
       throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
 
     anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    #if defined(ANON_DEBUG_PAUSED)
+    anon_log("while_paused2 locked pause_mutex");
+    #endif
+
     io_d.num_paused_threads_ = 1;
 
-    // if there is already at least one add_at_rest_fn
-    // then we don't need to re-awaken the threads
-    // (and it would be messy to try).  All we do
-    // in that case is add this fn to the list so
-    // it will get executed when the threads all
-    // get back to their epoll_wait call.
-    if (io_d.thread_countdown_ == 0) {
-
-      // if there is only one io thread, and
-      // we are called from that thread, then
-      // we don't want to write a k_pause command
-      if (io_d.num_paused_threads_ < io_d.num_threads_)
-      {
-        char cmd = k_pause;
-        if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
-          do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
-      }
-
-      while (io_d.num_paused_threads_ != io_d.num_threads_)
-        io_d.pause_cond_.wait(lock);
-
-      io_d.thread_countdown_ = io_d.num_threads_;
+    // if there is only one io thread, and
+    // we are called from that thread, then
+    // we don't want to write a k_pause command
+    if (io_d.num_paused_threads_ < io_d.num_threads_)
+    {
+      char cmd = k_pause;
+      if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
+        do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
     }
-    
-    io_d.add_at_rest_fn(f());
+
+    while (io_d.num_paused_threads_ != io_d.num_threads_)
+      io_d.pause_cond_.wait(lock);
+
+    #if defined(ANON_DEBUG_PAUSED)
+    anon_log("all io threads paused");
+    #endif
+
+    try {
+      io_d.add_at_rest_fn(f());
+    }
+    catch(...) {
+      anon_log_error("io_d.add_at_rest_fn(f())io_d.add_at_rest_fn(f()) threw exception");
+    }
+
+    io_d.thread_countdown_ = io_d.num_threads_;
     set_this_thread_countdown();
     io_d.num_paused_threads_ = 0;
+    io_d.num_pause_done_threads_ = 1;
     io_d.resume_cond_.notify_all();
+
+    // we need to wait here until all other io threads
+    // have seen that num_paused_threads_ is zero and
+    // have move on from waiting for it to be zero.
+    while (io_d.num_pause_done_threads_ != io_d.num_threads_)
+      io_d.resume2_cond_.wait(lock);
   }
 
   // execute the given function once on each
@@ -376,7 +387,6 @@ private:
   void add_at_rest_fn(const std::function<void(void)>& fn);
   static void set_this_thread_countdown();
 
-  std::mutex thread_countdown_mtx_;
   std::condition_variable thread_countdown_cond_;
   int thread_countdown_;
   std::list<std::function<void(void)>> at_rest_functions_;
@@ -394,7 +404,9 @@ private:
   std::mutex pause_mutex_;
   std::condition_variable pause_cond_;
   std::condition_variable resume_cond_;
+  std::condition_variable resume2_cond_;
   int num_paused_threads_;
+  int num_pause_done_threads_;
 
   std::mutex task_mutex_;
   std::multimap<struct timespec, std::unique_ptr<virt_caller_>> task_map_;
