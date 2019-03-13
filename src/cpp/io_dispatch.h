@@ -147,8 +147,9 @@ public:
       throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
 
     anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    anon::unique_lock<std::mutex> com_lock(io_d.pause_com_mutex_);
     #if defined(ANON_DEBUG_PAUSED)
-    anon_log("while_paused2 locked pause_mutex");
+    anon_log("while_paused2 locked pause_mutex and pause_com_mutex_");
     #endif
 
     io_d.num_paused_threads_ = 1;
@@ -164,7 +165,7 @@ public:
     }
 
     while (io_d.num_paused_threads_ != io_d.num_threads_)
-      io_d.pause_cond_.wait(lock);
+      io_d.pause_cond_.wait(com_lock);
 
     #if defined(ANON_DEBUG_PAUSED)
     anon_log("all io threads paused");
@@ -187,7 +188,7 @@ public:
     // have seen that num_paused_threads_ is zero and
     // have move on from waiting for it to be zero.
     while (io_d.num_pause_done_threads_ != io_d.num_threads_)
-      io_d.resume2_cond_.wait(lock);
+      io_d.resume2_cond_.wait(com_lock);
   }
 
   // execute the given function once on each
@@ -402,6 +403,7 @@ private:
   int num_threads_;
 
   std::mutex pause_mutex_;
+  std::mutex pause_com_mutex_;
   std::condition_variable pause_cond_;
   std::condition_variable resume_cond_;
   std::condition_variable resume2_cond_;

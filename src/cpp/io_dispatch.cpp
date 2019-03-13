@@ -79,7 +79,7 @@ public:
         #if defined(ANON_DEBUG_PAUSED)
         anon_log("handling io_dispatch::k_pause");
         #endif
-        anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        anon::unique_lock<std::mutex> lock(io_d.pause_com_mutex_);
         io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
 
         // if this is the last io thread to have paused
