@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2015 Anon authors, see AUTHORS file.
+ Copyright (c) 2019 Anon authors, see AUTHORS file.
  
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -35,10 +35,10 @@ namespace {
 struct iod_params {
 
   iod_params()
-    : countdown_(false)
+    : countdown_(0)
   {}
 
-  bool countdown_;
+  int countdown_;
 
 };
 
@@ -119,7 +119,7 @@ public:
 
         // signal this thread to execute the "countdown"
         // when it is ready to call epoll_wait again
-        tls_iod_params.countdown_ = true;
+        ++tls_iod_params.countdown_;
       }
       else if (cmd == io_dispatch::k_on_each)
       {
@@ -362,7 +362,7 @@ void io_dispatch::add_at_rest_fn(const std::function<void(void)>& fn)
 
 void io_dispatch::set_this_thread_countdown()
 {
-  tls_iod_params.countdown_ = true;
+  ++tls_iod_params.countdown_;
 };
 
 void io_dispatch::epoll_loop()
@@ -383,10 +383,12 @@ void io_dispatch::epoll_loop()
     // deal with any "stage2" at_rest
     // while_paused operations that may have
     // been registered
-    if (tls_iod_params.countdown_) {
-      tls_iod_params.countdown_ = false;
-      std::unique_lock<std::mutex> lock(pause_mutex_);
-      if (--thread_countdown_ == 0) {
+    auto& cd = tls_iod_params.countdown_;
+    if (cd) {
+      auto ncd = thread_countdown_ -= cd;
+      cd = 0;
+      if (ncd == 0) {
+        std::unique_lock<std::mutex> lock(pause_com_mutex_);
         // we execute all at_rest functions with
         // pause_mutex_ locked.  That keeps
         // any other io threads blocked in the while
@@ -395,23 +397,16 @@ void io_dispatch::epoll_loop()
         // execute
         #if defined(ANON_DEBUG_PAUSED)
         auto num_at_rest = at_rest_functions_.size();
+        anon_log("executing " << num_at_rest << " at rest function" << (num_at_rest == 1 ? "" : "s"));
         #endif
         for (auto &arf : at_rest_functions_)
           arf();
         at_rest_functions_.clear();
         thread_countdown_cond_.notify_all();
-        #if defined(ANON_DEBUG_PAUSED)
-        anon_log("executed " << num_at_rest << " at rest function" << (num_at_rest == 1 ? "" : "s") << ", continuing to epoll_wait");
-        #endif
-      }
-      else
-      {
-        while (thread_countdown_ != 0)
-          thread_countdown_cond_.wait(lock);
       }
     }
 
-    struct epoll_event event[8];
+    struct epoll_event event[1];
     int ret;
     if ((ret = epoll_wait(ep_fd_, &event[0], sizeof(event) / sizeof(event[0]), -1)) > 0)
     {

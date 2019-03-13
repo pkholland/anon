@@ -111,6 +111,7 @@ public:
     bool is_io_thread = io_d.on_io_thread();
 
     anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    anon::unique_lock<std::mutex> com_lock(io_d.pause_com_mutex_);
     io_d.num_paused_threads_ = is_io_thread ? 1 : 0;
 
     // if there is only one io thread, and
@@ -124,7 +125,7 @@ public:
     }
 
     while (io_d.num_paused_threads_ != io_d.num_threads_)
-      io_d.pause_cond_.wait(lock);
+      io_d.pause_cond_.wait(com_lock);
 
     f();
 
@@ -134,10 +135,10 @@ public:
 
   // similar to the above while_paused, except called with a
   // a function which returns another function object.  That
-  // returned function will be called all io threads have
+  // returned function will be called once all io threads have
   // returned at least once from epoll_wait, processed whatever
   // events that returned, and are all just about to call epoll_wait
-  // again.  This can be used to "flush" io events from the system
+  // again.  This can be used to "flush" io events from the system.
   static void while_paused2(const std::function<std::function<void(void)>(void)>& f)
   {
     // if this is called from an io thread, then there
@@ -178,7 +179,7 @@ public:
       anon_log_error("io_d.add_at_rest_fn(f())io_d.add_at_rest_fn(f()) threw exception");
     }
 
-    io_d.thread_countdown_ = io_d.num_threads_;
+    io_d.thread_countdown_ += io_d.num_threads_;
     set_this_thread_countdown();
     io_d.num_paused_threads_ = 0;
     io_d.num_pause_done_threads_ = 1;
@@ -389,7 +390,7 @@ private:
   static void set_this_thread_countdown();
 
   std::condition_variable thread_countdown_cond_;
-  int thread_countdown_;
+  std::atomic_int thread_countdown_;
   std::list<std::function<void(void)>> at_rest_functions_;
 
   bool running_;
