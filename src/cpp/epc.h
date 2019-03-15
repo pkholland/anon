@@ -63,9 +63,9 @@ public:
       }
       catch (const fiber_io_error &e)
       {
-//#ifdef ANON_LOG_DNS_LOOKUP
+#ifdef ANON_LOG_DNS_LOOKUP
         anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << sleepMs / 1000.0 << " seconds before trying again");
-//#endif
+#endif
         fiber::msleep(sleepMs);
         sleepMs *= 2;
         if (sleepMs > 30 * 1000)

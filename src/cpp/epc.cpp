@@ -21,6 +21,7 @@
 */
 
 #include <epc.h>
+#include <netdb.h>
 #include "dns_lookup.h"
 
 endpoint_cluster::endpoint_cluster(const char *host, int port,
@@ -56,7 +57,7 @@ void endpoint_cluster::update_endpoints()
     // re-attempt the operation - optimistically hoping that whatever
     // is causing the error will resolve itself
     lookup_err_ = std::unique_ptr<fiber_io_error>(new fiber_io_error(Log::fmt(
-        [&](std::ostream &msg) { msg << "dns lookup failed for: " << host_ << ", error: " << error_string(addrs.first); })));
+        [&](std::ostream &msg) { msg << "dns lookup failed for: " << host_ << ", error: " << (addrs.first < 0 ? gai_strerror(addrs.first) : error_string(addrs.first)); })));
   }
   else
   {
