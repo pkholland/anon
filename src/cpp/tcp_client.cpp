@@ -44,7 +44,7 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
   }
   else if (errno != EINPROGRESS)
   {
-    do_error("connect(fd, addr, addrlen)");
+    do_error("connect(fd, " << *addr << ", addrlen)");
   }
   else
   {
