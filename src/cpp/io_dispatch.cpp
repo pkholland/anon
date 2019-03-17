@@ -196,19 +196,29 @@ class io_timer_handler : public io_dispatch::handler
         do_error("read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations))");
       }
 
+      #if defined(ANON_DEBUG_TIMERS)
+      anon_log("read timer event");
+      #endif
+
       struct timespec now = cur_time();
 
       std::vector<std::unique_ptr<io_dispatch::virt_caller_>> ready_tasks;
       {
         anon::unique_lock<std::mutex> lock(io_d.task_mutex_);
-        std::multimap<struct timespec, std::unique_ptr<io_dispatch::virt_caller_>>::iterator beg;
+        decltype(io_d.task_map_.begin()) beg;
         while (((beg = io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= now))
         {
+          #if defined(ANON_DEBUG_TIMERS)
+          anon_log("removed timer callback from list");
+          #endif
           ready_tasks.push_back(std::move(beg->second));
           io_d.task_map_.erase(beg);
         }
-        if ((beg = io_d.task_map_.begin()) != io_d.task_map_.end())
+        if (beg != io_d.task_map_.end())
         {
+          #if defined(ANON_DEBUG_TIMERS)
+          anon_log("timer list non-empty, rearming timer to " << beg->first - cur_time() << " seconds in future");
+          #endif
           struct itimerspec t_spec = {0};
           t_spec.it_value = beg->first;
           if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
@@ -216,8 +226,8 @@ class io_timer_handler : public io_dispatch::handler
         }
       }
 
-      for (auto it = ready_tasks.begin(); it != ready_tasks.end(); it++)
-        (*it)->exec();
+      for (auto &it : ready_tasks)
+        it->exec();
     }
   }
 };
@@ -436,6 +446,9 @@ io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_ *task, cons
   io_d.task_map_.insert(std::make_pair(when, std::unique_ptr<virt_caller_>(task)));
   if (io_d.task_map_.begin()->first == when)
   {
+    #if defined(ANON_DEBUG_TIMERS)
+    anon_log("schedule_task_ setting timer_fd to " << when - cur_time() << " seconds in future");
+    #endif
     struct itimerspec t_spec = {0};
     t_spec.it_value = when;
     if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)

@@ -54,6 +54,9 @@ void aws_sqs_listener::start()
       },
       aws_sqs_listener::_simple_stack_size, "aws_sqs_listener::aws_sqs_listener, start_listen");
 
+  #if defined(ANON_DEBUG_TIMERS)
+  anon_log("io_dispatch::schedule_task, aws_sqs_listener::start");
+  #endif
   _timer_task = io_dispatch::schedule_task(
       [wp] {
         fiber::run_in_fiber(
@@ -226,6 +229,9 @@ void aws_sqs_listener::set_visibility_timeout()
 
   // schedule the sweep to run again in visibility_sweep_time seconds
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
+  #if defined(ANON_DEBUG_TIMERS)
+  anon_log("io_dispatch::schedule_task, aws_sqs_listener::set_visibility_timeout");
+  #endif
   _timer_task = io_dispatch::schedule_task(
       [wp] {
         fiber::run_in_fiber(

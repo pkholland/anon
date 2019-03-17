@@ -235,8 +235,12 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
   if (socket_type == network)
   {
     fiber_lock lock(zero_net_pipes_mutex_);
-    if (++num_net_pipes_ == 1)
+    if (++num_net_pipes_ == 1) {
+      #if defined(ANON_DEBUG_TIMERS)
+      anon_log("fiber_pipe::fiber_pipe, first net pipe");
+      #endif
       io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + k_net_io_sweep_time);
+    }
   }
 
   std::lock_guard<std::mutex> lock(list_mutex_);
@@ -490,8 +494,12 @@ void io_params::sweep_timed_out_pipes()
         }
 
         fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
-        if (fiber_pipe::num_net_pipes_ > 0)
+        if (fiber_pipe::num_net_pipes_ > 0) {
+          #if defined(ANON_DEBUG_TIMERS)
+          anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
+          #endif
           next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time);
+        }
         else
           next_pipe_sweep_ = io_dispatch::scheduled_task();
 
