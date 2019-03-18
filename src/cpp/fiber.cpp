@@ -235,10 +235,11 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
   if (socket_type == network)
   {
     fiber_lock lock(zero_net_pipes_mutex_);
-    if (++num_net_pipes_ == 1) {
-      #if defined(ANON_DEBUG_TIMERS)
+    if (++num_net_pipes_ == 1)
+    {
+#if defined(ANON_DEBUG_TIMERS)
       anon_log("fiber_pipe::fiber_pipe, first net pipe");
-      #endif
+#endif
       io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + k_net_io_sweep_time);
     }
   }
@@ -399,10 +400,10 @@ void io_params::wake_all(fiber *first)
 
     case oc_sleep:
       io_dispatch::schedule_task(
-        [wake] {
-          tls_io_params.wake_all(wake);
-        },
-        cur_time() + sleep_dur_);
+          [wake] {
+            tls_io_params.wake_all(wake);
+          },
+          cur_time() + sleep_dur_);
       break;
 
     case oc_exit_fiber:
@@ -429,82 +430,87 @@ void io_params::sweep_timed_out_pipes()
 #if defined(ANON_RUNTIME_CHECKS)
   anon_log("io_params::sweep_timed_out_pipes");
 #endif
-  io_dispatch::while_paused2(
-    [] () -> std::function<void(void)> {
-
-      // turn off all future io processing of any
-      // timed-out pipe.  This means there will be at
-      // most one additional io event for that pipe
-      // between now and when the returned function
-      // executes.
-      std::lock_guard<std::mutex> l(fiber_pipe::list_mutex_);
-      auto ct = cur_time();
-      auto pipe = fiber_pipe::first_;
-      while (pipe) {
-        if (pipe->io_timeout_ < ct)
+  auto paused = io_dispatch::while_paused2(
+      []() -> std::function<void(void)> {
+        // turn off all future io processing of any
+        // timed-out pipe.  This means there will be at
+        // most one additional io event for that pipe
+        // between now and when the returned function
+        // executes.
+        std::lock_guard<std::mutex> l(fiber_pipe::list_mutex_);
+        auto ct = cur_time();
+        auto pipe = fiber_pipe::first_;
+        while (pipe)
         {
-          io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pipe->fd_, 0, pipe);
-          pipe->attached_ = false;
+          if (pipe->io_timeout_ < ct)
+          {
+            io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pipe->fd_, 0, pipe);
+            pipe->attached_ = false;
+          }
+          pipe = pipe->next_;
         }
-        pipe = pipe->next_;
-      }
 
-      return [ct] {
-        // this also runs while no other io processing is
-        // happening, but unlike the body of while_paused2
-        // above, this runs after all
-        fiber_pipe *timed_out = 0;
-        {
-          std::lock_guard<std::mutex> l(fiber_pipe::list_mutex_);
-          auto pipe = fiber_pipe::first_;
-          while (pipe) {
-            auto next = pipe->next_;
-            if (pipe->io_timeout_ < ct
-                && !pipe->attached_
-                && pipe->io_fiber_
-                && pipe->io_fiber_->timeout_pipe_ == pipe)
+        return [ct] {
+          // this also runs while no other io processing is
+          // happening, but unlike the body of while_paused2
+          // above, this runs after all io threads have consumed
+          // whatever io is available and processed it.
+          fiber_pipe *timed_out = 0;
+          {
+            std::lock_guard<std::mutex> l(fiber_pipe::list_mutex_);
+            auto pipe = fiber_pipe::first_;
+            while (pipe)
             {
-              // remove from main list
-              if (pipe->next_)
-                pipe->next_->prev_ = pipe->prev_;
-              if (pipe->prev_)
-                pipe->prev_->next_ = pipe->next_;
-              else
-                fiber_pipe::first_ = pipe->next_;
+              auto next = pipe->next_;
+              if (pipe->io_timeout_ < ct && !pipe->attached_ && pipe->io_fiber_ && pipe->io_fiber_->timeout_pipe_ == pipe)
+              {
+                // remove from main list
+                if (pipe->next_)
+                  pipe->next_->prev_ = pipe->prev_;
+                if (pipe->prev_)
+                  pipe->prev_->next_ = pipe->next_;
+                else
+                  fiber_pipe::first_ = pipe->next_;
 
-              // add to our to-delete list
-              pipe->next_ = timed_out;
-              timed_out = pipe;
+                // add to our to-delete list
+                pipe->next_ = timed_out;
+                timed_out = pipe;
+              }
+              pipe = next;
             }
+          }
+
+          auto params = &tls_io_params;
+          auto pipe = timed_out;
+          while (pipe)
+          {
+#if defined(ANON_RUNTIME_CHECKS)
+            anon_log("timing out io-blocked pipe, fd: " << pipe->fd_);
+#endif
+            auto next = pipe->next_;
+            pipe->next_ = pipe->prev_ = pipe; // so dtor's list removal is a no-op
+            params->timeout_expired_ = true;
+            params->wake_all(pipe->io_fiber_);
             pipe = next;
           }
-        }
 
-        auto params = &tls_io_params;
-        auto pipe = timed_out;
-        while (pipe) {
-#if defined(ANON_RUNTIME_CHECKS)
-          anon_log("timing out io-blocked pipe, fd: " << pipe->fd_);
+          fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
+          if (fiber_pipe::num_net_pipes_ > 0)
+          {
+#if defined(ANON_DEBUG_TIMERS)
+            anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
 #endif
-          auto next = pipe->next_;
-          pipe->next_ = pipe->prev_ = pipe; // so dtor's list removal is a no-op
-          params->timeout_expired_ = true;
-          params->wake_all(pipe->io_fiber_);
-          pipe = next;
-        }
+            next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time);
+          }
+          else
+            next_pipe_sweep_ = io_dispatch::scheduled_task();
+        };
+      });
 
-        fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
-        if (fiber_pipe::num_net_pipes_ > 0) {
-          #if defined(ANON_DEBUG_TIMERS)
-          anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
-          #endif
-          next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time);
-        }
-        else
-          next_pipe_sweep_ = io_dispatch::scheduled_task();
-
-      };
-    });
+  // occasionally timing hits such that a pause is not possible.
+  // in that case, go ahead and reschedule the next sweep
+  if (!paused)
+    next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time / 4);
 }
 
 void io_params::sleep_until_data_available(fiber_pipe *pipe)

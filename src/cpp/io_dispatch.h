@@ -104,20 +104,30 @@ public:
   // pause all io threads (other than the one calling this function
   // if it happens to be called from an io thread) and execute 'f'
   // while they are paused. Once 'f' returns resume all io threads.
-  static void while_paused(const std::function<void(void)>& f)
+  // Note that this is not guaranteed to run.  If a while_paused is
+  // already in progress when this is called it cannot run another
+  // until that completes.  It returns true if it was able to run
+  // the while_paused function, false if not
+  static bool while_paused(const std::function<void(void)> &f)
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to pause
     bool is_io_thread = io_d.on_io_thread();
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    if (!lock)
+    {
+#if defined(ANON_DEBUG_PAUSED)
+      anon_log("while_paused failed to lock pause_outer_mutex_");
+#endif
+      return false;
+    }
+
     anon::unique_lock<std::mutex> com_lock(io_d.pause_com_mutex_);
     io_d.num_paused_threads_ = is_io_thread ? 1 : 0;
 
-    // if there is only one io thread, and
-    // we are called from that thread, then
-    // we don't want to write a k_pause command
-    if (io_d.num_paused_threads_ < io_d.num_threads_)
+    // write the pause commands for all of the (other) io threads
+    for (auto i = io_d.num_paused_threads_; i < io_d.num_threads_; i++)
     {
       char cmd = k_pause;
       if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
@@ -131,6 +141,8 @@ public:
 
     io_d.num_paused_threads_ = 0;
     io_d.resume_cond_.notify_all();
+
+    return true;
   }
 
   // similar to the above while_paused, except called with a
@@ -139,26 +151,31 @@ public:
   // returned at least once from epoll_wait, processed whatever
   // events that returned, and are all just about to call epoll_wait
   // again.  This can be used to "flush" io events from the system.
-  static void while_paused2(const std::function<std::function<void(void)>(void)>& f)
+  static bool while_paused2(const std::function<std::function<void(void)>(void)> &f)
   {
-    // if this is called from an io thread, then there
-    // is one less io thread we have to pause
+    // currently only supported when called from an io thread
     bool is_io_thread = io_d.on_io_thread();
     if (!is_io_thread)
       throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    if (!lock)
+    {
+#if defined(ANON_DEBUG_PAUSED)
+      anon_log("while_paused2 failed to lock pause_outer_mutex_");
+#endif
+      return false;
+    }
+
     anon::unique_lock<std::mutex> com_lock(io_d.pause_com_mutex_);
-    #if defined(ANON_DEBUG_PAUSED)
-    anon_log("while_paused2 locked pause_mutex and pause_com_mutex_");
-    #endif
+#if defined(ANON_DEBUG_PAUSED)
+    anon_log("while_paused2 locked pause_outer_mutex_ and pause_com_mutex_");
+#endif
 
     io_d.num_paused_threads_ = 1;
 
-    // if there is only one io thread, and
-    // we are called from that thread, then
-    // we don't want to write a k_pause command
-    if (io_d.num_paused_threads_ < io_d.num_threads_)
+    // write the pause commands for all of the (other) io threads
+    for (auto i = io_d.num_paused_threads_; i < io_d.num_threads_; i++)
     {
       char cmd = k_pause;
       if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
@@ -168,14 +185,20 @@ public:
     while (io_d.num_paused_threads_ != io_d.num_threads_)
       io_d.pause_cond_.wait(com_lock);
 
-    #if defined(ANON_DEBUG_PAUSED)
+#if defined(ANON_DEBUG_PAUSED)
     anon_log("all io threads paused");
-    #endif
+#endif
 
-    try {
+    // call the "while paused" function and store
+    // its return value in our list of functions
+    // we will call once all io threads get back
+    // to where they will call epoll_wait again
+    try
+    {
       io_d.add_at_rest_fn(f());
     }
-    catch(...) {
+    catch (...)
+    {
       anon_log_error("io_d.add_at_rest_fn(f())io_d.add_at_rest_fn(f()) threw exception");
     }
 
@@ -190,18 +213,28 @@ public:
     // have move on from waiting for it to be zero.
     while (io_d.num_pause_done_threads_ != io_d.num_threads_)
       io_d.resume2_cond_.wait(com_lock);
+
+    return true;
   }
 
   // execute the given function once on each
   // of the io threads
   template <typename Fn>
-  static void on_each(Fn f)
+  static bool on_each(Fn f)
   {
     // if this is called from an io thread, then there
     // is one less io thread we have to cause to execute f
     bool is_io_thread = io_d.on_io_thread();
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    if (!lock)
+    {
+#if defined(ANON_DEBUG_PAUSED)
+      anon_log("on_each failed to lock pause_outer_mutex_");
+#endif
+      return false;
+    }
+
     io_d.num_paused_threads_ = is_io_thread ? 1 : 0;
 
     // if there is only one io thread, and
@@ -225,6 +258,8 @@ public:
 
     io_d.num_paused_threads_ = 0;
     io_d.resume_cond_.notify_all();
+
+    return true;
   }
 
   // if you have passed numSigs > 0 to io_dispatch::start
@@ -386,7 +421,7 @@ private:
 
   void epoll_loop();
   void wake_next_thread();
-  void add_at_rest_fn(const std::function<void(void)>& fn);
+  void add_at_rest_fn(const std::function<void(void)> &fn);
   static void set_this_thread_countdown();
 
   std::condition_variable thread_countdown_cond_;
@@ -403,7 +438,7 @@ private:
   std::atomic_int thread_init_index_;
   int num_threads_;
 
-  std::mutex pause_mutex_;
+  std::mutex pause_outer_mutex_;
   std::mutex pause_com_mutex_;
   std::condition_variable pause_cond_;
   std::condition_variable resume_cond_;

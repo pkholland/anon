@@ -38,35 +38,36 @@
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include "aws_http.h"
 
-namespace {
+namespace
+{
 
 // we use this class to tell the AWS sdk to never try its
 // own retries.  All retry logic is done down in anon
 // and we don't want a second layer of it happening in AWS
 class neverRetryStrategy : public Aws::Client::DefaultRetryStrategy
 {
-  public:
-    neverRetryStrategy()
-    {
-    }
+public:
+  neverRetryStrategy()
+  {
+  }
 
-    bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
-    {
-        return false;
-    }
+  bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+  {
+    return false;
+  }
 
-    long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
-    {
-        return 0;
-    }
+  long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+  {
+    return 0;
+  }
 };
 
 static std::shared_ptr<Aws::Client::RetryStrategy> make_strategy()
 {
-    return std::static_pointer_cast<Aws::Client::RetryStrategy>(std::make_shared<neverRetryStrategy>());
+  return std::static_pointer_cast<Aws::Client::RetryStrategy>(std::make_shared<neverRetryStrategy>());
 }
 
-}
+} // namespace
 
 #endif
 

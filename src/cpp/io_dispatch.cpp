@@ -30,21 +30,23 @@
 #include <openssl/err.h>
 #include <sys/signalfd.h>
 
-namespace {
+namespace
+{
 
-struct iod_params {
+struct iod_params
+{
 
   iod_params()
-    : countdown_(0)
-  {}
+      : countdown_(0)
+  {
+  }
 
   int countdown_;
-
 };
 
 thread_local iod_params tls_iod_params;
 
-}
+} // namespace
 
 class io_ctl_handler : public io_dispatch::handler
 {
@@ -76,30 +78,18 @@ public:
       }
       else if (cmd == io_dispatch::k_pause)
       {
-        #if defined(ANON_DEBUG_PAUSED)
-        anon_log("handling io_dispatch::k_pause");
-        #endif
         anon::unique_lock<std::mutex> lock(io_d.pause_com_mutex_);
         io_dispatch::epoll_ctl(EPOLL_CTL_MOD, fd_, EPOLLIN | EPOLLONESHOT, this);
 
         // if this is the last io thread to have paused
         // then signal whatever thread is waiting in
-        // io_dispatch::while_paused, otherwise get the
-        // next io thread to pause
+        // io_dispatch::while_paused
         if (++io_d.num_paused_threads_ == io_d.num_threads_)
         {
-          #if defined(ANON_DEBUG_PAUSED)
+#if defined(ANON_DEBUG_PAUSED)
           anon_log(" notifying all paused");
-          #endif
+#endif
           io_d.pause_cond_.notify_one();
-        }
-        else
-        {
-          #if defined(ANON_DEBUG_PAUSED)
-          anon_log(" pausing another");
-          #endif
-          if (write(io_d.send_ctl_fd_, &cmd, 1) != 1)
-            do_error("write(io_d.send_ctl_fd_, &cmd, 1)");
         }
 
         // wait until the thread that called io_dispatch::while_paused
@@ -110,10 +100,11 @@ public:
 
         // tell while_paused2 that everyone has made it past
         // the wait immediately above
-        if (++io_d.num_pause_done_threads_ == io_d.num_threads_) {
-          #if defined(ANON_DEBUG_PAUSED)
+        if (++io_d.num_pause_done_threads_ == io_d.num_threads_)
+        {
+#if defined(ANON_DEBUG_PAUSED)
           anon_log("all io threads have resumed, notifying while_paused2");
-          #endif
+#endif
           io_d.resume2_cond_.notify_all();
         }
 
@@ -123,7 +114,7 @@ public:
       }
       else if (cmd == io_dispatch::k_on_each)
       {
-        anon::unique_lock<std::mutex> lock(io_d.pause_mutex_);
+        anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_);
 
         io_dispatch::virt_caller_ *tc;
         if (read(fd_, &tc, sizeof(tc)) != sizeof(tc))
@@ -196,9 +187,9 @@ class io_timer_handler : public io_dispatch::handler
         do_error("read(io_d.timer_fd_, &num_expirations, sizeof(num_expirations))");
       }
 
-      #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
       anon_log("read timer event");
-      #endif
+#endif
 
       struct timespec now = cur_time();
 
@@ -208,17 +199,17 @@ class io_timer_handler : public io_dispatch::handler
         decltype(io_d.task_map_.begin()) beg;
         while (((beg = io_d.task_map_.begin()) != io_d.task_map_.end()) && (beg->first <= now))
         {
-          #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
           anon_log("removed timer callback from list");
-          #endif
+#endif
           ready_tasks.push_back(std::move(beg->second));
           io_d.task_map_.erase(beg);
         }
         if (beg != io_d.task_map_.end())
         {
-          #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
           anon_log("timer list non-empty, rearming timer to " << beg->first - cur_time() << " seconds in future");
-          #endif
+#endif
           struct itimerspec t_spec = {0};
           t_spec.it_value = beg->first;
           if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
@@ -328,7 +319,7 @@ int io_dispatch::new_command_pipe()
   // reduce the size of the pipe buffers to keep callers from
   // queueing up too many requests in advance of us being able
   // to dispatch them
-  const int bufSize = 4096;
+  const int bufSize = 32768;
   socklen_t optSize = sizeof(bufSize);
   if (setsockopt(sv[0], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize) != 0)
     do_error("setsockopt(sv[0], SOL_SOCKET, SO_RCVBUF, &bufSize, optSize)");
@@ -365,7 +356,7 @@ void io_dispatch::wake_next_thread()
 
 int guess_fd(io_dispatch::handler *ioh);
 
-void io_dispatch::add_at_rest_fn(const std::function<void(void)>& fn)
+void io_dispatch::add_at_rest_fn(const std::function<void(void)> &fn)
 {
   at_rest_functions_.push_front(fn);
 }
@@ -393,22 +384,24 @@ void io_dispatch::epoll_loop()
     // deal with any "stage2" at_rest
     // while_paused operations that may have
     // been registered
-    auto& cd = tls_iod_params.countdown_;
-    if (cd) {
+    auto &cd = tls_iod_params.countdown_;
+    if (cd)
+    {
       auto ncd = thread_countdown_ -= cd;
       cd = 0;
-      if (ncd == 0) {
+      if (ncd == 0)
+      {
         std::unique_lock<std::mutex> lock(pause_com_mutex_);
-        // we execute all at_rest functions with
-        // pause_mutex_ locked.  That keeps
-        // any other io threads blocked in the while
-        // statement below, which ensures that only
-        // this thread is running while these functions
-        // execute
-        #if defined(ANON_DEBUG_PAUSED)
+// we execute all at_rest functions with
+// pause_mutex_ locked.  That keeps
+// any other io threads blocked in the while
+// statement below, which ensures that only
+// this thread is running while these functions
+// execute
+#if defined(ANON_DEBUG_PAUSED)
         auto num_at_rest = at_rest_functions_.size();
         anon_log("executing " << num_at_rest << " at rest function" << (num_at_rest == 1 ? "" : "s"));
-        #endif
+#endif
         for (auto &arf : at_rest_functions_)
           arf();
         at_rest_functions_.clear();
@@ -446,9 +439,9 @@ io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_ *task, cons
   io_d.task_map_.insert(std::make_pair(when, std::unique_ptr<virt_caller_>(task)));
   if (io_d.task_map_.begin()->first == when)
   {
-    #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
     anon_log("schedule_task_ setting timer_fd to " << when - cur_time() << " seconds in future");
-    #endif
+#endif
     struct itimerspec t_spec = {0};
     t_spec.it_value = when;
     if (timerfd_settime(io_d.timer_fd_, TFD_TIMER_ABSTIME, &t_spec, 0) != 0)
