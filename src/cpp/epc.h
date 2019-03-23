@@ -114,7 +114,9 @@ private:
   void do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f);
   void update_endpoints();
 
+public:
   void erase(const std::shared_ptr<endpoint> &ep);
+private:
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
   std::string host_;

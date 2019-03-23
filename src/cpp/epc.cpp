@@ -201,6 +201,27 @@ class cleanup {
     bool success;
 };
 
+class eraser
+{
+  public:
+    eraser(endpoint_cluster* epc,
+          const std::shared_ptr<endpoint_cluster::endpoint>& ep)
+      : epc(epc),
+        ep(ep),
+        success(false)
+    {}
+
+    ~eraser()
+    {
+      if (!success)
+        epc->erase(ep);
+    }
+
+    endpoint_cluster* epc;
+    std::shared_ptr<endpoint_cluster::endpoint> ep;
+    bool success;
+};
+
 }
 
 void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
@@ -263,7 +284,9 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
     else
     {
       l.unlock();
+      eraser era(this, ep);
       auto conn = tcp_client::connect((struct sockaddr *)&ep->addr_, ep->addr_.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+      era.success = true;
       if (conn.first != 0)
       {
         erase(ep);

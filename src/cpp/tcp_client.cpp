@@ -31,8 +31,10 @@ namespace tcp_client
 std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen)
 {
   int fd = socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-  if (fd == -1)
-    do_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
+  if (fd == -1) {
+    anon_log("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0) faied, err: " << error_string(errno));
+    return std::make_pair(errno, std::unique_ptr<fiber_pipe>());
+  }
 
   std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
   // anon_log("connecting new socket, fd: " << fd);
@@ -44,7 +46,7 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
   }
   else if (errno != EINPROGRESS)
   {
-    anon_log("connect(fd, " << *addr << ", addrlen) err: " << error_string(errno));
+    anon_log("connect(fd, " << *addr << ", addrlen) failed, err: " << error_string(errno));
     return std::make_pair(errno, std::unique_ptr<fiber_pipe>());
   }
   else
