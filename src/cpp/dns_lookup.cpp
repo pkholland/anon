@@ -353,6 +353,12 @@ private:
               }
               freeaddrinfo(result);
             }
+            else
+            {
+#ifdef ANON_LOG_DNS_LOOKUP
+              anon_log(" getaddrinfo failed: " << (err < 0 ? gai_strerror(err) : error_string(err)));
+#endif
+            }
             auto fn = cr->fn;
             auto stack_size = 8 * 1024 - 256;
             fiber::run_in_fiber(
