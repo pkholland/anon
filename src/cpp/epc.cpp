@@ -257,7 +257,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       sock = ep->socks_.front();
       ep->socks_.pop();
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc reused connection to " << ep->addr_);
+      anon_log("epc reused connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_);
 #endif
     }
     else
@@ -283,7 +283,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
         pipe = std::unique_ptr<pipe_t>(conn.second.release());
       sock = std::shared_ptr<endpoint::sock>(new endpoint::sock(std::move(pipe)));
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc established new connection to " << ep->addr_);
+      anon_log("epc established new connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_);
 #endif
     }
   }

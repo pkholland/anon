@@ -69,7 +69,7 @@ public:
         fiber::msleep(sleepMs);
         sleepMs *= 2;
         if (sleepMs > 30 * 1000)
-          throw;
+          throw e;
       }
       catch (const fiber_io_timeout_error &e)
       {
