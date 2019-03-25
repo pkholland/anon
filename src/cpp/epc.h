@@ -66,18 +66,21 @@ public:
 #ifdef ANON_LOG_DNS_LOOKUP
         anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << sleepMs / 1000.0 << " seconds before trying again");
 #endif
-        fiber::msleep(sleepMs);
-        sleepMs *= 2;
         if (sleepMs > 30 * 1000)
-          throw e;
+          throw;
       }
       catch (const fiber_io_timeout_error &e)
       {
-//#ifdef ANON_LOG_DNS_LOOKUP
+#ifdef ANON_LOG_DNS_LOOKUP
         anon_log("with_connected_pipe hit fiber_io_timeout_error, what() = " << e.what());
-//#endif
-        sleepMs = 50;
+#endif
+        sleepMs = 0;
       }
+      if (sleepMs > 0) {
+        fiber::msleep(sleepMs);
+        sleepMs *= 2;
+      } else
+        sleepMs = 50;
     }
   }
 

@@ -114,7 +114,7 @@ public:
     // is one less io thread we have to pause
     bool is_io_thread = io_d.on_io_thread();
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    std::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
     if (!lock)
     {
 #if defined(ANON_DEBUG_PAUSED)
@@ -158,7 +158,7 @@ public:
     if (!is_io_thread)
       throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    std::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
     if (!lock)
     {
 #if defined(ANON_DEBUG_PAUSED)
@@ -226,7 +226,7 @@ public:
     // is one less io thread we have to cause to execute f
     bool is_io_thread = io_d.on_io_thread();
 
-    anon::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
+    std::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
     if (!lock)
     {
 #if defined(ANON_DEBUG_PAUSED)
