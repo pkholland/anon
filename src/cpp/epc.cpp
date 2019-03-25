@@ -47,7 +47,7 @@ void endpoint_cluster::update_endpoints()
   auto addrs = dns_lookup::get_addrinfo(host_.c_str(), port_);
 
   fiber_lock l(mtx_);
-  if (addrs.first != 0)
+  if (addrs.first != 0 || addrs.second.size() == 0)
   {
     // if there are no current endpoints that are already known
     // for this host name, then this error object will be thrown
@@ -169,60 +169,67 @@ void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
   erase(ep);
 }
 
-namespace {
+namespace
+{
 
-class cleanup {
-  public:
-    cleanup(const std::weak_ptr<endpoint_cluster::endpoint>& wep,
-            const std::shared_ptr<endpoint_cluster::endpoint::sock>& sock)
+class cleanup
+{
+public:
+  cleanup(const std::weak_ptr<endpoint_cluster::endpoint> &wep,
+          const std::shared_ptr<endpoint_cluster::endpoint::sock> &sock)
       : wep(wep),
         sock(sock),
         success(false)
-    {}
+  {
+  }
 
-    ~cleanup()
+  ~cleanup()
+  {
+    auto ep = wep.lock();
+    if (ep)
     {
-      auto ep = wep.lock();
-      if (ep) {
-        fiber_lock l(ep->mtx_);
-        --ep->outstanding_requests_;
-        if (success)
-          ep->socks_.push(sock);
-        ep->cond_.notify_all();
-      } else {
+      fiber_lock l(ep->mtx_);
+      --ep->outstanding_requests_;
+      if (success)
+        ep->socks_.push(sock);
+      ep->cond_.notify_all();
+    }
+    else
+    {
 #ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc, appears that endpoint was deleted prior to callback returning");
 #endif
-      }
     }
+  }
 
-    std::weak_ptr<endpoint_cluster::endpoint> wep;
-    std::shared_ptr<endpoint_cluster::endpoint::sock> sock;
-    bool success;
+  std::weak_ptr<endpoint_cluster::endpoint> wep;
+  std::shared_ptr<endpoint_cluster::endpoint::sock> sock;
+  bool success;
 };
 
 class eraser
 {
-  public:
-    eraser(endpoint_cluster* epc,
-          const std::shared_ptr<endpoint_cluster::endpoint>& ep)
+public:
+  eraser(endpoint_cluster *epc,
+         const std::shared_ptr<endpoint_cluster::endpoint> &ep)
       : epc(epc),
         ep(ep),
         success(false)
-    {}
+  {
+  }
 
-    ~eraser()
-    {
-      if (!success)
-        epc->erase(ep);
-    }
+  ~eraser()
+  {
+    if (!success)
+      epc->erase(ep);
+  }
 
-    endpoint_cluster* epc;
-    std::shared_ptr<endpoint_cluster::endpoint> ep;
-    bool success;
+  endpoint_cluster *epc;
+  std::shared_ptr<endpoint_cluster::endpoint> ep;
+  bool success;
 };
 
-}
+} // namespace
 
 void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
 {
