@@ -25,6 +25,7 @@
 #include "tcp_client.h"
 #include "tls_pipe.h"
 #include "tls_context.h"
+#include "big_id_crypto.h"
 #include <queue>
 #include <memory>
 
@@ -47,13 +48,15 @@ public:
                    int max_conn_per_ep,
                    int lookup_frequency_in_seconds);
 
-  void set_max_io_block_time(int max_io_block_time) {
+  void set_max_io_block_time(int max_io_block_time)
+  {
     max_io_block_time_ = max_io_block_time;
   }
 
   void with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
   {
-    int sleepMs = 50;
+    auto sleepMs = 50;
+    auto slp = 0;
     while (true)
     {
       try
@@ -63,11 +66,15 @@ public:
       }
       catch (const fiber_io_error &e)
       {
-#ifdef ANON_LOG_DNS_LOOKUP
-        anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << sleepMs / 1000.0 << " seconds before trying again");
-#endif
+
         if (sleepMs > 30 * 1000)
           throw;
+        auto rid = small_rand_id();
+        auto ri = *(unsigned int *)&rid.m_buf[0];
+        slp = sleepMs * 3 / 4 + (ri % (sleepMs / 2));
+#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << slp / 1000.0 << " seconds before trying again");
+#endif
       }
       catch (const fiber_io_timeout_error &e)
       {
@@ -76,10 +83,12 @@ public:
 #endif
         sleepMs = 0;
       }
-      if (sleepMs > 0) {
-        fiber::msleep(sleepMs);
+      if (sleepMs > 0)
+      {
+        fiber::msleep(slp);
         sleepMs *= 2;
-      } else
+      }
+      else
         sleepMs = 50;
     }
   }
@@ -119,6 +128,7 @@ private:
 
 public:
   void erase(const std::shared_ptr<endpoint> &ep);
+
 private:
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
@@ -138,8 +148,8 @@ private:
   std::unique_ptr<fiber_io_error> lookup_err_;
   int max_io_block_time_;
 
-  enum {
+  enum
+  {
     k_default_io_block_time = 30
   };
-
 };
