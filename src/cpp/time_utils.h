@@ -35,6 +35,14 @@ inline struct timespec cur_time()
   return now;
 }
 
+inline struct timespec cur_epoc_time()
+{
+  struct timespec now;
+  if (clock_gettime(CLOCK_REALTIME, &now) != 0)
+    do_error("clock_gettime(CLOCK_REALTIME, &now)");
+  return now;
+}
+
 inline bool operator<(const struct timespec &spec1, const struct timespec &spec2)
 {
   if (spec1.tv_sec != spec2.tv_sec)
