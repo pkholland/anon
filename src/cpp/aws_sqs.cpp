@@ -94,23 +94,23 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
       }
       catch (const std::exception &exc)
       {
-        do_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
+        anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
         return false;
       }
       catch (...)
       {
-        do_error("caught unknown exception processing message, message body: '" << body << "'");
+        anon_log_error("caught unknown exception processing message, message body: '" << body << "'");
         return false;
       }
     }
     catch (const std::exception &exc)
     {
-      do_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
+      anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
       return true;
     }
     catch (...)
     {
-      do_error("caught unknown exception parsing message, message body: '" << body << "'");
+      anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
       return true;
     }
   };
