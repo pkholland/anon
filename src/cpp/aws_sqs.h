@@ -56,6 +56,14 @@ public:
 
   static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
 
+  class inval_message : public std::runtime_error
+  {
+  public:
+    inval_message(const std::string& message)
+      : std::runtime_error(message)
+    {}
+  };
+
 private:
   enum
   {

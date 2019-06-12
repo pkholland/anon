@@ -92,6 +92,11 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
       {
         return fn(m, body_js);
       }
+      catch (const inval_message& exc)
+      {
+        anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
+        return true;
+      }
       catch (const std::exception &exc)
       {
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
