@@ -46,7 +46,7 @@ inline void to_ascii_hex(char *ascii, const uint8_t *id_buff, int id_len)
     else
       ascii[i * 2 + 1] = 'a' + nib - 10;
   }
-  ascii[id_len - 1] = 0;
+  ascii[id_len * 2] = 0;
 }
 
 // Convert one ascii/hex character to its integer value value.
