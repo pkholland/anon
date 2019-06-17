@@ -69,6 +69,22 @@ void throw_request_error_(int code, T err)
   throw request_error(code, format.str());
 }
 
+inline void reply_back_error(const char* error_type, const char* msg, const char* response_code,
+                    http_server::pipe_t &pipe)
+{
+  anon_log("request_wrap caught " << error_type << ": " << msg);
+  http_response response;
+  response.add_header("Content-Type", "text/plain");
+  response.set_status_code(response_code);
+  response << msg << "\n";
+  try {
+    pipe.respond(response);
+  }
+  catch(...) {
+    anon_log("request_wrap caught exception trying to respond with error");
+  }
+}
+
 /*
  * helper in reporting errors back to an http client caller.
  * Use it like this:
@@ -91,38 +107,18 @@ void request_wrap(http_server::pipe_t &pipe, Fn f)
   }
   catch (const request_error &e)
   {
-    anon_log("request_wrap caught request_error - " << e.reason);
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code(e.code);
-    response << e.reason << "\n";
-    pipe.respond(response);
+    reply_back_error("request_error", e.reason.c_str(), e.code.c_str(), pipe);
   }
   catch (const nlohmann::json::exception& e)
   {
-    anon_log("request_wrap caught json exception - " << e.what());
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code("400");
-    response << e.what() << "\n";
-    pipe.respond(response);
+    reply_back_error("json exception", e.what(), "400", pipe);
   }
   catch (const std::exception &e)
   {
-    anon_log_error("request_wrap caught std::exception - " << e.what());
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code("500");
-    response << e.what() << "\n";
-    pipe.respond(response);
+    reply_back_error("std::exception", e.what(), "500", pipe);
   }
   catch (...)
   {
-    anon_log_error("request_wrap caught unknown exception");
-    http_response response;
-    response.add_header("Content-Type", "text/plain");
-    response.set_status_code("500");
-    response << "caught unknown exception\n";
-    pipe.respond(response);
+    reply_back_error("unknown exception", "", "500", pipe);
   }
 }
