@@ -24,6 +24,7 @@
 
 #include "lock_checker.h"
 #include "time_utils.h"
+#include <functional>
 #include <vector>
 #include <thread>
 #include <mutex>
