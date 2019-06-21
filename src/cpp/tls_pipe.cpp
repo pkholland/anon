@@ -21,6 +21,7 @@
 */
 
 #include "tls_pipe.h"
+#include <openssl/opensslv.h>
 
 ///////////////////////////////////////////////////////////////
 
@@ -39,8 +40,48 @@ static long fp_ctrl(BIO *h, int cmd, long arg1, void *arg2);
 static int fp_new(BIO *h);
 static int fp_free(BIO *data);
 
+// original openssl, before 1.1 needed different code
+// to initialize a custom BIO
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+
+static BIO_METHOD methods_fdp =
+    {
+        BIO_TYPE_FIBER_PIPE,
+        "fiber_pipe",
+        fp_write,
+        fp_read,
+        fp_puts,
+        fp_gets,
+        fp_ctrl,
+        fp_new,
+        fp_free,
+        NULL,
+};
+
+#endif
+
 namespace
 {
+
+#if OPENSSL_VERSION_NUMBER < 0x10100000
+
+void BIO_set_data(BIO *b, void* p) {
+  b->ptr = p;
+}
+
+void* BIO_get_data(BIO* b) {
+  return b->ptr;
+}
+
+BIO_METHOD* create_biom() {
+  return &methods_fdp;
+}
+
+void BIO_set_init(BIO *b, int init) {
+  b->init = init;
+}
+
+#else
 
 std::mutex mtx;
 BIO_METHOD* biom = 0;
@@ -62,6 +103,8 @@ BIO_METHOD* create_biom()
   BIO_meth_set_destroy(biom, fp_free);
   return biom;
 }
+
+#endif
 
 class fp_pipe
 {
@@ -91,7 +134,7 @@ static BIO *BIO_new_fp(std::unique_ptr<fiber_pipe> &&pipe)
 
 static int fp_new(BIO *b)
 {
-  //b->init = 1;
+  BIO_set_init(b, 1);
   BIO_set_data(b, 0);
   return 1;
 }

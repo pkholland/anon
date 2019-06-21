@@ -364,7 +364,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     }
     else
     {
-      do_error("delete SQS message " << messageId << ", " << out.GetError().GetMessage());
+      anon_log("delete SQS message failed, messageId:" << messageId << ", " << out.GetError().GetMessage());
     }
   });
 }
