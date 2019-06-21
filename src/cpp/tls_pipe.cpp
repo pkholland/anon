@@ -39,22 +39,29 @@ static long fp_ctrl(BIO *h, int cmd, long arg1, void *arg2);
 static int fp_new(BIO *h);
 static int fp_free(BIO *data);
 
-static BIO_METHOD methods_fdp =
-    {
-        BIO_TYPE_FIBER_PIPE,
-        "fiber_pipe",
-        fp_write,
-        fp_read,
-        fp_puts,
-        fp_gets,
-        fp_ctrl,
-        fp_new,
-        fp_free,
-        NULL,
-};
-
 namespace
 {
+
+std::mutex mtx;
+BIO_METHOD* biom = 0;
+
+BIO_METHOD* create_biom()
+{
+  std::unique_lock<std::mutex> l(mtx);
+  if (biom)
+    return biom;
+
+  auto index = BIO_get_new_index();
+  biom = BIO_meth_new(index, "fiber_pipe");
+  BIO_meth_set_write(biom, fp_write);
+  BIO_meth_set_read(biom, fp_read);
+  BIO_meth_set_puts(biom, fp_puts);
+  BIO_meth_set_gets(biom, fp_gets);
+  BIO_meth_set_ctrl(biom, fp_ctrl);
+  BIO_meth_set_create(biom, fp_new);
+  BIO_meth_set_destroy(biom, fp_free);
+  return biom;
+}
 
 class fp_pipe
 {
@@ -75,17 +82,17 @@ public:
 
 static BIO *BIO_new_fp(std::unique_ptr<fiber_pipe> &&pipe)
 {
-  BIO *b = BIO_new(&methods_fdp);
+  BIO *b = BIO_new(create_biom());
   if (b == 0)
     return 0;
-  b->ptr = new fp_pipe(std::move(pipe));
+  BIO_set_data(b, new fp_pipe(std::move(pipe)));
   return b;
 }
 
 static int fp_new(BIO *b)
 {
-  b->init = 1;
-  b->ptr = NULL;
+  //b->init = 1;
+  BIO_set_data(b, 0);
   return 1;
 }
 
@@ -93,16 +100,16 @@ static int fp_free(BIO *b)
 {
   if (b == NULL)
     return 0;
-  auto p = reinterpret_cast<fp_pipe *>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(b));
   if (p)
     delete p;
-  b->ptr = 0;
+  BIO_set_data(b, 0);
   return 1;
 }
 
 static int fp_read(BIO *b, char *out, int outl)
 {
-  auto p = reinterpret_cast<fp_pipe *>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(b));
   if (p)
   {
     try
@@ -127,7 +134,7 @@ static int fp_read(BIO *b, char *out, int outl)
 
 static int fp_write(BIO *b, const char *in, int inl)
 {
-  auto p = reinterpret_cast<fp_pipe *>(b->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(b));
   if (p)
   {
     try
@@ -268,7 +275,7 @@ struct auto_bio
 
 void throw_ssl_error_(BIO *fpb)
 {
-  auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 1");
   else if (p->hit_fiber_io_timeout_error_)
@@ -279,7 +286,7 @@ void throw_ssl_error_(BIO *fpb)
 
 static void throw_ssl_error_(BIO *fpb, unsigned long err)
 {
-  auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 2");
   else if (p->hit_fiber_io_timeout_error_)
@@ -290,7 +297,7 @@ static void throw_ssl_error_(BIO *fpb, unsigned long err)
 
 void throw_ssl_io_error_(BIO *fpb, unsigned long err)
 {
-  auto p = reinterpret_cast<fp_pipe *>(fpb->ptr);
+  auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
   if (p->hit_fiber_io_error_)
     throw fiber_io_error("fiber io error during tls 3");
   else if (p->hit_fiber_io_timeout_error_)
