@@ -42,6 +42,21 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
 {
 }
 
+aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
+                                   const Aws::Client::ClientConfiguration &client_config,
+                                   const Aws::String &queue_url,
+                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>&)> &handler,
+                                   size_t stack_size)
+    : _client(provider, client_config),
+      _queue_url(queue_url),
+      _num_fibers(0),
+      _exit_now(false),
+      _process_msg_del(handler),
+      _consecutive_errors(0),
+      _stack_size(stack_size)
+{
+}
+
 void aws_sqs_listener::start()
 {
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
@@ -121,6 +136,49 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
   };
 }
 
+std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del, const nlohmann::json &body)> &fn)
+{
+  return [fn](const Aws::SQS::Model::Message &m, const std::function<void()>& del) -> bool {
+    std::string body = m.GetBody();
+    try
+    {
+      json body_js = json::parse(body.begin(), body.end());
+      try
+      {
+        return fn(m, del, body_js);
+      }
+      catch (const inval_message& exc)
+      {
+        anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
+        del();
+        return true;
+      }
+      catch (const std::exception &exc)
+      {
+        anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
+        return false;
+      }
+      catch (...)
+      {
+        anon_log_error("caught unknown exception processing message, message body: '" << body << "'");
+        return false;
+      }
+    }
+    catch (const std::exception &exc)
+    {
+      anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
+      del();
+      return true;
+    }
+    catch (...)
+    {
+      anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
+      del();
+      return true;
+    }
+  };
+}
+
 void aws_sqs_listener::start_listen()
 {
   Model::ReceiveMessageRequest req;
@@ -165,9 +223,19 @@ void aws_sqs_listener::start_listen()
                 if (!ths)
                   return;
                 ths->add_to_keep_alive(m);
-                if (ths->_process_msg(m))
-                  ths->delete_message(m);
+                bool success;
+                if (ths->_process_msg) {
+                  success = ths->_process_msg(m);
+                  if (success)
+                    ths->delete_message(m);
+                }
                 else
+                  success = ths->_process_msg_del(m, [wp, m] {
+                    auto ths = wp.lock();
+                    if (ths)
+                      ths->delete_message(m);
+                  });
+                if (!success)
                   ths->remove_from_keep_alive(m, true);
               },
               ths->_stack_size, "aws_sqs_listener, process_msg");
