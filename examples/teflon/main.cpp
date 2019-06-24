@@ -294,7 +294,7 @@ extern "C" int main(int argc, char **argv)
   }
   else
   {
-    auto cfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetConfigProfileFilename();
+    auto cfn = Aws::Auth::GetConfigProfileFilename();
     Aws::Config::AWSConfigFileProfileConfigLoader loader(cfn);
     if (loader.Load())
     {
