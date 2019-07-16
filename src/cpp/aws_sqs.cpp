@@ -31,6 +31,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
                                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                                   bool single_concurrent_message,
                                    size_t stack_size)
     : _client(provider, client_config),
       _queue_url(queue_url),
@@ -38,7 +39,9 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _exit_now(false),
       _process_msg(handler),
       _consecutive_errors(0),
-      _stack_size(stack_size)
+      _single_concurrent_message(single_concurrent_message),
+      _stack_size(stack_size),
+      _continue_after_timeout([]{return true;})
 {
 }
 
@@ -46,6 +49,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
                                    const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>&)> &handler,
+                                   bool single_concurrent_message,
                                    size_t stack_size)
     : _client(provider, client_config),
       _queue_url(queue_url),
@@ -53,7 +57,9 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _exit_now(false),
       _process_msg_del(handler),
       _consecutive_errors(0),
-      _stack_size(stack_size)
+      _single_concurrent_message(single_concurrent_message),
+      _stack_size(stack_size),
+      _continue_after_timeout([]{return true;})
 {
 }
 
@@ -182,7 +188,7 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()
 void aws_sqs_listener::start_listen()
 {
   Model::ReceiveMessageRequest req;
-  req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(max_messages_per_read).WithWaitTimeSeconds(read_wait_time);
+  req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(_single_concurrent_message ? 1 : max_messages_per_read).WithWaitTimeSeconds(read_wait_time);
   Aws::Vector<Model::QueueAttributeName> att;
   att.push_back(Model::QueueAttributeName::All);
   req.WithAttributeNames(std::move(att));
@@ -237,14 +243,19 @@ void aws_sqs_listener::start_listen()
                   });
                 if (!success)
                   ths->remove_from_keep_alive(m, true);
+                if (ths->_single_concurrent_message && !ths->_exit_now)
+                  ths->start_listen();
               },
               ths->_stack_size, "aws_sqs_listener, process_msg");
+      } else {
+        if (!ths->_continue_after_timeout())
+          ths->_exit_now = true;
       }
     }
 
     if (ths->_consecutive_errors < 1000)
     {
-      if (!ths->_exit_now)
+      if (!ths->_single_concurrent_message && !ths->_exit_now)
       {
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)

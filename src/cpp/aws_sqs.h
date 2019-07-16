@@ -45,9 +45,10 @@ public:
                                                         const Aws::Client::ClientConfiguration &client_config,
                                                         const Aws::String &queue_url,
                                                         const Fn &handler,
+                                                        bool single_concurrent_message = false,
                                                         size_t stack_size = _default_process_message_stack_size)
   {
-    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler), stack_size);
+    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler), single_concurrent_message, stack_size);
     ths->start();
     return ths;
   }
@@ -64,6 +65,10 @@ public:
       : std::runtime_error(message)
     {}
   };
+
+  void on_timeout(const std::function<bool()>& timeout) {
+    _continue_after_timeout = timeout;
+  }
 
 private:
   enum
@@ -82,9 +87,11 @@ private:
   std::atomic<bool> _exit_now;
   std::function<bool(const Aws::SQS::Model::Message &m)> _process_msg;
   std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& delete_message)> _process_msg_del;
+  std::function<bool()> _continue_after_timeout;
   std::map<Aws::String, Aws::String> _alive_set;
   io_dispatch::scheduled_task _timer_task;
   int _consecutive_errors;
+  bool _single_concurrent_message;
   size_t _stack_size;
 
   enum
@@ -128,12 +135,14 @@ public:
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                   bool single_concurrent_message,
                    size_t stack_size);
 
   aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
                    const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>&)> &handler,
+                   bool single_concurrent_message,
                    size_t stack_size);
 };
 
