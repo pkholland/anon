@@ -105,7 +105,7 @@ aws_sqs_listener::~aws_sqs_listener()
 std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn)
 {
   return [fn](const Aws::SQS::Model::Message &m) -> bool {
-    std::string body = m.GetBody();
+    std::string body = get_body(m);
     try
     {
       json body_js = json::parse(body.begin(), body.end());
@@ -145,7 +145,7 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
 std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del, const nlohmann::json &body)> &fn)
 {
   return [fn](const Aws::SQS::Model::Message &m, const std::function<void()>& del) -> bool {
-    std::string body = m.GetBody();
+    std::string body = get_body(m);
     try
     {
       json body_js = json::parse(body.begin(), body.end());

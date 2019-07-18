@@ -39,6 +39,21 @@
 
 class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
 {
+  static std::string replace_all(std::string& s, const std::string& pat, const std::string& rep)
+  {
+    size_t pos = 0;
+    auto plen = pat.size();
+    auto rlen = rep.size();
+    while (true) {
+      auto fpos = s.find(pat, pos);
+      if (fpos != std::string::npos) {
+        s = s.replace(fpos, plen, rep);
+        pos = fpos + rlen;
+      } else
+        break;
+    }
+  }
+
 public:
   template <typename Fn>
   static std::shared_ptr<aws_sqs_listener> new_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
@@ -68,6 +83,20 @@ public:
 
   void on_timeout(const std::function<bool()>& timeout) {
     _continue_after_timeout = timeout;
+  }
+
+  // I wish I could find documentation on this, but at least the c++ SQS amazon
+  // code returns the Message.GetBody with XML-style encoding of the characters
+  // &, ', ", >, and <
+  // No one ever wants that...
+  static std::string get_body(const Aws::SQS::Model::Message &m)
+  {
+    auto body = m.GetBody();
+    body = replace_all(body, "&amp;", "&");
+    body = replace_all(body, "&quot;", "\"");
+    body = replace_all(body, "&apos;", "\'");
+    body = replace_all(body, "&lt;", "<");
+    return replace_all(body, "&gt;", "<");
   }
 
 private:
