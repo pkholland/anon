@@ -46,12 +46,12 @@ class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
     auto rlen = rep.size();
     while (true) {
       auto fpos = s.find(pat, pos);
-      if (fpos != std::string::npos) {
-        s = s.replace(fpos, plen, rep);
-        pos = fpos + rlen;
-      } else
+      if (fpos == std::string::npos)
         break;
+      s = s.replace(fpos, plen, rep);
+      pos = fpos + rlen;
     }
+    return s;
   }
 
 public:
