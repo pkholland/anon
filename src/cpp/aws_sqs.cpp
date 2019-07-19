@@ -371,7 +371,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     fiber::rename_fiber("aws_sqs_listener::delete_message, DeleteMessageAsync");
     if (out.IsSuccess())
     {
-      // anon_log("deleted SQS message " << messageId);
+      anon_log("deleted SQS message " << messageId);
     }
     else
     {
