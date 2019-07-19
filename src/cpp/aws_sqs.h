@@ -96,7 +96,7 @@ public:
     body = replace_all(body, "&quot;", "\"");
     body = replace_all(body, "&apos;", "\'");
     body = replace_all(body, "&lt;", "<");
-    return replace_all(body, "&gt;", "<");
+    return replace_all(body, "&gt;", ">");
   }
 
 private:
