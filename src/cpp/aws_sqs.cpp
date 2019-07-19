@@ -351,7 +351,7 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
       fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
       if (out.IsSuccess())
       {
-        // anon_log("reset message visibility near 0 for " << messageId);
+        anon_log("reset message visibility near 0 for " << messageId);
       }
       else
       {
