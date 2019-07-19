@@ -48,7 +48,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
 aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
-                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>&)> &handler,
+                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>&)> &handler,
                                    bool single_concurrent_message,
                                    size_t stack_size)
     : _client(provider, client_config),
@@ -142,9 +142,9 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
   };
 }
 
-std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del, const nlohmann::json &body)> &fn)
+std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del, const nlohmann::json &body)> &fn)
 {
-  return [fn](const Aws::SQS::Model::Message &m, const std::function<void()>& del) -> bool {
+  return [fn](const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del) -> bool {
     std::string body = get_body(m);
     try
     {
@@ -156,7 +156,7 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()
       catch (const inval_message& exc)
       {
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
-        del();
+        del(true);
         return true;
       }
       catch (const std::exception &exc)
@@ -173,13 +173,13 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()
     catch (const std::exception &exc)
     {
       anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
-      del();
+      del(true);
       return true;
     }
     catch (...)
     {
       anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
-      del();
+      del(true);
       return true;
     }
   };
@@ -228,23 +228,28 @@ void aws_sqs_listener::start_listen()
                 auto ths = wp.lock();
                 if (!ths)
                   return;
+                anon_log("adding message " << m.GetMessageId() << " to keep_alive");
                 ths->add_to_keep_alive(m);
                 bool success;
                 if (ths->_process_msg) {
                   success = ths->_process_msg(m);
                   if (success)
                     ths->delete_message(m);
+                  if (ths->_single_concurrent_message && !ths->_exit_now)
+                    ths->start_listen();
                 }
                 else
-                  success = ths->_process_msg_del(m, [wp, m] {
+                  success = ths->_process_msg_del(m, [wp, m](bool delete_it) {
                     auto ths = wp.lock();
-                    if (ths)
-                      ths->delete_message(m);
+                    if (ths) {
+                      if (delete_it)
+                        ths->delete_message(m);
+                      else
+                        ths->remove_from_keep_alive(m, true);
+                    }
                   });
                 if (!success)
                   ths->remove_from_keep_alive(m, true);
-                if (ths->_single_concurrent_message && !ths->_exit_now)
-                  ths->start_listen();
               },
               ths->_stack_size, "aws_sqs_listener, process_msg");
       } else {
@@ -363,11 +368,11 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
 
 void aws_sqs_listener::delete_message(const Model::Message &m)
 {
-  remove_from_keep_alive(m, false);
   Model::DeleteMessageRequest req;
   req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle());
   auto messageId = m.GetMessageId();
-  _client.DeleteMessageAsync(req, [messageId](const SQSClient *, const Model::DeleteMessageRequest &, const Model::DeleteMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+  std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
+  _client.DeleteMessageAsync(req, [messageId, wp, m](const SQSClient *, const Model::DeleteMessageRequest &, const Model::DeleteMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
     fiber::rename_fiber("aws_sqs_listener::delete_message, DeleteMessageAsync");
     if (out.IsSuccess())
     {
@@ -377,6 +382,9 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     {
       anon_log("delete SQS message failed, messageId:" << messageId << ", " << out.GetError().GetMessage());
     }
+    auto ths = wp.lock();
+    if (ths)
+      ths->remove_from_keep_alive(m, false);
   });
 }
 

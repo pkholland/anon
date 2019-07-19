@@ -71,7 +71,7 @@ public:
   ~aws_sqs_listener();
 
   static std::function<bool(const Aws::SQS::Model::Message &m)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const nlohmann::json &body)> &fn);
-  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del, const nlohmann::json &body)> &fn);
+  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del, const nlohmann::json &body)> &fn);
 
   class inval_message : public std::runtime_error
   {
@@ -115,7 +115,7 @@ private:
   std::atomic<int> _num_fibers;
   std::atomic<bool> _exit_now;
   std::function<bool(const Aws::SQS::Model::Message &m)> _process_msg;
-  std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& delete_message)> _process_msg_del;
+  std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& delete_message)> _process_msg_del;
   std::function<bool()> _continue_after_timeout;
   std::map<Aws::String, Aws::String> _alive_set;
   io_dispatch::scheduled_task _timer_task;
@@ -149,12 +149,12 @@ private:
     return aws_sqs_listener::js_wrap(fn);
   }
 
-  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> &fn) 
+  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> &fn) 
   {
     return fn;
   }
 
-  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>& del, const nlohmann::json &body)> &fn)
+  static std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del, const nlohmann::json &body)> &fn)
   {
     return aws_sqs_listener::js_wrap(fn);
   }
@@ -170,7 +170,7 @@ public:
   aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
-                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void()>&)> &handler,
+                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>&)> &handler,
                    bool single_concurrent_message,
                    size_t stack_size);
 };
