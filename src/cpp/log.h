@@ -35,6 +35,10 @@
 #include <vector>
 #include <mutex>
 
+#if defined(ANON_SYS_LOG)
+#include <syslog.h>
+#endif
+
 #if defined(ANON_LOG_FIBER_IDS)
 extern int get_current_fiber_id();
 #endif
@@ -131,8 +135,12 @@ static void output(const char *file_name, int line_num, Func func, bool err)
 #if defined(ANON_LOG_KEEP_RECENT)
   add_to_recent_logs(s);
 #endif
+#if defined(ANON_SYS_LOG)
+  syslog(err ? LOG_ERR : LOG_INFO, "%s", s.c_str());
+#else
   if (write(err ? 2 : 1, s.c_str(), s.length()))
     ;
+#endif
 }
 }; // namespace Log
 
