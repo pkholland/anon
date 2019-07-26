@@ -197,14 +197,15 @@ void aws_sqs_listener::start_listen()
     auto ths = wp.lock();
     if (!ths)
       return;
+    bool last_read_failed = false;
     fiber::rename_fiber("aws_sqs_listener::start_listen, ReceiveMessageAsync");
     if (!out.IsSuccess())
     {
       ++ths->_consecutive_errors;
       if (ths->_consecutive_errors > 10)
       {
-        anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << "\n"
-                                                                          << out.GetError());
+        anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << ", "
+                                                                          << out.GetError().GetMessage());
       }
       else
       {
@@ -212,6 +213,7 @@ void aws_sqs_listener::start_listen()
       }
       
       fiber::msleep(2000);
+      last_read_failed = true;
     }
     else
     {
@@ -260,7 +262,7 @@ void aws_sqs_listener::start_listen()
 
     if (ths->_consecutive_errors < 1000)
     {
-      if (!ths->_single_concurrent_message && !ths->_exit_now)
+      if ((last_read_failed || !ths->_single_concurrent_message) && !ths->_exit_now)
       {
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)
@@ -306,7 +308,7 @@ void aws_sqs_listener::set_visibility_timeout()
         fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
-          // anon_log("batch visibilty reset for " << nMessages << " messages");
+          // anon_log("batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
         }
         else
         {

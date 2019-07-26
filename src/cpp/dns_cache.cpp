@@ -27,6 +27,7 @@
 #include <limits>
 #include <netdb.h>
 #include <pthread.h>
+#include <limits.h>
 
 namespace dns_cache
 {
@@ -327,10 +328,11 @@ void dns_entry::initiate_lookup(const char *host, int port, const std::function<
     dns_map.erase(dns_map.find(host));
     throw std::system_error(rslt, std::system_category());
   }
-  rslt = pthread_attr_setstacksize(&nc->ptattr_, 64 * 1024);
+  auto sz = std::max(64 * 1024, PTHREAD_STACK_MIN);
+  rslt = pthread_attr_setstacksize(&nc->ptattr_, sz);
   if (rslt != 0)
   {
-    anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, 64*1024) failed with result: " << error_string(rslt));
+    anon_log_error("pthread_attr_setstacksize(&nc->ptattr_, " << sz << ") failed with result: " << error_string(rslt));
     pthread_attr_destroy(&nc->ptattr_);
     inform_in_fiber(dnsc, rslt);
     delete nc;
