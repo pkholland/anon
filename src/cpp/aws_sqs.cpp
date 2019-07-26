@@ -306,7 +306,7 @@ void aws_sqs_listener::set_visibility_timeout()
         fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
-          anon_log("batch visibilty reset for " << nMessages << " messages");
+          // anon_log("batch visibilty reset for " << nMessages << " messages");
         }
         else
         {
