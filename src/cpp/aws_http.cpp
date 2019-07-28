@@ -41,6 +41,86 @@ class http_client : public HttpClient
     return path;
   }
 
+  std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
+                                            const URI& uri,
+                                            Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
+                                            Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
+                                            int recursion) const {
+
+    if (recursion > 4) {
+      auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+      return std::static_pointer_cast<HttpResponse>(resp);
+    }
+
+    // anon_log("MakeRequest, url: " << uri.GetURIString());
+
+    // auto start_time = cur_time();
+
+    const auto& body = request.GetContentBody();
+    std::vector<char> body_buff;
+    if (body)
+      body_buff = std::vector<char>((std::istreambuf_iterator<char>(*body)), std::istreambuf_iterator<char>());
+
+    auto method = request.GetMethod();
+    std::ostringstream str;
+    str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath()) << " HTTP/1.1\r\n";
+    auto headers = request.GetHeaders();
+    for (auto &h : headers)
+      str << h.first << ": " << h.second << "\r\n";
+    if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
+    {
+      str << "transfer-encoding: identity\r\n";
+      str << "content-length: " << body_buff.size() << "\r\n";
+    }
+
+    str << "\r\n";
+    if (body)
+      str.write(&body_buff[0], body_buff.size());
+    auto message = str.str();
+
+    std::shared_ptr<Standard::StandardHttpResponse> resp;
+    auto read_body = method != HttpMethod::HTTP_HEAD;
+    try
+    {
+      get_epc(uri.GetURIString())->with_connected_pipe([&](const pipe_t *pipe) {
+        // anon_log("sending...\n\n" << message << "\n");
+        pipe->write(message.c_str(), message.size());
+        http_client_response re;
+        re.parse(*pipe, read_body);
+        if (re.status_code == 301 || re.status_code == 302) {
+          if (re.headers.contains_header("Location")) {
+            return MakeRequest(request, URI(re.headers.get_header("Location").str()),
+                              readLimiter, writeLimiter, recursion+1);
+
+          }
+        }
+        resp = std::make_shared<Standard::StandardHttpResponse>(request);
+        resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
+        for (auto &h : re.headers.headers)
+          resp->AddHeader(h.first.str(), h.second.str());
+        for (auto &data : re.body)
+          resp->GetResponseBody().write(&data[0], data.size());
+      });
+    }
+    catch (const std::exception &exc)
+    {
+      anon_log_error("failure to write request: " << exc.what());
+      resp = std::make_shared<Standard::StandardHttpResponse>(request);
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
+    catch (...)
+    {
+      anon_log_error("unknown failure to write request");
+      resp = std::make_shared<Standard::StandardHttpResponse>(request);
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // anon_log("time for transfer: " << cur_time() - start_time);
+
+    return std::static_pointer_cast<HttpResponse>(resp);
+  }
+
 public:
   http_client(const std::shared_ptr<aws_http_client_factory::epc_map> &maps, const std::shared_ptr<tls_context> &tls)
       : _maps(maps),
@@ -67,66 +147,7 @@ public:
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
   {
-    URI uri = request.GetUri();
-    // anon_log("MakeRequest, url: " << uri.GetURIString());
-
-    // auto start_time = cur_time();
-
-    auto body = request.GetContentBody();
-    std::vector<char> body_buff;
-    if (body)
-      body_buff = std::vector<char>((std::istreambuf_iterator<char>(*body)), std::istreambuf_iterator<char>());
-
-    auto method = request.GetMethod();
-    std::ostringstream str;
-    str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath()) << " HTTP/1.1\r\n";
-    auto headers = request.GetHeaders();
-    for (auto &h : headers)
-      str << h.first << ": " << h.second << "\r\n";
-    if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
-    {
-      str << "transfer-encoding: identity\r\n";
-      str << "content-length: " << body_buff.size() << "\r\n";
-    }
-
-    str << "\r\n";
-    if (body)
-      str.write(&body_buff[0], body_buff.size());
-    auto message = str.str();
-
-    std::shared_ptr<Standard::StandardHttpResponse> resp;
-    auto read_body = method != HttpMethod::HTTP_HEAD;
-    try
-    {
-      get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message, read_body](const pipe_t *pipe) {
-        // anon_log("sending...\n\n" << message << "\n");
-        pipe->write(message.c_str(), message.size());
-        http_client_response re;
-        re.parse(*pipe, read_body);
-        resp = std::make_shared<Standard::StandardHttpResponse>(request);
-        resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
-        for (auto &h : re.headers.headers)
-          resp->AddHeader(h.first.str(), h.second.str());
-        for (auto &data : re.body)
-          resp->GetResponseBody().write(&data[0], data.size());
-      });
-    }
-    catch (const std::exception &exc)
-    {
-      anon_log_error("failure to write request: " << exc.what());
-      resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-    }
-    catch (...)
-    {
-      anon_log_error("unknown failure to write request");
-      resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-    }
-
-    // anon_log("time for transfer: " << cur_time() - start_time);
-
-    return std::static_pointer_cast<HttpResponse>(resp);
+    return MakeRequest(request, request.GetUri(), readLimiter, writeLimiter, 0);
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest> &request,
