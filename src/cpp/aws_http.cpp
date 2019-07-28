@@ -103,11 +103,14 @@ public:
     auto read_body = method != HttpMethod::HTTP_HEAD;
     try
     {
-      get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message, read_body](const pipe_t *pipe) {
+      get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
         // anon_log("sending...\n\n" << message << "\n");
         pipe->write(message.c_str(), message.size());
         http_client_response re;
         re.parse(*pipe, read_body);
+        if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("Location")) {
+          return MakeRequest(request, URI(re.headers.get_header("Location").str()), readLimiter, writeLimiter, recursion+1);
+        }
         resp = std::make_shared<Standard::StandardHttpResponse>(request);
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
         for (auto &h : re.headers.headers)
