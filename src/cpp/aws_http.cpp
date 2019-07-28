@@ -57,7 +57,7 @@ class http_client : public HttpClient
 
     // auto start_time = cur_time();
 
-    const auto& body = request.GetContentBody();
+    auto body = request.GetContentBody();
     std::vector<char> body_buff;
     if (body)
       body_buff = std::vector<char>((std::istreambuf_iterator<char>(*body)), std::istreambuf_iterator<char>());
@@ -83,7 +83,7 @@ class http_client : public HttpClient
     auto read_body = method != HttpMethod::HTTP_HEAD;
     try
     {
-      get_epc(uri.GetURIString())->with_connected_pipe([&](const pipe_t *pipe) {
+      get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
         // anon_log("sending...\n\n" << message << "\n");
         pipe->write(message.c_str(), message.size());
         http_client_response re;
