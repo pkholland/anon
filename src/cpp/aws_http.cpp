@@ -41,18 +41,34 @@ class http_client : public HttpClient
     return path;
   }
 
+public:
+  http_client(const std::shared_ptr<aws_http_client_factory::epc_map> &maps, const std::shared_ptr<tls_context> &tls)
+      : _maps(maps),
+        _tls(tls)
+  {
+  }
+  ~http_client() {}
+
+  std::shared_ptr<endpoint_cluster> get_epc(const Aws::String &url) const
+  {
+    URI uri(url);
+    auto key = uri.GetAuthority() + ":" + std::to_string(uri.GetPort());
+    fiber_lock l(_maps->_mtx);
+    auto &m = _maps->_epc_map;
+    auto epc = m.find(key);
+    if (epc != m.end())
+      return epc->second;
+
+    return m[key] = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
+                                             uri.GetScheme() == Scheme::HTTPS, _tls.get());
+  }
+
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
-                                            const URI& uri,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
-                                            int recursion) const {
-
-    if (recursion > 4) {
-      auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-      return std::static_pointer_cast<HttpResponse>(resp);
-    }
-
+                                            int recursion) const
+  {
+    URI uri = request.GetUri();
     // anon_log("MakeRequest, url: " << uri.GetURIString());
 
     // auto start_time = cur_time();
@@ -83,18 +99,11 @@ class http_client : public HttpClient
     auto read_body = method != HttpMethod::HTTP_HEAD;
     try
     {
-      get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
+      get_epc(uri.GetURIString())->with_connected_pipe([&request, &resp, &message, read_body](const pipe_t *pipe) {
         // anon_log("sending...\n\n" << message << "\n");
         pipe->write(message.c_str(), message.size());
         http_client_response re;
         re.parse(*pipe, read_body);
-        if (re.status_code == 301 || re.status_code == 302) {
-          if (re.headers.contains_header("Location")) {
-            return MakeRequest(request, URI(re.headers.get_header("Location").str()),
-                              readLimiter, writeLimiter, recursion+1);
-
-          }
-        }
         resp = std::make_shared<Standard::StandardHttpResponse>(request);
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
         for (auto &h : re.headers.headers)
@@ -121,33 +130,11 @@ class http_client : public HttpClient
     return std::static_pointer_cast<HttpResponse>(resp);
   }
 
-public:
-  http_client(const std::shared_ptr<aws_http_client_factory::epc_map> &maps, const std::shared_ptr<tls_context> &tls)
-      : _maps(maps),
-        _tls(tls)
-  {
-  }
-  ~http_client() {}
-
-  std::shared_ptr<endpoint_cluster> get_epc(const Aws::String &url) const
-  {
-    URI uri(url);
-    auto key = uri.GetAuthority() + ":" + std::to_string(uri.GetPort());
-    fiber_lock l(_maps->_mtx);
-    auto &m = _maps->_epc_map;
-    auto epc = m.find(key);
-    if (epc != m.end())
-      return epc->second;
-
-    return m[key] = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
-                                             uri.GetScheme() == Scheme::HTTPS, _tls.get());
-  }
-
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
   {
-    return MakeRequest(request, request.GetUri(), readLimiter, writeLimiter, 0);
+    return MakeRequest(request, readLimiter, writeLimiter, 0);
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest> &request,
