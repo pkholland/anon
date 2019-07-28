@@ -69,8 +69,11 @@ public:
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
                                             int recursion) const
   {
-    //URI uri = request.GetUri();
-    // anon_log("MakeRequest, url: " << uri.GetURIString());
+    if (recursion > 4) {
+      auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+      return std::static_pointer_cast<HttpResponse>(resp);
+    }
 
     // auto start_time = cur_time();
 
