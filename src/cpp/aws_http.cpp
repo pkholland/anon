@@ -63,19 +63,17 @@ public:
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
   }
 
-  std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
+  void MakeRequest(const std::shared_ptr<Standard::StandardHttpResponse>& resp,
+                                            HttpRequest &request,
                                             URI uri,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
                                             int recursion) const
   {
     if (recursion > 4) {
-      auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
       resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-      return std::static_pointer_cast<HttpResponse>(resp);
+      return;
     }
-
-    // auto start_time = cur_time();
 
     auto body = request.GetContentBody();
     std::vector<char> body_buff;
@@ -99,49 +97,46 @@ public:
       str.write(&body_buff[0], body_buff.size());
     auto message = str.str();
 
-    std::shared_ptr<Standard::StandardHttpResponse> resp;
     auto read_body = method != HttpMethod::HTTP_HEAD;
-    try
-    {
-      get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
-        // anon_log("sending...\n\n" << message << "\n");
-        pipe->write(message.c_str(), message.size());
-        http_client_response re;
-        re.parse(*pipe, read_body);
-        if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("Location")) {
-          return MakeRequest(request, URI(re.headers.get_header("Location").str()), readLimiter, writeLimiter, recursion+1);
-        }
-        resp = std::make_shared<Standard::StandardHttpResponse>(request);
+    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
+      // anon_log("sending...\n\n" << message << "\n");
+      pipe->write(message.c_str(), message.size());
+      http_client_response re;
+      re.parse(*pipe, read_body);
+      if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("Location")) {
+        MakeRequest(resp, request, URI(re.headers.get_header("Location").str()), readLimiter, writeLimiter, recursion+1);
+      }
+      else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
         for (auto &h : re.headers.headers)
           resp->AddHeader(h.first.str(), h.second.str());
         for (auto &data : re.body)
           resp->GetResponseBody().write(&data[0], data.size());
-      });
-    }
-    catch (const std::exception &exc)
-    {
-      anon_log_error("failure to write request: " << exc.what());
-      resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-    }
-    catch (...)
-    {
-      anon_log_error("unknown failure to write request");
-      resp = std::make_shared<Standard::StandardHttpResponse>(request);
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
-    }
+      }
+    });
 
-    // anon_log("time for transfer: " << cur_time() - start_time);
-
-    return std::static_pointer_cast<HttpResponse>(resp);
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
   {
-    return MakeRequest(request, request.GetUri(), readLimiter, writeLimiter, 0);
+    auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
+    try
+    {
+      MakeRequest(resp, request, request.GetUri(), readLimiter, writeLimiter, 0);
+    }
+    catch (const std::exception &exc)
+    {
+      anon_log_error("failure to write request: " << exc.what());
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
+    catch (...)
+    {
+      anon_log_error("unknown failure to write request");
+      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+    }
+    return std::static_pointer_cast<HttpResponse>(resp);
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest> &request,
