@@ -64,11 +64,12 @@ public:
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
+                                            URI uri,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
                                             int recursion) const
   {
-    URI uri = request.GetUri();
+    //URI uri = request.GetUri();
     // anon_log("MakeRequest, url: " << uri.GetURIString());
 
     // auto start_time = cur_time();
@@ -134,7 +135,7 @@ public:
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
   {
-    return MakeRequest(request, readLimiter, writeLimiter, 0);
+    return MakeRequest(request, request.GetUri(), readLimiter, writeLimiter, 0);
   }
 
   std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest> &request,
