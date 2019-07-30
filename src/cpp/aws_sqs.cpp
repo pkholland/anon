@@ -230,7 +230,7 @@ void aws_sqs_listener::start_listen()
                 auto ths = wp.lock();
                 if (!ths)
                   return;
-                anon_log("adding message " << m.GetMessageId() << " to keep_alive");
+                anon_log("aws_sqs, adding message " << m.GetMessageId() << " to keep_alive");
                 ths->add_to_keep_alive(m);
                 bool success;
                 if (ths->_process_msg) {
@@ -297,6 +297,7 @@ void aws_sqs_listener::set_visibility_timeout()
       if (index % 10 == 0)
         entries_v.push_back(Aws::Vector<Model::ChangeMessageVisibilityBatchRequestEntry>());
       str << "message_" << ++index;
+      anon_log("aws_sqs, reset visibility on " << it.first << " (" << str.str() << ") for another " << visibility_time << " seconds");
       ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_time).WithId(str.str());
       entries_v.back().push_back(ent);
     }
@@ -308,7 +309,7 @@ void aws_sqs_listener::set_visibility_timeout()
         fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
-          // anon_log("batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
+          anon_log("aws_sqs, batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
         }
         else
         {
