@@ -204,12 +204,12 @@ void aws_sqs_listener::start_listen()
       ++ths->_consecutive_errors;
       if (ths->_consecutive_errors > 10)
       {
-        anon_log_error("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << ", "
+        anon_log_error("aws_sqs, SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << ", "
                                                                           << out.GetError().GetMessage());
       }
       else
       {
-        anon_log("SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors);
+        anon_log("aws_sqs, SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors);
       }
       
       fiber::msleep(2000);
@@ -313,7 +313,7 @@ void aws_sqs_listener::set_visibility_timeout()
         }
         else
         {
-          do_error("batch reset visibility for " << nMessages << " messages: " << out.GetError().GetMessage());
+          do_error("aws_sqs, batch reset visibility for " << nMessages << " messages: " << out.GetError().GetMessage());
         }
       });
     }
@@ -359,11 +359,11 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
       fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
       if (out.IsSuccess())
       {
-        anon_log("reset message visibility near 0 for " << messageId);
+        anon_log("aws_sqs, reset message visibility near 0 for " << messageId);
       }
       else
       {
-        do_error("reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
+        do_error("aws_sqs, reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
       }
     });
   }
@@ -383,7 +383,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     }
     else
     {
-      anon_log("delete SQS message failed, messageId:" << messageId << ", " << out.GetError().GetMessage());
+      anon_log("aws_sqs, delete SQS message failed, messageId:" << messageId << ", " << out.GetError().GetMessage());
     }
     auto ths = wp.lock();
     if (ths)
