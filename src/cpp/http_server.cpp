@@ -264,8 +264,8 @@ size_t http_server::pipe_t::read(void *buff, size_t len)
 {
   if (bsp != bep)
   {
-    if (len > bsp - bep)
-      len = bsp - bep;
+    if (len > bep - bsp)
+      len = bep - bsp;
     memcpy(buff, &buf[bsp], len);
     bsp += len;
     return len;

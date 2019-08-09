@@ -357,7 +357,7 @@ public:
 
   struct pipe_t
   {
-    pipe_t(::pipe_t *pipe, char (&buf)[4096], size_t &bsp, size_t &bep)
+    pipe_t(::pipe_t *pipe, char (&buf)[4096], size_t &bsp, size_t bep)
         : pipe(pipe),
           buf(buf),
           bep(bep),
@@ -385,7 +385,7 @@ public:
     ::pipe_t *pipe;
     char (&buf)[4096];
     size_t &bsp;
-    size_t &bep;
+    size_t bep;
   };
 
   void stop()
