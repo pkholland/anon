@@ -184,9 +184,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
           //anon_log("client sent:\n" << &buf[0] << "\n\n");
 
           // call the joyent parser
-          auto orig_bsp = bsp;
           bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep - bsp);
-          anon_log("bsp stated: " << orig_bsp << ", bep: " << bep << ", new bsp: " << bsp);
 
           if (pcallback.message_complete)
           {
@@ -229,7 +227,6 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
 #endif
             if (keep_alive)
             {
-              anon_log("keep_alive moving data to start of buffer, bsp: " << bsp << ", bep: " << bep);
               http_parser_init(&parser, HTTP_REQUEST);
               memmove(&buf[0], &buf[bsp], bep - bsp);
               bep -= bsp;
@@ -267,8 +264,8 @@ size_t http_server::pipe_t::read(void *buff, size_t len)
 {
   if (bsp != bep)
   {
-    if (len > bsp - bep)
-      len = bsp - bep;
+    if (len > bep - bsp)
+      len = bep - bsp;
     memcpy(buff, &buf[bsp], len);
     bsp += len;
     return len;
