@@ -179,7 +179,7 @@ public:
           const std::shared_ptr<endpoint_cluster::endpoint::sock> &sock)
       : wep(wep),
         sock(sock),
-        success(false)
+        cache(false)
   {
   }
 
@@ -190,8 +190,10 @@ public:
     {
       fiber_lock l(ep->mtx_);
       --ep->outstanding_requests_;
-      if (success)
+      if (cache) {
+        sock->idle_start_time = cur_time();
         ep->socks_.push(sock);
+      }
       ep->cond_.notify_all();
     }
     else
@@ -204,7 +206,7 @@ public:
 
   std::weak_ptr<endpoint_cluster::endpoint> wep;
   std::shared_ptr<endpoint_cluster::endpoint::sock> sock;
-  bool success;
+  bool cache;
 };
 
 class eraser
@@ -231,7 +233,7 @@ public:
 
 } // namespace
 
-void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
+void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f)
 {
   // if there are currently no available endpoints, or if it has been too long since we have
   // last looked up endpoints, then restart the lookup process.  If there are no endpoints
@@ -280,10 +282,15 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
       ep->cond_.wait(l);
     ++ep->outstanding_requests_;
 
-    if (ep->socks_.size() != 0)
-    {
-      sock = ep->socks_.front();
+    while (!sock && ep->socks_.size() != 0) {
+      auto s = ep->socks_.front();
       ep->socks_.pop();
+      if (cur_time() < s->idle_start_time + k_max_idle_time)
+        sock = s;
+    }
+
+    if (sock)
+    {
 #ifdef ANON_LOG_DNS_LOOKUP
       anon_log("epc reused connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_);
 #endif
@@ -323,6 +330,5 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<void(const pip
   // lets it timeout and get deleted more smoothly.
   ep.reset();
   cleanup cu(wep, sock);
-  f(sock->pipe_.get());
-  cu.success = true;
+  cu.cache = f(sock->pipe_.get());
 }

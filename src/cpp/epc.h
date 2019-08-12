@@ -36,7 +36,7 @@ public:
   create(const char *host, int port,
          bool do_tls = false,
          const tls_context *tls_ctx = 0,
-         int max_conn_per_ep = 20,
+         int max_conn_per_ep = 40,
          int lookup_frequency_in_seconds = 20)
   {
     return std::make_shared<endpoint_cluster>(host, port, do_tls, tls_ctx, max_conn_per_ep, lookup_frequency_in_seconds);
@@ -53,7 +53,7 @@ public:
     max_io_block_time_ = max_io_block_time;
   }
 
-  void with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f)
+  void with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f)
   {
     auto sleepMs = 50;
     auto slp = 0;
@@ -112,6 +112,7 @@ public:
       {
       }
       std::unique_ptr<pipe_t> pipe_;
+      timespec idle_start_time;
     };
 
     struct sockaddr_in6 addr_;
@@ -123,7 +124,7 @@ public:
   };
 
 private:
-  void do_with_connected_pipe(const std::function<void(const pipe_t *pipe)> &f);
+  void do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f);
   void update_endpoints();
 
 public:
@@ -150,6 +151,7 @@ private:
 
   enum
   {
-    k_default_io_block_time = 30
+    k_default_io_block_time = 30,
+    k_max_idle_time = 25
   };
 };
