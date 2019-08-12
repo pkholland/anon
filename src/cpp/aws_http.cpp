@@ -98,7 +98,7 @@ public:
     auto message = str.str();
 
     auto read_body = method != HttpMethod::HTTP_HEAD;
-    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) {
+    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
       // anon_log("sending...\n\n" << message << "\n");
       pipe->write(message.c_str(), message.size());
       http_client_response re;
@@ -113,6 +113,7 @@ public:
         for (auto &data : re.body)
           resp->GetResponseBody().write(&data[0], data.size());
       }
+      return re.should_keep_alive;
     });
 
   }

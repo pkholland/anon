@@ -52,7 +52,7 @@ void mcd_cluster::set(const std::string &key, const std::string &val, int expira
   memcpy(&pkt[32 + key.size()], val.c_str(), val.size());
 
   std::vector<unsigned char> reply(24);
-  clstr_->with_connected_pipe([&pkt, &reply](const pipe_t *pipe) {
+  clstr_->with_connected_pipe([&pkt, &reply](const pipe_t *pipe) -> bool {
     pipe->write(&pkt[0], pkt.size());
     int bytes_read = 0;
     while (bytes_read < 24)
@@ -79,6 +79,7 @@ void mcd_cluster::set(const std::string &key, const std::string &val, int expira
       do_error("invalid memcached reply, specified data type: " << (int)reply[5]);
     if (ntohl(*((uint32_t *)&reply[8])) != 0)
       do_error("invalid memcached reply to \"set\", contained body length of: " << (int)*((uint32_t *)&reply[8]));
+    return true;  // cache the socket
   });
 }
 
@@ -100,7 +101,7 @@ std::string mcd_cluster::get(const std::string &key, int vbucket)
 
   std::vector<unsigned char> reply(24);
   std::string ret;
-  clstr_->with_connected_pipe([&pkt, &reply, &ret](const pipe_t *pipe) {
+  clstr_->with_connected_pipe([&pkt, &reply, &ret](const pipe_t *pipe) -> bool {
     pipe->write(&pkt[0], pkt.size());
     int bytes_read = 0;
     while (bytes_read < 24)
@@ -126,6 +127,8 @@ std::string mcd_cluster::get(const std::string &key, int vbucket)
 
     auto bl = ntohl(*((uint32_t *)&reply[8]));
     ret = std::string((char *)&reply[28], bl - 4 /*extra data size*/);
+
+    return true;  // cache the socket
   });
 
   return ret;

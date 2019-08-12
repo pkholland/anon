@@ -279,6 +279,8 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
 
     // response is good enough to return
     status_code = parser.status_code;
+    if (status_code >= 200 && status_code < 300)
+      should_keep_alive = http_should_keep_alive(&parser);
     break;
   }
 }

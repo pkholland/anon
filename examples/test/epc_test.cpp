@@ -80,7 +80,7 @@ void epc_test()
     {
       fiber::run_in_fiber([&mtx, &cond, &remaining, &epc, i] {
         for (int j = 0; j < 100; j++)
-          epc->with_connected_pipe([j](const pipe_t *pipe) {
+          epc->with_connected_pipe([j](const pipe_t *pipe) -> bool {
             const char *msg = "hello";
             //anon_log("sending " << j << "th epc test message \"" << msg << "\"");
             pipe->write(msg, strlen(msg) + 1);
@@ -89,6 +89,7 @@ void epc_test()
             while (!bytes_read || response[bytes_read - 1])
               bytes_read += pipe->read(&response[bytes_read], sizeof(response) - bytes_read);
             //anon_log("got back \"" << &response[0] << "\"");
+            return true;  // cache the socket
           });
 
         fiber_lock lock(mtx);

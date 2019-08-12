@@ -29,7 +29,8 @@ struct http_client_response
 {
   http_client_response()
       : http_major_(0),
-        http_minor_(0)
+        http_minor_(0),
+        should_keep_alive(false)
   {
   }
 
@@ -38,6 +39,7 @@ struct http_client_response
   int status_code;
   http_headers headers;
   std::list<std::vector<char>> body;
+  bool should_keep_alive;
 
   void set_status(const char *ptr, size_t len) { status_ = std::string(ptr, len); }
   const std::string &get_status() const { return status_; }
