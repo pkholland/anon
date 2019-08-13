@@ -48,9 +48,11 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
   if (clen <= 2)
     throw request_error(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2");
   if (clen > 16384)
-    throw request_error(HTTP_STATUS_PAYLOAD_TOO_LARGE, "Content-Length cannot exceed clen");
+    throw request_error(HTTP_STATUS_PAYLOAD_TOO_LARGE, "Content-Length cannot exceed 16384");
   std::vector<char> buff(clen);
-  pipe.read(&buff[0], clen);
+  auto bytes_read = 0;
+  while (bytes_read < clen)
+    bytes_read += pipe.read(&buff[bytes_read], clen - bytes_read);
   nlohmann::json body = nlohmann::json::parse(buff.begin(), buff.end());
   f(pipe, request, std::forward<Args>(args)..., body);
 }
