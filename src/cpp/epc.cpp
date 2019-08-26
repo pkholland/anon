@@ -169,6 +169,12 @@ void endpoint_cluster::erase_if_empty(const std::shared_ptr<endpoint> &ep)
   erase(ep);
 }
 
+void endpoint_cluster::delete_cached_endpoints()
+{
+  fiber_lock l(mtx_);
+  endpoints_.resize(0);
+}
+
 namespace
 {
 

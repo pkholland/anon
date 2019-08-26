@@ -69,6 +69,7 @@ public:
 
         if (sleepMs > 30 * 1000)
           throw;
+        delete_cached_endpoints();
         auto rid = small_rand_id();
         auto ri = *(unsigned int *)&rid.m_buf[0];
         slp = sleepMs * 3 / 4 + (ri % (sleepMs / 2));
@@ -126,6 +127,7 @@ public:
 private:
   void do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f);
   void update_endpoints();
+  void delete_cached_endpoints();
 
 public:
   void erase(const std::shared_ptr<endpoint> &ep);
