@@ -102,6 +102,9 @@ void endpoint_cluster::update_endpoints()
     }
     endpoints_.resize(endpoints.size());
     int indx = 0;
+#ifdef ANON_LOG_DNS_LOOKUP
+    anon_log("host: " << host_);
+#endif
     for (auto &p : endpoints)
     {
 #ifdef ANON_LOG_DNS_LOOKUP
