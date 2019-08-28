@@ -430,7 +430,10 @@ void io_dispatch::epoll_loop()
   anon_log("exiting io_dispatch::epoll_loop");
 
   // clean up some potential openssl memory
+  // in older versions of openssl
+  #if OPENSSL_VERSION_NUMBER < 0x10100000
   ERR_remove_state(0);
+  #endif
 }
 
 io_dispatch::scheduled_task io_dispatch::schedule_task_(virt_caller_ *task, const timespec &when)
