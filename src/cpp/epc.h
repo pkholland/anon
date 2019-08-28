@@ -53,6 +53,11 @@ public:
     max_io_block_time_ = max_io_block_time;
   }
 
+  void disable_retries()
+  {
+    retries_enabled_ = false;
+  }
+
   void with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f)
   {
     auto sleepMs = 50;
@@ -66,8 +71,8 @@ public:
       }
       catch (const fiber_io_error &e)
       {
-
-        if (sleepMs > 30 * 1000)
+        
+        if (!retries_enabled_ || sleepMs > 30 * 1000)
           throw;
         delete_cached_endpoints();
         auto rid = small_rand_id();
@@ -144,6 +149,7 @@ private:
 
   std::vector<std::shared_ptr<endpoint>> endpoints_;
   bool looking_up_endpoints_;
+  bool retries_enabled_;
   fiber_mutex mtx_;
   fiber_cond cond_;
   struct timespec last_lookup_time_;

@@ -34,7 +34,7 @@ struct http_client_response
   {
   }
 
-  void parse(const pipe_t &pipe, bool read_body);
+  void parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error = true);
 
   int status_code;
   http_headers headers;

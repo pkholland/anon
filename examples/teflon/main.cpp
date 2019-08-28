@@ -37,38 +37,6 @@
 #include <aws/core/utils/threading/Executor.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include "aws_http.h"
-
-namespace
-{
-
-// we use this class to tell the AWS sdk to never try its
-// own retries.  All retry logic is done down in anon
-// and we don't want a second layer of it happening in AWS
-class neverRetryStrategy : public Aws::Client::DefaultRetryStrategy
-{
-public:
-  neverRetryStrategy()
-  {
-  }
-
-  bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
-  {
-    return false;
-  }
-
-  long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
-  {
-    return 0;
-  }
-};
-
-static std::shared_ptr<Aws::Client::RetryStrategy> make_strategy()
-{
-  return std::static_pointer_cast<Aws::Client::RetryStrategy>(std::make_shared<neverRetryStrategy>());
-}
-
-} // namespace
-
 #endif
 
 #include <dirent.h>
@@ -307,7 +275,6 @@ extern "C" int main(int argc, char **argv)
   if (region == "")
     region = "us-east-1";
 
-  client_cfg.retryStrategy = make_strategy();
   client_cfg.region = region;
   client_cfg.executor = aws_executor::singleton;
 #endif

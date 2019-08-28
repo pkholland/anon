@@ -38,7 +38,8 @@ endpoint_cluster::endpoint_cluster(const char *host, int port,
       last_lookup_time_((struct timespec){}),
       round_robin_index_(0),
       looking_up_endpoints_(false),
-      max_io_block_time_(k_default_io_block_time)
+      max_io_block_time_(k_default_io_block_time),
+      retries_enabled_(true)
 {
 }
 
