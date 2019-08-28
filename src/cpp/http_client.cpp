@@ -61,7 +61,7 @@ struct pc
 
 } // namespace
 
-void http_client_response::parse(const pipe_t &pipe, bool read_body)
+void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error)
 {
   // joyent data structure, set its callback functions
   http_parser_settings settings;
@@ -266,16 +266,18 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body)
 #endif
       continue;
     }
-    if (parser.status_code == 408)
-      throw fiber_io_error("408 server response");
-    if (parser.status_code == 500)
-      throw fiber_io_error("500 server response");
-    if (parser.status_code == 502)
-      throw fiber_io_error("502 server response");
-    if (parser.status_code == 503)
-      throw fiber_io_error("503 server response");
-    if (parser.status_code == 504)
-      throw fiber_io_error("504 server response");
+    if (throw_on_server_error) {
+      if (parser.status_code == 408)
+        throw fiber_io_error("408 server response");
+      if (parser.status_code == 500)
+        throw fiber_io_error("500 server response");
+      if (parser.status_code == 502)
+        throw fiber_io_error("502 server response");
+      if (parser.status_code == 503)
+        throw fiber_io_error("503 server response");
+      if (parser.status_code == 504)
+        throw fiber_io_error("504 server response");
+    }
 
     // response is good enough to return
     status_code = parser.status_code;

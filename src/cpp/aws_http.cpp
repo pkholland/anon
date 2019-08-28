@@ -59,8 +59,10 @@ public:
     if (epc != m.end())
       return epc->second;
 
-    return m[key] = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
+    auto newepc = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
+    newepc->disable_retries();
+    return m[key] = newepc;
   }
 
   void MakeRequest(const std::shared_ptr<Standard::StandardHttpResponse>& resp,
@@ -102,7 +104,7 @@ public:
       // anon_log("sending...\n\n" << message << "\n");
       pipe->write(message.c_str(), message.size());
       http_client_response re;
-      re.parse(*pipe, read_body);
+      re.parse(*pipe, read_body, false/*throw_on_server_error*/);
       if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("Location")) {
         MakeRequest(resp, request, URI(re.headers.get_header("Location").str()), readLimiter, writeLimiter, recursion+1);
       }
