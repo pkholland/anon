@@ -131,13 +131,17 @@ public:
     }
     catch (const std::exception &exc)
     {
-      anon_log_error("failure to write request: " << exc.what());
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+#if ANON_LOG_NET_TRAFFIC > 0
+      anon_log("failure to write request: " << exc.what());
+#endif
+      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
     }
     catch (...)
     {
-      anon_log_error("unknown failure to write request");
-      resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
+#if ANON_LOG_NET_TRAFFIC > 0
+      anon_log("unknown failure to write request");
+#endif
+      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
     }
     return std::static_pointer_cast<HttpResponse>(resp);
   }
