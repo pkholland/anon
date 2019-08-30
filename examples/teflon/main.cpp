@@ -114,6 +114,31 @@ public:
     anon_log(tag << " " << messageStream.rdbuf()->str());
   }
 };
+
+class retryStrategy : public Aws::Client::DefaultRetryStrategy
+{
+public:
+    retryStrategy(long maxRetries = 10, long scaleFactor = 25)
+        : Aws::Client::DefaultRetryStrategy(maxRetries, scaleFactor)
+    {
+    }
+
+    bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+    {
+        auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
+        anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning " << (ret ? "true" : "false"));
+        return ret;
+    }
+
+    long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+    {
+        auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
+        anon_log("retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << ") sleping for " << ret << " milliseconds");
+        fiber::msleep(ret);
+        return 0;
+    }
+};
+
 } // namespace
 #endif
 
@@ -277,6 +302,8 @@ extern "C" int main(int argc, char **argv)
 
   client_cfg.region = region;
   client_cfg.executor = aws_executor::singleton;
+  client_cfg.retryStrategy = std::make_shared<retryStrategy>();
+
 #endif
 
   int ret = 0;
