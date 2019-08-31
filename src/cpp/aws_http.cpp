@@ -134,14 +134,14 @@ public:
 #if ANON_LOG_NET_TRAFFIC > 0
       anon_log("failure to write request: " << exc.what());
 #endif
-      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
+      resp.reset();
     }
     catch (...)
     {
 #if ANON_LOG_NET_TRAFFIC > 0
       anon_log("unknown failure to write request");
 #endif
-      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
+      resp.reset();
     }
     return std::static_pointer_cast<HttpResponse>(resp);
   }
