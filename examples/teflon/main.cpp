@@ -36,6 +36,7 @@
 #include <aws/core/utils/logging/LogSystemInterface.h>
 #include <aws/core/utils/threading/Executor.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
+#include <aws/core/client/AWSError.h>
 #include "aws_http.h"
 #endif
 
@@ -126,7 +127,11 @@ public:
     bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
-        anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning " << (ret ? "true" : "false"));
+        if (ret)
+          anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning true");
+        else
+          anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning false, "
+            << "response code: " << (int)error.GetResponseCode() << ", message: " << error.GetMessage());
         return ret;
     }
 
