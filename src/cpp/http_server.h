@@ -57,7 +57,9 @@ struct http_request
 {
   http_request(const sockaddr *src_addr, socklen_t src_addr_len)
       : src_addr(src_addr),
-        src_addr_len(src_addr_len)
+        src_addr_len(src_addr_len),
+        has_content_length(false),
+        content_length(0)
   {
     memset(&p_url, 0, sizeof(p_url)); // joyent data structure
   }
@@ -66,6 +68,8 @@ struct http_request
 
   http_parser_url p_url;
   std::string url_str;
+  bool has_content_length;
+  int content_length;
 
   std::string get_url_field(enum http_parser_url_fields f) const
   {

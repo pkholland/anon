@@ -129,10 +129,15 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
           c->request.method = p->method;
           if (c->header_state == pc::k_value)
           {
+            std::transform(c->last_field_start, c->last_field_start + c->last_field_len,
+              (char*)c->last_field_start,
+              [](char c){ return std::tolower(c); });
             string_len fld(c->last_field_start, c->last_field_len);
             string_len val(c->last_value_start, c->last_value_len);
             c->request.headers.headers[fld] = val;
           }
+          c->request.has_content_length = (p->flags & F_CONTENTLENGTH) != 0;
+          c->request.content_length = p->content_length;
 
           // note, see code in http_parser.c, returning 1 causes the
           // parser to skip attempting to read the body, which is

@@ -40,11 +40,10 @@ request_helper request_mapping_helper(const std::string &path_spec);
 template <typename Fn, typename... Args>
 void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, Args &&... args)
 {
-  auto &h = request.headers;
-  if (!h.contains_header("content-length"))
+  // auto &h = request.headers;
+  if (!request.has_content_length)
     throw request_error(HTTP_STATUS_LENGTH_REQUIRED, "required Content-Length header is missing");
-  auto cl = h.get_header("content-length").str();
-  auto clen = std::stoi(cl);
+  auto clen = request.content_length;
   if (clen <= 2)
     throw request_error(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2");
   if (clen > 16384)
