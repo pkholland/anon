@@ -40,7 +40,7 @@ void http2_handler::exec(http_server::pipe_t &pipe, const http_request &request)
   // this isn't quite right here.  We disconnect the socket if the header is not
   // present. the spec seems to suggest that it simply not upgrade -- which we aren't
   // doing -- but probably doesn't imply that we should disconnect.
-  if (!request.headers.contains_header("HTTP2-Settings"))
+  if (!request.headers.contains_header("http2-settings"))
   {
 #if ANON_LOG_NET_TRAFFIC > 1
     anon_log("ignoring http/2 upgrade sent from " << *request.src_addr << ", because it does not contain an HTTP2-Settings header");

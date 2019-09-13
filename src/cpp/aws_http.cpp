@@ -105,8 +105,8 @@ public:
       pipe->write(message.c_str(), message.size());
       http_client_response re;
       re.parse(*pipe, read_body, false/*throw_on_server_error*/);
-      if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("Location")) {
-        MakeRequest(resp, request, URI(re.headers.get_header("Location").str()), readLimiter, writeLimiter, recursion+1);
+      if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
+        MakeRequest(resp, request, URI(re.headers.get_header("location").str()), readLimiter, writeLimiter, recursion+1);
       }
       else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));

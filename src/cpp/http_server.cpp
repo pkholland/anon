@@ -22,6 +22,7 @@
 
 #include "http_server.h"
 #include "tls_pipe.h"
+#include <algorithm>
 
 void http_server::start_(int tcp_port, body_handler *base_handler, int listen_backlog, tls_context *tls_ctx, bool port_is_fd, size_t stack_size)
 {
@@ -91,7 +92,10 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
           pc *c = (pc *)p->data;
           if (c->header_state == pc::k_value)
           {
-            // <field,value> complete, add new pair
+            // <field,value> complete, convert field to lower case and add new pair
+            std::transform(c->last_field_start, c->last_field_start + c->last_field_len,
+              (char*)c->last_field_start,
+              [](char c){ return std::tolower(c); });
             string_len fld(c->last_field_start, c->last_field_len);
             string_len val(c->last_value_start, c->last_value_len);
             c->request.headers.headers[fld] = val;
@@ -201,13 +205,13 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
             if (parser.upgrade)
             {
 
-              auto handler = m_upgrade_map_.find(pcallback.request.headers.get_header("Upgrade").str());
+              auto handler = m_upgrade_map_.find(pcallback.request.headers.get_header("upgrade").str());
               if (handler != m_upgrade_map_.end())
                 handler->second->exec(body_pipe, pcallback.request);
               else
               {
 #if ANON_LOG_NET_TRAFFIC > 1
-                anon_log("unknown http upgrade type: \"" << pcallback.request.headers.get_header("Upgrade").str() << "\"");
+                anon_log("unknown http upgrade type: \"" << pcallback.request.headers.get_header("upgrade").str() << "\"");
 #endif
               }
 

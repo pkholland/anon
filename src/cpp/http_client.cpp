@@ -126,9 +126,9 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_
     }
     if (c->read_body_)
     {
-      if (c->cr->headers.contains_header("Content-Length"))
+      if (c->cr->headers.contains_header("content-length"))
       {
-        auto clen = atoi(c->cr->headers.get_header("Content-Length").ptr());
+        auto clen = atoi(c->cr->headers.get_header("content-length").ptr());
         c->cr->body.push_back(std::vector<char>(clen));
       }
       return 0;

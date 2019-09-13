@@ -105,10 +105,10 @@ void server_init()
       // so just respond with that.  But this can't quite be a simple, static
       // response because we want to respect the etag, etc...
 
-      anon_log("client sent If-None-Match: " << request.headers.get_header("If-None-Match").str());
-      anon_log("client sent Accept-Encoding: " << request.headers.get_header("Accept-Encoding").str());
+      anon_log("client sent If-None-Match: " << request.headers.get_header("if-none-match").str());
+      anon_log("client sent Accept-Encoding: " << request.headers.get_header("accept-encoding").str());
 
-      if (request.headers.get_header("If-None-Match").str() == ent->etag)
+      if (request.headers.get_header("if-none-match").str() == ent->etag)
       {
 
         anon_log("etags match, returning 304");
@@ -117,14 +117,14 @@ void server_init()
       else
       {
 
-        anon_log("etags do not match, returning 200 with " << (permits_gzip(request.headers.get_header("Accept-Encoding")) ? "gzip" : "identity") << " encoding");
+        anon_log("etags do not match, returning 200 with " << (permits_gzip(request.headers.get_header("accept-encoding")) ? "gzip" : "identity") << " encoding");
 
         http_response response;
         response.add_header("ETag", ent->etag);
         response.add_header("Content-Type", ent->content_type);
-        if (permits_gzip(request.headers.get_header("Accept-Encoding")))
+        if (permits_gzip(request.headers.get_header("accept-encoding")))
         {
-          response.add_header("Content-Encoding", "gzip");
+          response.add_header("content-encoding", "gzip");
           response << std::string((const char *)ent->compressed, ent->sz_compressed);
         }
         else

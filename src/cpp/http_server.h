@@ -143,7 +143,7 @@ struct http_request
   std::string get_cookie_val(const char *name) const
   {
     auto slen = strlen(name);
-    auto cs = headers.get_header("Cookie");
+    auto cs = headers.get_header("cookie");
     auto ptr = cs.ptr();
     auto end = ptr + cs.len();
     while (ptr < end)
