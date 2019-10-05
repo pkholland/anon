@@ -96,8 +96,8 @@ protected:
           f();
         },
         stack_size, "aws SubmitToThread");
-  },
-  return true;
+    return true;
+  }
 };
 std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
 
