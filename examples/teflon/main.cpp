@@ -128,18 +128,20 @@ public:
     bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
+        #if 0
         if (ret)
           anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning true");
         else
           anon_log("retryStrategy::ShouldRetry(" << attemptedRetries << ") returning false, "
             << "response code: " << (int)error.GetResponseCode() << ", message: " << error.GetMessage());
+        #endif
         return ret;
     }
 
     long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
-        anon_log("retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << ") sleeping for " << ret << " milliseconds");
+        // anon_log("retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << ") sleeping for " << ret << " milliseconds");
         fiber::msleep(ret);
         return 0;
     }
