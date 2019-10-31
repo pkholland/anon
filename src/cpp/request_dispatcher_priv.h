@@ -42,15 +42,15 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
 {
   // auto &h = request.headers;
   if (!request.has_content_length)
-    throw_request_error_(HTTP_STATUS_LENGTH_REQUIRED, "required Content-Length header is missing");
+    throw_request_error(HTTP_STATUS_LENGTH_REQUIRED, "required Content-Length header is missing");
   auto clen = request.content_length;
   if (clen <= 2)
-    throw_request_error_(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2 (" << clen << ")");
+    throw_request_error(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2 (" << clen << ")");
   if (clen > 16384) {
     struct sockaddr_in6 addr6;
     socklen_t addr_len = sizeof(addr6);
     getpeername(pipe.get_fd(), (struct sockaddr *)&addr6, &addr_len);
-    throw_request_error_(HTTP_STATUS_PAYLOAD_TOO_LARGE, "Content-Length cannot exceed 16384 (" << clen << " - " << addr6 << ")");
+    throw_request_error(HTTP_STATUS_PAYLOAD_TOO_LARGE, "Content-Length cannot exceed 16384 (" << clen << " - " << addr6 << ")");
   }
   std::vector<char> buff(clen);
   auto bytes_read = 0;
