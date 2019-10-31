@@ -711,7 +711,7 @@ extern "C" int main(int argc, char **argv)
           if (getpeername(sock, (struct sockaddr *)&addr6, &addr_len) != 0)
             anon_log("getpeername(" << sock << "...) failed with error " << errno_string());
           else
-            anon_log("getpeernmame(" << sock << ", ...) reported peer as " << &addr6);
+            anon_log("getpeername(" << sock << ", ...) reported peer as " << &addr6);
         }
         else if (!strcmp(&msgBuff[0], "mc"))
         {
