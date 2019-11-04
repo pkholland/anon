@@ -94,8 +94,8 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
       int fd = socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
       if (fd == -1)
       {
+        anon_log_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
         inform(tcpc, errno);
-        do_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
       }
 
 #if defined(ANON_LOG_DNS_LOOKUP)
@@ -114,7 +114,6 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
       {
 
         inform(tcpc, errno);
-        do_error("connect(" << fd << ", addr, addrlen)");
       }
       else
       {
@@ -128,7 +127,6 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
         if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen) != 0)
         {
           inform(tcpc, errno);
-          do_error("getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen)");
         }
 
         if (result != 0)
