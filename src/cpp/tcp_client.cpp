@@ -86,8 +86,10 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
   dns_cache::lookup_and_run(host, port, [tcpc](int err_code, const struct sockaddr *addr, socklen_t addrlen) {
     std::unique_ptr<tcp_caller> td(tcpc);
 
-    if (err_code != 0)
+    if (err_code != 0) {
       inform(tcpc, err_code);
+      return;
+    }
     else
     {
 
@@ -96,6 +98,7 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
       {
         anon_log_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
         inform(tcpc, errno);
+        return;
       }
 
 #if defined(ANON_LOG_DNS_LOOKUP)
@@ -107,17 +110,15 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
 
       if (cr == 0)
       {
-
         anon_log("a little weird, but ok.  non-blocking connect succeeded immediately");
       }
       else if (errno != EINPROGRESS)
       {
-
         inform(tcpc, errno);
+        return;
       }
       else
       {
-
         // fiber-sleep until connect completes
         io_params::sleep_cur_until_write_possible(pipe.get());
 
@@ -127,11 +128,11 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
         if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &result, &optlen) != 0)
         {
           inform(tcpc, errno);
+          return;
         }
 
         if (result != 0)
         {
-
 #if ANON_LOG_NET_TRAFFIC > 0
           anon_log("async connect() with fd: " << fd << " completed with error: " << (result > 0 ? error_string(result) : gai_strerror(result)));
 #endif
@@ -145,7 +146,7 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
       tcpc->exec(0, std::move(pipe));
     }
   },
-                            stack_size);
+  stack_size);
 }
 
 std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port)
