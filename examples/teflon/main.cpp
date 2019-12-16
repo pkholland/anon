@@ -373,7 +373,7 @@ extern "C" int main(int argc, char **argv)
   if (specific_profile)
     aws_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(profile);
   else
-    aws_prov = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+    aws_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
 
   std::string region("");
   const char *region_ = getenv("AWS_DEFAULT_REGION");
