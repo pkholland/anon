@@ -37,6 +37,8 @@
 #include <aws/core/utils/threading/Executor.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include <aws/core/client/AWSError.h>
+#include <aws/core/auth/STSCredentialsProvider.h>
+#include <aws/core/platform/Environment.h>
 #include "aws_http.h"
 #endif
 
@@ -145,6 +147,92 @@ public:
         fiber::msleep(ret);
         return 0;
     }
+};
+
+// the implementation of this class in Aws itself (InstanceProfileCredentialsProvider)
+// is intended to run when the code finds itself running on an ec2 instance.  But that
+// implementation locks a system mutex around http api calls, which we don't permit in
+// anon.  So this reimplements that class using fiber mutexes intead.
+static const char* INSTANCE_LOG_TAG = "fiberInstanceProfileCredentialsProvider";
+
+class fiberInstanceProfileCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
+{
+public:
+  fiberInstanceProfileCredentialsProvider(long refreshRateMs = Aws::Auth::REFRESH_THRESHOLD)
+    : m_ec2MetadataConfigLoader(Aws::MakeShared<Aws::Config::EC2InstanceProfileConfigLoader>(INSTANCE_LOG_TAG)),
+      m_loadFrequencyMs(refreshRateMs)
+  {
+  }
+
+  fiberInstanceProfileCredentialsProvider(const std::shared_ptr<Aws::Config::EC2InstanceProfileConfigLoader>& loader, long refreshRateMs = Aws::Auth::REFRESH_THRESHOLD)
+    : m_ec2MetadataConfigLoader(loader),
+      m_loadFrequencyMs(refreshRateMs)
+  {
+  }
+
+  Aws::Auth::AWSCredentials GetAWSCredentials() override
+  {
+    fiber_lock l(mutex);
+    if (IsTimeToRefresh(m_loadFrequencyMs))
+      Reload();
+
+    auto profileIter = m_ec2MetadataConfigLoader->GetProfiles().find(Aws::Config::INSTANCE_PROFILE_KEY);
+    if (profileIter != m_ec2MetadataConfigLoader->GetProfiles().end())
+      return profileIter->second.GetCredentials();
+
+    return Aws::Auth::AWSCredentials();
+  }
+
+protected:
+  void Reload() override
+  {
+    m_ec2MetadataConfigLoader->Load();
+    AWSCredentialsProvider::Reload();
+  }
+
+private:
+  std::shared_ptr<Aws::Config::AWSProfileConfigLoader> m_ec2MetadataConfigLoader;
+  long m_loadFrequencyMs;
+  fiber_mutex mutex;
+};
+
+static const char defaultFiberCredentialsProviderChainTag[] = "defaultFiberAWSCredentialsProviderChain";
+static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
+static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
+static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
+static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+
+class defaultFiberAWSCredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
+{
+public:
+  defaultFiberAWSCredentialsProviderChain()
+  {
+    AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
+    AddProvider(Aws::MakeShared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
+    AddProvider(Aws::MakeShared<Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
+    
+    //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
+    const auto relativeUri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
+
+    const auto absoluteUri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI);
+
+    const auto ec2MetadataDisabled = Aws::Environment::GetEnv(AWS_EC2_METADATA_DISABLED);
+
+    if (!relativeUri.empty())
+    {
+        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(defaultFiberCredentialsProviderChainTag, relativeUri.c_str()));
+    }
+    else if (!absoluteUri.empty())
+    {
+        const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
+        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(defaultFiberCredentialsProviderChainTag,
+                    absoluteUri.c_str(), token.c_str()));
+    }
+    else if (Aws::Utils::StringUtils::ToLower(ec2MetadataDisabled.c_str()) != "true")
+    {
+        AddProvider(Aws::MakeShared<fiberInstanceProfileCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
+    }
+  }
 };
 
 } // namespace
@@ -285,7 +373,7 @@ extern "C" int main(int argc, char **argv)
   if (specific_profile)
     aws_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(profile);
   else
-    aws_prov = std::make_shared<Aws::Auth::DefaultAWSCredentialsProviderChain>();
+    aws_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
 
   std::string region("");
   const char *region_ = getenv("AWS_DEFAULT_REGION");
