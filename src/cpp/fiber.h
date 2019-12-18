@@ -281,6 +281,16 @@ public:
       f->fiber_name_ = new_name;
   }
 
+  static io_dispatch::scheduled_task schedule_task(const std::function<void(void)>& fn, const struct timespec &when,
+      size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown3") {
+    std::string name = fiber_name;
+    return io_dispatch::schedule_task([fn, stack_size, name]{
+      run_in_fiber([fn] {
+        fn();
+      }, stack_size, name.c_str());
+    }, when);
+  }
+
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
   // this is the kind that live in io_params.iod_fiber_
