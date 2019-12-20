@@ -84,7 +84,8 @@ public:
 
     auto method = request.GetMethod();
     std::ostringstream str;
-    str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath()) << " HTTP/1.1\r\n";
+    str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
+      << uri.GetQueryString() << " HTTP/1.1\r\n";
     auto headers = request.GetHeaders();
     for (auto &h : headers)
       str << h.first << ": " << h.second << "\r\n";
