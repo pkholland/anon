@@ -91,7 +91,10 @@ public:
       {
         if (++attempts < 10)
         {
-          anon_log("ddb conditional write failed, retrying, retry count: " << attempts);
+          auto msecs = 4 << attempts;
+          msecs += (std::rand() % (msecs - 1)) + 64;
+          anon_log("ddb conditional write failed, retry count: " << attempts << ", will retry after " << msecs / 1000.0 << " seconds");
+          fiber::msleep(msecs);
         }
         else
           break;
