@@ -109,11 +109,12 @@ public:
     Aws::DynamoDB::Model::PutItemRequest req;
     if (fn(req))
     {
+      anon_log("calling ddb PutItem");
       auto start_time = cur_time();
       auto out = _client.PutItem(req);
       if (!out.IsSuccess())
       {
-        anon_log("ddb write took " << cur_time() - start_time << " seconds");
+        anon_log("ddb failed after " << cur_time() - start_time << " seconds");
         auto &e = out.GetError();
         if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
         {
@@ -122,6 +123,8 @@ public:
         }
         else
           throw_request_error(e.GetResponseCode(), e.GetMessage());
+      } else {
+        anon_log("ddb write took " << cur_time() - start_time << " seconds");
       }
     }
   }
