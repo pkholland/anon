@@ -73,7 +73,6 @@ public:
     {
       try
       {
-        auto start_time = cur_time();
         Aws::DynamoDB::Model::GetItemRequest req;
         Aws::DynamoDB::Model::AttributeValue primary_key;
         primary_key.SetS(primary_key_value);
@@ -85,7 +84,6 @@ public:
           anon_log("getItem failed, error: " << e.GetMessage());
           throw_request_error(e.GetResponseCode(), e.GetMessage());
         }
-        anon_log("ddb read took " << cur_time() - start_time << " seconds");
         f(out.GetResult().GetItem());
         return;
       }
@@ -110,11 +108,9 @@ public:
     if (fn(req))
     {
       anon_log("calling ddb PutItem");
-      auto start_time = cur_time();
       auto out = _client.PutItem(req);
       if (!out.IsSuccess())
       {
-        anon_log("ddb failed after " << cur_time() - start_time << " seconds");
         auto &e = out.GetError();
         if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
         {
@@ -123,8 +119,6 @@ public:
         }
         else
           throw_request_error(e.GetResponseCode(), e.GetMessage());
-      } else {
-        anon_log("ddb write took " << cur_time() - start_time << " seconds");
       }
     }
   }
