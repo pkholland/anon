@@ -130,13 +130,13 @@ public:
     {
       MakeRequest(resp, request, request.GetUri(), readLimiter, writeLimiter, 0);
     }
+#if ANON_LOG_NET_TRAFFIC > 0
     catch (const std::exception &exc)
     {
-#if ANON_LOG_NET_TRAFFIC > 0
       anon_log("failure to write request: " << exc.what());
-#endif
       resp.reset();
     }
+#endif
     catch (...)
     {
 #if ANON_LOG_NET_TRAFFIC > 0
