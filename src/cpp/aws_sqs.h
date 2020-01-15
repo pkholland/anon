@@ -60,10 +60,11 @@ public:
                                                         const Aws::Client::ClientConfiguration &client_config,
                                                         const Aws::String &queue_url,
                                                         const Fn &handler,
+                                                        int max_read_messages = max_messages_per_read,
                                                         bool single_concurrent_message = false,
                                                         size_t stack_size = _default_process_message_stack_size)
   {
-    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler), single_concurrent_message, stack_size);
+    auto ths = std::make_shared<aws_sqs_listener>(provider, client_config, queue_url, wrap(handler), max_read_messages, single_concurrent_message, stack_size);
     ths->start();
     return ths;
   }
@@ -122,6 +123,7 @@ private:
   int _consecutive_errors;
   bool _single_concurrent_message;
   size_t _stack_size;
+  int _max_read_messages;
 
   enum
   {
@@ -164,6 +166,7 @@ public:
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                   int max_read_messages,
                    bool single_concurrent_message,
                    size_t stack_size);
 
@@ -171,6 +174,7 @@ public:
                    const Aws::Client::ClientConfiguration &client_config,
                    const Aws::String &queue_url,
                    const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>&)> &handler,
+                   int max_read_messages,
                    bool single_concurrent_message,
                    size_t stack_size);
 };

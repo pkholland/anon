@@ -31,6 +31,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
                                    const std::function<bool(const Aws::SQS::Model::Message &m)> &handler,
+                                   int max_read_messages,
                                    bool single_concurrent_message,
                                    size_t stack_size)
     : _client(provider, client_config),
@@ -39,6 +40,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _exit_now(false),
       _process_msg(handler),
       _consecutive_errors(0),
+      _max_read_messages(max_read_messages),
       _single_concurrent_message(single_concurrent_message),
       _stack_size(stack_size),
       _continue_after_timeout([]{return true;})
@@ -49,6 +51,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
                                    const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>&)> &handler,
+                                   int max_read_messages,
                                    bool single_concurrent_message,
                                    size_t stack_size)
     : _client(provider, client_config),
@@ -57,6 +60,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _exit_now(false),
       _process_msg_del(handler),
       _consecutive_errors(0),
+      _max_read_messages(max_read_messages),
       _single_concurrent_message(single_concurrent_message),
       _stack_size(stack_size),
       _continue_after_timeout([]{return true;})
@@ -184,7 +188,7 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(b
 void aws_sqs_listener::start_listen()
 {
   Model::ReceiveMessageRequest req;
-  req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(_single_concurrent_message ? 1 : max_messages_per_read).WithWaitTimeSeconds(read_wait_time);
+  req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(_single_concurrent_message ? 1 : _max_read_messages).WithWaitTimeSeconds(read_wait_time);
   Aws::Vector<Model::QueueAttributeName> att;
   att.push_back(Model::QueueAttributeName::All);
   req.WithAttributeNames(std::move(att));
