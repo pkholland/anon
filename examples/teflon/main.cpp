@@ -143,7 +143,7 @@ public:
     long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
-        anon_log("retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << ") sleeping for " << ret << " milliseconds, error: " << error.GetMessage());
+        anon_log("retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << ") sleeping for " << ret << " milliseconds, error: " << (int)error.GetResponseCode() << ": " << error.GetMessage());
         fiber::msleep(ret);
         return 0;
     }
