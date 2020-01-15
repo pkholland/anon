@@ -143,7 +143,7 @@ public:
     long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
-        auto should_sleep = ShouldRetry(error, attemptedRetries);
+        auto should_sleep = ShouldRetry(error, attemptedRetries) && ret > 0;
         #if 1
         std::ostringstream str;
         str << "retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << "), error: " << (int)error.GetResponseCode() << ": " << error.GetMessage();

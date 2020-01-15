@@ -107,7 +107,6 @@ public:
     Aws::DynamoDB::Model::PutItemRequest req;
     if (fn(req))
     {
-      anon_log("calling ddb PutItem");
       auto out = _client.PutItem(req);
       if (!out.IsSuccess())
       {
