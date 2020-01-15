@@ -60,41 +60,50 @@ public:
 
   void with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f)
   {
-    auto sleepMs = 50;
-    auto slp = 0;
-    while (true)
+    if (retries_enabled_)
     {
-      try
+      auto sleepMs = 50;
+      auto slp = 0;
+      while (true)
       {
-        do_with_connected_pipe(f);
-        return;
-      }
-      catch (const fiber_io_error &e)
-      {
-        delete_cached_endpoints();
-        if (!retries_enabled_ || sleepMs > 30 * 1000)
-          throw;
-        auto rid = small_rand_id();
-        auto ri = *(unsigned int *)&rid.m_buf[0];
-        slp = sleepMs * 3 / 4 + (ri % (sleepMs / 2));
+        try
+        {
+          do_with_connected_pipe(f);
+          return;
+        }
+        catch (const fiber_io_error &e)
+        {
+          delete_cached_endpoints();
+          if (sleepMs > 30 * 1000)
+            throw;
+          auto rid = small_rand_id();
+          auto ri = *(unsigned int *)&rid.m_buf[0];
+          slp = sleepMs * 3 / 4 + (ri % (sleepMs / 2));
 #ifdef ANON_LOG_DNS_LOOKUP
-        anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << slp / 1000.0 << " seconds before trying again");
+          anon_log("with_connected_pipe hit exception, what() = " << e.what() << ", sleeping for " << slp / 1000.0 << " seconds before trying again");
 #endif
-      }
-      catch (const fiber_io_timeout_error &e)
-      {
+        }
+        catch (const fiber_io_timeout_error &e)
+        {
 #ifdef ANON_LOG_DNS_LOOKUP
-        anon_log("with_connected_pipe hit fiber_io_timeout_error, what() = " << e.what());
+          anon_log("with_connected_pipe hit fiber_io_timeout_error, what() = " << e.what());
 #endif
-        sleepMs = 0;
+          sleepMs = 0;
+        }
+        if (sleepMs > 0)
+        {
+          fiber::msleep(slp);
+          sleepMs *= 2;
+        }
+        else
+          sleepMs = 50;
       }
-      if (sleepMs > 0)
-      {
-        fiber::msleep(slp);
-        sleepMs *= 2;
-      }
-      else
-        sleepMs = 50;
+    }
+    else
+    {
+      cache_cleaner cc(this);
+      do_with_connected_pipe(f);
+      cc.complete();
     }
   }
 
@@ -131,12 +140,34 @@ public:
 private:
   void do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f);
   void update_endpoints();
-  void delete_cached_endpoints();
 
 public:
   void erase(const std::shared_ptr<endpoint> &ep);
+  void delete_cached_endpoints();
 
 private:
+  struct cache_cleaner
+  {
+    endpoint_cluster *epc;
+    bool clean;
+    cache_cleaner(endpoint_cluster *epc)
+        : epc(epc),
+          clean(true)
+    {
+    }
+
+    ~cache_cleaner()
+    {
+      if (clean)
+        epc->delete_cached_endpoints();
+    }
+
+    void complete()
+    {
+      clean = false;
+    }
+  };
+
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
   std::string host_;
