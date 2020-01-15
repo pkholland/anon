@@ -71,10 +71,9 @@ public:
       }
       catch (const fiber_io_error &e)
       {
-        
+        delete_cached_endpoints();
         if (!retries_enabled_ || sleepMs > 30 * 1000)
           throw;
-        delete_cached_endpoints();
         auto rid = small_rand_id();
         auto ri = *(unsigned int *)&rid.m_buf[0];
         slp = sleepMs * 3 / 4 + (ri % (sleepMs / 2));
