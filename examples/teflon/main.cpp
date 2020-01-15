@@ -144,7 +144,7 @@ public:
     {
         auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
         auto should_sleep = ShouldRetry(error, attemptedRetries) && ret > 0;
-        #if 1
+        #if 0
         std::ostringstream str;
         str << "retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << "), error: " << (int)error.GetResponseCode() << ": " << error.GetMessage();
         if (should_sleep)
