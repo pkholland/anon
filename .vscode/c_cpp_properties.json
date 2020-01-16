@@ -4,6 +4,7 @@
       "name": "default",
       "includePath": [
         "${workspaceFolder}",
+        "${workspaceFolder}/src/cpp",
         "${workspaceFolder}/../json/include",
         "${workspaceFolder}/../http-parser"
       ],

@@ -100,11 +100,7 @@ public:
       }
     }
     else
-    {
-      cache_cleaner cc(this);
       do_with_connected_pipe(f);
-      cc.complete();
-    }
   }
 
   // each 'endpoint' is a single ip address
@@ -115,7 +111,8 @@ public:
     endpoint(const struct sockaddr_in6 &addr)
         : addr_(addr),
           outstanding_requests_(0),
-          last_lookup_time_(cur_time())
+          last_lookup_time_(cur_time()),
+          error_(false)
     {
     }
 
@@ -135,43 +132,18 @@ public:
     fiber_mutex mtx_;
     fiber_cond cond_;
     struct timespec last_lookup_time_;
+    bool error_;
   };
 
 private:
   void do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f);
   void update_endpoints();
+  void delete_cached_endpoints();
 
 public:
   void erase(const std::shared_ptr<endpoint> &ep);
-  void delete_cached_endpoints();
 
 private:
-  struct cache_cleaner
-  {
-    endpoint_cluster *epc;
-    bool clean;
-    cache_cleaner(endpoint_cluster *epc)
-        : epc(epc),
-          clean(true)
-    {
-    }
-
-    ~cache_cleaner()
-    {
-      if (clean)
-      {
-        anon_log("cache_cleaner::~cache_cleaner calling delete_cached_endpoints");
-        epc->delete_cached_endpoints();
-        anon_log("cache_cleaner::~cache_cleaner back from calling delete_cached_endpoints");
-      }
-    }
-
-    void complete()
-    {
-      clean = false;
-    }
-  };
-
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
   std::string host_;

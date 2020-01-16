@@ -87,19 +87,17 @@ void endpoint_cluster::update_endpoints()
     // "slighly old" endpoints we will delete that endpoint
     // from our list.
     auto oldest = now - lookup_frequency_in_seconds_ * 10;
-    auto it = endpoints.begin();
-    while (it != endpoints.end())
+    for (auto it = endpoints.begin(); it != endpoints.end();)
     {
-      auto next = it;
-      next++;
       if (it->second->last_lookup_time_ < oldest)
       {
 #ifdef ANON_LOG_DNS_LOOKUP
         anon_log("aging out endpoint " << it->second->addr_ << ", because it was " << to_seconds(now - it->second->last_lookup_time_) << " seconds old");
 #endif
-        endpoints.erase(it);
+        it = endpoints.erase(it);
       }
-      it = next;
+      else
+        ++it;
     }
     endpoints_.resize(endpoints.size());
     int indx = 0;
@@ -186,10 +184,12 @@ class cleanup
 {
 public:
   cleanup(const std::weak_ptr<endpoint_cluster::endpoint> &wep,
-          const std::shared_ptr<endpoint_cluster::endpoint::sock> &sock)
+          const std::shared_ptr<endpoint_cluster::endpoint::sock> &sock,
+          const std::weak_ptr<endpoint_cluster>& wcp)
       : wep(wep),
         sock(sock),
-        cache(false)
+        cache(false),
+        exception_thrown(true)
   {
   }
 
@@ -200,10 +200,17 @@ public:
     {
       fiber_lock l(ep->mtx_);
       --ep->outstanding_requests_;
-      if (cache) {
+      if (exception_thrown) {
+        auto cp = wcp.lock();
+        if (cp)
+          cp->erase(ep);
+      }
+      if (cache)
+      {
         sock->idle_start_time = cur_time();
         ep->socks_.push(sock);
       }
+      ep->error_ |= exception_thrown;
       ep->cond_.notify_all();
     }
     else
@@ -216,7 +223,9 @@ public:
 
   std::weak_ptr<endpoint_cluster::endpoint> wep;
   std::shared_ptr<endpoint_cluster::endpoint::sock> sock;
+  std::weak_ptr<endpoint_cluster> wcp;
   bool cache;
+  bool exception_thrown;
 };
 
 class eraser
@@ -289,20 +298,40 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
     fiber_lock l(ep->mtx_);
 
     while (ep->outstanding_requests_ >= max_conn_per_ep_)
+    {
+#ifdef ANON_LOG_DNS_LOOKUP
+      anon_log("waiting to use endpoint because it has " << ep->outstanding_requests_ << " current connections, maximum allowed: " << max_conn_per_ep_);
+#endif
       ep->cond_.wait(l);
+    }
+    if (ep->error_)
+    {
+#ifdef ANON_LOG_DNS_LOOKUP
+      anon_log("endpoint for " << ep->addr_ << " had previous error (and has been removed from endpoint list) - trying again");
+#endif
+      l.unlock();
+      ep.reset();
+      do_with_connected_pipe(f);
+      return;
+    }
     ++ep->outstanding_requests_;
 
-    while (!sock && ep->socks_.size() != 0) {
+    while (!sock && ep->socks_.size() != 0)
+    {
       auto s = ep->socks_.front();
       ep->socks_.pop();
       if (cur_time() < s->idle_start_time + k_max_idle_time)
         sock = s;
+#ifdef ANON_LOG_DNS_LOOKUP
+      else
+        anon_log("releasing socket (fd=" << s->pipe_->get_fd() << ") because it has been idle for " << cur_time() - s->idle_start_time << " seconds");
+#endif
     }
 
     if (sock)
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc reused connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_);
+      anon_log("epc reused connection (fd=" << sock->pipe_->get_fd() << ", idle_time=" << cur_time() - sock->idle_start_time << ") to " << ep->addr_);
 #endif
     }
     else
@@ -339,6 +368,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
   // the weak pointer to it across the call.  This
   // lets it timeout and get deleted more smoothly.
   ep.reset();
-  cleanup cu(wep, sock);
+  cleanup cu(wep, sock, shared_from_this());
   cu.cache = f(sock->pipe_.get());
+  cu.exception_thrown = false;
 }
