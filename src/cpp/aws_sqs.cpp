@@ -50,7 +50,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
 aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
-                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>&)> &handler,
+                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>&)> &handler,
                                    int max_read_messages,
                                    bool single_concurrent_message,
                                    size_t stack_size)
@@ -142,9 +142,9 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
   };
 }
 
-std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del, const nlohmann::json &body)> &fn)
+std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del, const nlohmann::json &body)> &fn)
 {
-  return [fn](const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it)>& del) -> bool {
+  return [fn](const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del) -> bool {
     std::string body = get_body(m);
     try
     {
@@ -156,7 +156,7 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(b
       catch (const inval_message& exc)
       {
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
-        del(true);
+        del(true, 0);
         return true;
       }
       catch (const std::exception &exc)
@@ -173,13 +173,13 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(b
     catch (const std::exception &exc)
     {
       anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
-      del(true);
+      del(true, 0);
       return true;
     }
     catch (...)
     {
       anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
-      del(true);
+      del(true, 0);
       return true;
     }
   };
@@ -240,19 +240,19 @@ void aws_sqs_listener::start_listen()
                     ths->start_listen();
                 }
                 else
-                  success = ths->_process_msg_del(m, [wp, m](bool delete_it) {
+                  success = ths->_process_msg_del(m, [wp, m](bool delete_it, int visibility_timeout) {
                     auto ths = wp.lock();
                     if (ths) {
                       if (delete_it)
                         ths->delete_message(m);
                       else
-                        ths->remove_from_keep_alive(m, true);
+                        ths->remove_from_keep_alive(m, visibility_timeout);
                       if (ths->_single_concurrent_message && !ths->_exit_now)
                         ths->start_listen();
                     }
                   });
                 if (!success)
-                  ths->remove_from_keep_alive(m, true);
+                  ths->remove_from_keep_alive(m, visibility_immediate_retry_time);
               },
               ths->_stack_size, "aws_sqs_listener, process_msg");
       } else {
@@ -339,30 +339,27 @@ void aws_sqs_listener::add_to_keep_alive(const Model::Message &m)
   _alive_set[m.GetReceiptHandle()] = m.GetMessageId();
 }
 
-void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool reset_visibility)
+void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, int visibility_timeout)
 {
   {
     fiber_lock l(_mtx);
     _alive_set.erase(m.GetReceiptHandle());
   }
-  if (reset_visibility)
-  {
-    // encourage the system to try this message again soon by resetting its visility near 0
-    Model::ChangeMessageVisibilityRequest req;
-    req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_immediate_retry_time);
-    auto messageId = m.GetMessageId();
-    _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
-      fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
-      if (out.IsSuccess())
-      {
-        // anon_log("reset message visibility near 0 for " << messageId);
-      }
-      else
-      {
-        do_error("aws_sqs, reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
-      }
-    });
-  }
+
+  Model::ChangeMessageVisibilityRequest req;
+  req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_timeout);
+  auto messageId = m.GetMessageId();
+  _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+    fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
+    if (out.IsSuccess())
+    {
+      // anon_log("reset message visibility near 0 for " << messageId);
+    }
+    else
+    {
+      do_error("aws_sqs, reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
+    }
+  });
 }
 
 void aws_sqs_listener::delete_message(const Model::Message &m)
