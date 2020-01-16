@@ -107,7 +107,10 @@ void endpoint_cluster::update_endpoints()
     for (auto &p : endpoints)
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log(" using " << p.second->addr_ << ", lookup age: " << to_seconds(now - p.second->last_lookup_time_) << " seconds");
+      auto age = to_seconds(now - p.second->last_lookup_time_);
+      if (age < 0.0)
+        age = 0.0;
+      anon_log(" using " << p.second->addr_ << ", lookup age: " << age << " seconds");
 #endif
       endpoints_[indx++] = p.second;
     }
