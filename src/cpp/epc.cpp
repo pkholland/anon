@@ -190,6 +190,9 @@ public:
         sock(sock),
         cache(false),
         exception_thrown(true)
+#ifdef ANON_LOG_DNS_LOOKUP
+        ,addr(wep.lock()->addr_)
+#endif
   {
   }
 
@@ -216,7 +219,7 @@ public:
     else
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc, appears that endpoint was deleted prior to callback returning");
+      anon_log("epc, appears that endpoint for " << addr << " was deleted prior to callback returning");
 #endif
     }
   }
@@ -226,6 +229,10 @@ public:
   std::weak_ptr<endpoint_cluster> wcp;
   bool cache;
   bool exception_thrown;
+
+#ifdef ANON_LOG_DNS_LOOKUP
+  const struct sockaddr_in6 addr;
+#endif
 };
 
 class eraser
