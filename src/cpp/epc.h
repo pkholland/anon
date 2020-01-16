@@ -159,7 +159,11 @@ private:
     ~cache_cleaner()
     {
       if (clean)
+      {
+        anon_log("cache_cleaner::~cache_cleaner calling delete_cached_endpoints");
         epc->delete_cached_endpoints();
+        anon_log("cache_cleaner::~cache_cleaner back from calling delete_cached_endpoints");
+      }
     }
 
     void complete()
