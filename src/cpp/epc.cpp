@@ -195,7 +195,8 @@ public:
       : wep(wep),
         sock(sock),
         cache(false),
-        exception_thrown(true)
+        exception_thrown(true),
+        wcp(wcp)
 #ifdef ANON_LOG_DNS_LOOKUP
         ,addr(wep.lock()->addr_)
 #endif
