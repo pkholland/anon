@@ -246,8 +246,10 @@ void aws_sqs_listener::start_listen()
                     {
                       if (delete_it)
                         ths->delete_message(m);
-                      else
+                      else {
+                        anon_log("letting message be re-driven after " << visibility_timeout << " seconds");
                         ths->remove_from_keep_alive(m, true, visibility_timeout);
+                      }
                       if (ths->_single_concurrent_message && !ths->_exit_now)
                         ths->start_listen();
                     }
@@ -353,15 +355,15 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
     Model::ChangeMessageVisibilityRequest req;
     req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_timeout);
     auto messageId = m.GetMessageId();
-    _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+    _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &r, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
       fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
       if (out.IsSuccess())
       {
-        // anon_log("reset message visibility near 0 for " << messageId);
+        // anon_log("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId);
       }
       else
       {
-        do_error("aws_sqs, reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
+        do_error("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId << ", " << out.GetError().GetMessage());
       }
     });
   }
