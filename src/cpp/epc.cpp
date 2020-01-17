@@ -377,8 +377,8 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
   // we let go of the endpoint itself and only hold
   // the weak pointer to it across the call.  This
   // lets it timeout and get deleted more smoothly.
-  ep.reset();
   cleanup cu(wep, sock, shared_from_this());
+  ep.reset();
   cu.cache = f(sock->pipe_.get());
   cu.exception_thrown = false;
 }
