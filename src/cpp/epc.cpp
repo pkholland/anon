@@ -222,7 +222,7 @@ public:
     else
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc, appears that endpoint for " << addr << " was deleted prior to callback returning");
+      anon_log("epc appears that endpoint for " << addr << " was deleted prior to callback returning");
 #endif
     }
   }
