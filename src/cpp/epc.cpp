@@ -334,7 +334,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
         sock = s;
 #ifdef ANON_LOG_DNS_LOOKUP
       else
-        anon_log("releasing socket (fd=" << s->pipe_->get_fd() << ") because it has been idle for " << cur_time() - s->idle_start_time << " seconds");
+        anon_log("releasing socket (fd=" << s->pipe_->get_fd() << ", from " << ep->addr_ << ") because it has been idle for " << cur_time() - s->idle_start_time << " seconds");
 #endif
     }
 
