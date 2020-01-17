@@ -143,6 +143,9 @@ void endpoint_cluster::erase(const std::shared_ptr<endpoint> &ep)
     }
     it++;
   }
+#ifdef ANON_LOG_DNS_LOOKUP
+  anon_log("failed to erase endpoint " << ep->addr_);
+#endif
 }
 
 // This is called when there is some error that has occurred
@@ -207,9 +210,16 @@ public:
       fiber_lock l(ep->mtx_);
       --ep->outstanding_requests_;
       if (exception_thrown) {
+#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("cleanup::~cleanup - exception thrown");
+#endif
         auto cp = wcp.lock();
-        if (cp)
+        if (cp) {
+#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("cleanup::~cleanup - exception thrown, erasing " << ep->addr_);
+#endif
           cp->erase(ep);
+        }
       }
       if (cache)
       {
