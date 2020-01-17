@@ -137,7 +137,7 @@ private:
 
   void set_visibility_timeout();
   void add_to_keep_alive(const Aws::SQS::Model::Message &);
-  void remove_from_keep_alive(const Aws::SQS::Model::Message &, int visibility_timeout);
+  void remove_from_keep_alive(const Aws::SQS::Model::Message &, bool reset_visibility, int visibility_timeout);
   void delete_message(const Aws::SQS::Model::Message &);
   void start_listen();
 
