@@ -246,10 +246,8 @@ void aws_sqs_listener::start_listen()
                     {
                       if (delete_it)
                         ths->delete_message(m);
-                      else {
-                        anon_log("letting message be re-driven after " << visibility_timeout << " seconds");
+                      else
                         ths->remove_from_keep_alive(m, true, visibility_timeout);
-                      }
                       if (ths->_single_concurrent_message && !ths->_exit_now)
                         ths->start_listen();
                     }
@@ -359,7 +357,7 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool rese
       fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
       if (out.IsSuccess())
       {
-        anon_log("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId);
+        // anon_log("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId);
       }
       else
       {
