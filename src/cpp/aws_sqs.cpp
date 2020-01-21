@@ -43,14 +43,14 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _max_read_messages(max_read_messages),
       _single_concurrent_message(single_concurrent_message),
       _stack_size(stack_size),
-      _continue_after_timeout([]{return true;})
+      _continue_after_timeout([] { return true; })
 {
 }
 
 aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider,
                                    const Aws::Client::ClientConfiguration &client_config,
                                    const Aws::String &queue_url,
-                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>&)> &handler,
+                                   const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)> &)> &handler,
                                    int max_read_messages,
                                    bool single_concurrent_message,
                                    size_t stack_size)
@@ -63,7 +63,7 @@ aws_sqs_listener::aws_sqs_listener(const std::shared_ptr<Aws::Auth::AWSCredentia
       _max_read_messages(max_read_messages),
       _single_concurrent_message(single_concurrent_message),
       _stack_size(stack_size),
-      _continue_after_timeout([]{return true;})
+      _continue_after_timeout([] { return true; })
 {
 }
 
@@ -79,16 +79,15 @@ void aws_sqs_listener::start()
       },
       aws_sqs_listener::_simple_stack_size, "aws_sqs_listener::aws_sqs_listener, start_listen");
 
-  #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
   anon_log("fiber::schedule_task, aws_sqs_listener::start");
-  #endif
+#endif
   _timer_task = fiber::schedule_task([wp] {
-        auto ths = wp.lock();
-        if (ths)
-          ths->set_visibility_timeout();
-      },
-      cur_time() + visibility_sweep_time,
-      aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
+    auto ths = wp.lock();
+    if (ths)
+      ths->set_visibility_timeout();
+  },
+                                     cur_time() + visibility_sweep_time, aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
 }
 
 aws_sqs_listener::~aws_sqs_listener()
@@ -113,7 +112,7 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
       {
         return fn(m, body_js);
       }
-      catch (const inval_message& exc)
+      catch (const inval_message &exc)
       {
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
         return true;
@@ -142,9 +141,9 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
   };
 }
 
-std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del, const nlohmann::json &body)> &fn)
+std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)> &del)> aws_sqs_listener::js_wrap(const std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)> &del, const nlohmann::json &body)> &fn)
 {
-  return [fn](const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& del) -> bool {
+  return [fn](const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)> &del) -> bool {
     std::string body = get_body(m);
     try
     {
@@ -153,7 +152,7 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(b
       {
         return fn(m, del, body_js);
       }
-      catch (const inval_message& exc)
+      catch (const inval_message &exc)
       {
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
         del(true, 0);
@@ -193,6 +192,9 @@ void aws_sqs_listener::start_listen()
   att.push_back(Model::QueueAttributeName::All);
   req.WithAttributeNames(std::move(att));
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
+#if defined(EXTENSIVE_SQS_LOGS)
+  anon_log("aws_sqs, calling ReceiveMessageAsync");
+#endif
   _client.ReceiveMessageAsync(req, [wp](const SQSClient *, const Model::ReceiveMessageRequest &, const Model::ReceiveMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
     auto ths = wp.lock();
     if (!ths)
@@ -205,13 +207,13 @@ void aws_sqs_listener::start_listen()
       if (ths->_consecutive_errors > 10)
       {
         anon_log_error("aws_sqs, SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors << ", "
-                                                                          << out.GetError().GetMessage());
+                                                                                   << out.GetError().GetMessage());
       }
       else
       {
         anon_log("aws_sqs, SQS ReceiveMessage failed, _consecutive_errors: " << ths->_consecutive_errors);
       }
-      
+
       fiber::msleep(2000);
       last_read_failed = true;
     }
@@ -221,8 +223,13 @@ void aws_sqs_listener::start_listen()
       auto &messages = out.GetResult().GetMessages();
       auto num_messages = messages.size();
 
+#if defined(EXTENSIVE_SQS_LOGS)
+      anon_log("aws_sqs, ReceiveMessageAsync completed sucessfully with " << num_messages << " messages");
+#endif
+
       if (num_messages > 0)
       {
+        fiber_lock l(ths->_mtx);
         ths->_num_fibers += num_messages;
         for (auto &m : messages)
           fiber::run_in_fiber(
@@ -230,32 +237,60 @@ void aws_sqs_listener::start_listen()
                 auto ths = wp.lock();
                 if (!ths)
                   return;
-                ths->add_to_keep_alive(m);
-                bool success;
-                if (ths->_process_msg) {
-                  success = ths->_process_msg(m);
-                  if (success)
-                    ths->delete_message(m);
-                  if (ths->_single_concurrent_message && !ths->_exit_now)
-                    ths->start_listen();
+                try
+                {
+                  ths->add_to_keep_alive(m);
+                  bool success;
+                  if (ths->_process_msg)
+                  {
+                    success = ths->_process_msg(m);
+                    if (success)
+                      ths->delete_message(m);
+#if defined(EXTENSIVE_SQS_LOGS)
+                    else
+                      anon_log("aws_sqs, _process_msg returned false");
+#endif
+                    if (ths->_single_concurrent_message && !ths->_exit_now)
+                      ths->start_listen();
+                  }
+                  else
+                    success = ths->_process_msg_del(m, [wp, m](bool delete_it, int visibility_timeout) {
+#if defined(EXTENSIVE_SQS_LOGS)
+                      anon_log("aws_sqs, _process_msg_del callback made with delete_it: " << (delete_it ? "true" : "false") << ", visibility_timeout: " << visibility_timeout);
+#endif
+                      auto ths = wp.lock();
+                      if (ths)
+                      {
+                        if (delete_it)
+                          ths->delete_message(m);
+                        else
+                          ths->remove_from_keep_alive(m, visibility_timeout);
+                        if (ths->_single_concurrent_message && !ths->_exit_now)
+                          ths->start_listen();
+                      }
+                    });
+                  if (!success)
+                    ths->remove_from_keep_alive(m, visibility_immediate_retry_time);
                 }
-                else
-                  success = ths->_process_msg_del(m, [wp, m](bool delete_it, int visibility_timeout) {
-                    auto ths = wp.lock();
-                    if (ths) {
-                      if (delete_it)
-                        ths->delete_message(m);
-                      else
-                        ths->remove_from_keep_alive(m, visibility_timeout);
-                      if (ths->_single_concurrent_message && !ths->_exit_now)
-                        ths->start_listen();
-                    }
-                  });
-                if (!success)
-                  ths->remove_from_keep_alive(m, visibility_immediate_retry_time);
+                catch (const std::exception &exc)
+                {
+                  anon_log("aws_sqs, exception thrown during message dispatch, error: " << exc.what());
+                }
+                catch (...)
+                {
+                  anon_log("aws_sqs, unknown exception thrown during message dispatch");
+                }
+                fiber_lock l(ths->_mtx);
+                --ths->_num_fibers;
+#if defined(EXTENSIVE_SQS_LOGS)
+                anon_log("aws_sqs, message dispatch complete, num outstanding messages: " << ths->_num_fibers);
+#endif
+                ths->_num_fibers_cond.notify_all();
               },
               ths->_stack_size, "aws_sqs_listener, process_msg");
-      } else {
+      }
+      else
+      {
         if (!ths->_continue_after_timeout())
           ths->_exit_now = true;
       }
@@ -267,7 +302,12 @@ void aws_sqs_listener::start_listen()
       {
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)
+        {
+#if defined(EXTENSIVE_SQS_LOGS)
+          anon_log("aws_sqs, stalling call to restart_listen because _num_fibers == " << ths->_num_fibers << ", (max_in_flight_fibers == " << max_in_flight_fibers << ")");
+#endif
           ths->_num_fibers_cond.wait(l);
+        }
         fiber::run_in_fiber(
             [wp] {
               auto ths = wp.lock();
@@ -309,7 +349,9 @@ void aws_sqs_listener::set_visibility_timeout()
         fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
-          // anon_log("batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
+#if defined(EXTENSIVE_SQS_LOGS)
+          anon_log("aws_sqs, batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
+#endif
         }
         else
         {
@@ -321,16 +363,15 @@ void aws_sqs_listener::set_visibility_timeout()
 
   // schedule the sweep to run again in visibility_sweep_time seconds
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
-  #if defined(ANON_DEBUG_TIMERS)
+#if defined(ANON_DEBUG_TIMERS)
   anon_log("fiber::schedule_task, aws_sqs_listener::set_visibility_timeout");
-  #endif
+#endif
   _timer_task = fiber::schedule_task([wp] {
-        auto ths = wp.lock();
-        if (ths)
-          ths->set_visibility_timeout();
-      },
-      cur_time() + visibility_sweep_time,
-      aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
+    auto ths = wp.lock();
+    if (ths)
+      ths->set_visibility_timeout();
+  },
+                                     cur_time() + visibility_sweep_time, aws_sqs_listener::_simple_stack_size, "aws_sqs_listener, set_visibility_timeout sweeper");
 }
 
 void aws_sqs_listener::add_to_keep_alive(const Model::Message &m)
@@ -353,7 +394,9 @@ void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, int visib
     fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
     if (out.IsSuccess())
     {
-      // anon_log("reset message visibility near 0 for " << messageId);
+#if defined(EXTENSIVE_SQS_LOGS)
+      anon_log("aws_sqs, reset message visibility near 0 for " << messageId);
+#endif
     }
     else
     {
@@ -372,7 +415,9 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     fiber::rename_fiber("aws_sqs_listener::delete_message, DeleteMessageAsync");
     if (out.IsSuccess())
     {
-      // anon_log("aws_sqs, deleted SQS message " << messageId);
+#if defined(EXTENSIVE_SQS_LOGS)
+      anon_log("aws_sqs, deleted SQS message " << messageId);
+#endif
     }
     else
     {
