@@ -113,7 +113,7 @@ private:
   Aws::String _queue_url;
   fiber_mutex _mtx;
   fiber_cond _num_fibers_cond;
-  std::atomic<int> _num_fibers;
+  int _num_fibers;
   std::atomic<bool> _exit_now;
   std::function<bool(const Aws::SQS::Model::Message &m)> _process_msg;
   std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(bool delete_it, int visibility_timeout)>& delete_message)> _process_msg_del;
