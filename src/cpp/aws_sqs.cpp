@@ -264,13 +264,13 @@ void aws_sqs_listener::start_listen()
                         if (delete_it)
                           ths->delete_message(m);
                         else
-                          ths->remove_from_keep_alive(m, visibility_timeout);
+                          ths->remove_from_keep_alive(m, true, visibility_timeout);
                         if (ths->_single_concurrent_message && !ths->_exit_now)
                           ths->start_listen();
                       }
                     });
                   if (!success)
-                    ths->remove_from_keep_alive(m, visibility_immediate_retry_time);
+                    ths->remove_from_keep_alive(m, true, visibility_immediate_retry_time);
                 }
                 catch (const std::exception &exc)
                 {
@@ -380,29 +380,30 @@ void aws_sqs_listener::add_to_keep_alive(const Model::Message &m)
   _alive_set[m.GetReceiptHandle()] = m.GetMessageId();
 }
 
-void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, int visibility_timeout)
+void aws_sqs_listener::remove_from_keep_alive(const Model::Message &m, bool reset_visibility, int visibility_timeout)
 {
   {
     fiber_lock l(_mtx);
     _alive_set.erase(m.GetReceiptHandle());
   }
 
-  Model::ChangeMessageVisibilityRequest req;
-  req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_timeout);
-  auto messageId = m.GetMessageId();
-  _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
-    fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
-    if (out.IsSuccess())
-    {
-#if defined(EXTENSIVE_SQS_LOGS)
-      anon_log("aws_sqs, reset message visibility near 0 for " << messageId);
-#endif
-    }
-    else
-    {
-      do_error("aws_sqs, reset message visibility near 0 for " << messageId << ", " << out.GetError().GetMessage());
-    }
-  });
+  if (reset_visibility)
+  {
+    Model::ChangeMessageVisibilityRequest req;
+    req.WithQueueUrl(_queue_url).WithReceiptHandle(m.GetReceiptHandle()).WithVisibilityTimeout(visibility_timeout);
+    auto messageId = m.GetMessageId();
+    _client.ChangeMessageVisibilityAsync(req, [messageId](const SQSClient *, const Model::ChangeMessageVisibilityRequest &r, const Model::ChangeMessageVisibilityOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
+      fiber::rename_fiber("aws_sqs_listener::remove_from_keep_alive, ChangeMessageVisibilityAsync");
+      if (out.IsSuccess())
+      {
+        // anon_log("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId);
+      }
+      else
+      {
+        do_error("reset message visibility to " << r.GetVisibilityTimeout() << " for " << messageId << ", " << out.GetError().GetMessage());
+      }
+    });
+  }
 }
 
 void aws_sqs_listener::delete_message(const Model::Message &m)
@@ -425,7 +426,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     }
     auto ths = wp.lock();
     if (ths)
-      ths->remove_from_keep_alive(m, false);
+      ths->remove_from_keep_alive(m, false, 0);
   });
 }
 

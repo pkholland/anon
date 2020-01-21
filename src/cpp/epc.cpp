@@ -143,6 +143,9 @@ void endpoint_cluster::erase(const std::shared_ptr<endpoint> &ep)
     }
     it++;
   }
+#ifdef ANON_LOG_DNS_LOOKUP
+  anon_log("failed to erase endpoint " << ep->addr_);
+#endif
 }
 
 // This is called when there is some error that has occurred
@@ -192,7 +195,8 @@ public:
       : wep(wep),
         sock(sock),
         cache(false),
-        exception_thrown(true)
+        exception_thrown(true),
+        wcp(wcp)
 #ifdef ANON_LOG_DNS_LOOKUP
         ,addr(wep.lock()->addr_)
 #endif
@@ -207,9 +211,16 @@ public:
       fiber_lock l(ep->mtx_);
       --ep->outstanding_requests_;
       if (exception_thrown) {
+#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("cleanup::~cleanup - exception thrown");
+#endif
         auto cp = wcp.lock();
-        if (cp)
+        if (cp) {
+#ifdef ANON_LOG_DNS_LOOKUP
+        anon_log("cleanup::~cleanup - exception thrown, erasing " << ep->addr_);
+#endif
           cp->erase(ep);
+        }
       }
       if (cache)
       {
@@ -222,7 +233,7 @@ public:
     else
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc, appears that endpoint for " << addr << " was deleted prior to callback returning");
+      anon_log("epc appears that endpoint for " << addr << " was deleted prior to callback returning");
 #endif
     }
   }
@@ -334,7 +345,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
         sock = s;
 #ifdef ANON_LOG_DNS_LOOKUP
       else
-        anon_log("releasing socket (fd=" << s->pipe_->get_fd() << ") because it has been idle for " << cur_time() - s->idle_start_time << " seconds");
+        anon_log("releasing socket (fd=" << s->pipe_->get_fd() << ", from " << ep->addr_ << ") because it has been idle for " << cur_time() - s->idle_start_time << " seconds");
 #endif
     }
 
@@ -377,8 +388,8 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
   // we let go of the endpoint itself and only hold
   // the weak pointer to it across the call.  This
   // lets it timeout and get deleted more smoothly.
-  ep.reset();
   cleanup cu(wep, sock, shared_from_this());
+  ep.reset();
   cu.cache = f(sock->pipe_.get());
   cu.exception_thrown = false;
 }
