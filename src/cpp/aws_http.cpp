@@ -62,6 +62,7 @@ public:
     auto newepc = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
     newepc->disable_retries();
+    newepc->set_max_io_block_time(120);
     return m[key] = newepc;
   }
 
