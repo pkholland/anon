@@ -79,12 +79,6 @@ public:
     }
 
     auto body = request.GetContentBody();
-    std::vector<char> body_buff;
-    if (body) {
-      body_buff = std::vector<char>(std::istreambuf_iterator<char>(*body), std::istreambuf_iterator<char>());
-      anon_log("sending " << body_buff.size() << " bytes to " << uri.GetURIString() << ", request.GetContentLength(): " << request.GetContentLength());
-    }
-
     auto method = request.GetMethod();
     std::ostringstream str;
     str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
@@ -95,12 +89,12 @@ public:
     if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
     {
       str << "transfer-encoding: identity\r\n";
-      str << "content-length: " << body_buff.size() << "\r\n";
+      str << "content-length: " << request.GetContentLength() << "\r\n";
     }
 
     str << "\r\n";
     if (body)
-      str.write(&body_buff[0], body_buff.size());
+      str << body->rdbuf();
     auto message = str.str();
 
     auto read_body = method != HttpMethod::HTTP_HEAD;
