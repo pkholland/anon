@@ -37,6 +37,9 @@ class dynamoDB
 
   class ddb_condition_failed
   {
+  public:
+    ddb_condition_failed() {}
+    ddb_condition_failed(const std::string&) {}
   };
 
 public:
@@ -58,7 +61,7 @@ public:
       if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
       {
         if (!ignore_write_failure)
-          throw ddb_condition_failed();
+          anon_throw(ddb_condition_failed, "dynamoDB::delete_item failed, ignore_write_failure = false");
       }
       else
         throw_request_error(e.GetResponseCode(), e.GetMessage());
@@ -114,7 +117,7 @@ public:
         if (e.GetErrorType() == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED)
         {
           if (!ignore_write_failure)
-            throw ddb_condition_failed();
+            anon_throw(ddb_condition_failed, "dynamoDB::store_item failed, ignore_write_failure = false");
         }
         else
           throw_request_error(e.GetResponseCode(), e.GetMessage());

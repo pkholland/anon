@@ -226,7 +226,7 @@ static const char *ssl_errors(unsigned long err)
 
 void throw_ssl_error(unsigned long err)
 {
-  throw std::runtime_error(ssl_errors(err));
+  anon_throw(std::runtime_error,ssl_errors(err));
 }
 
 void throw_ssl_error()
@@ -262,7 +262,7 @@ static const char *ssl_io_errors(unsigned long err)
 
 void throw_ssl_io_error(unsigned long err)
 {
-  throw fiber_io_error(ssl_io_errors(err));
+  anon_throw(fiber_io_error, ssl_io_errors(err));
 }
 
 ///////////////////////////////////////////////////////////////

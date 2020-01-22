@@ -259,10 +259,7 @@ public:
   static void lookup(const char *host, int port, const std::function<void(int, const std::vector<sockaddr_in6> &)> &fn)
   {
     if (!singleton)
-    {
-      anon_log_error("dns_lookup service not started");
-      throw std::runtime_error("dns_lookup service not started");
-    }
+      anon_throw(std::runtime_error, "dns_lookup service not started");
 
     cmd_rec *cr = new cmd_rec;
     cr->host_name = host;

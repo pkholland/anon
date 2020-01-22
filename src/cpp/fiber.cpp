@@ -133,7 +133,7 @@ void fiber::initialize()
 {
 #if defined(ANON_RUNTIME_CHECKS)
   if (on_one_pipe_)
-    throw std::runtime_error("fiber::initialize already called");
+    anon_throw(std::runtime_error, "fiber::initialize already called");
 #endif
 
   int pipe = io_dispatch::new_command_pipe();

@@ -306,8 +306,12 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
       while (endpoints_.size() == 0)
       {
         cond_.wait(l);
-        if (lookup_err_)
+        if (lookup_err_) {
+          #if defined(ANON_LOG_ALL_THROWS)
+          anon_log(lookup_err_->what());
+          #endif
           throw *lookup_err_;
+        }
       }
     }
     ep = endpoints_[round_robin_index_++ % endpoints_.size()];

@@ -157,7 +157,7 @@ public:
     // currently only supported when called from an io thread
     bool is_io_thread = io_d.on_io_thread();
     if (!is_io_thread)
-      throw std::runtime_error("invalid call to while_paused2 from a non-io thread");
+      anon_throw(std::runtime_error, "invalid call to while_paused2 from a non-io thread");
 
     std::unique_lock<std::mutex> lock(io_d.pause_outer_mutex_, std::try_to_lock);
     if (!lock)

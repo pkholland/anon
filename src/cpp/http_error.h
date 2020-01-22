@@ -66,7 +66,11 @@ void throw_request_error_(int code, T err)
   std::ostringstream format;
   err(format);
   format << "\n";
-  throw request_error(code, format.str());
+  auto msg = format.str();
+  #if defined(ANON_LOG_ALL_THROWS)
+  anon_log(msg);
+  #endif
+  throw request_error(code, msg);
 }
 
 inline void reply_back_error(const char* error_type, const char* msg, const char* response_code,

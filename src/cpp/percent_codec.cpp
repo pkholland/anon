@@ -21,6 +21,7 @@
 */
 
 #include "percent_codec.h"
+#include "log.h"
 #include <string.h>
 #include <stdexcept>
 
@@ -49,7 +50,7 @@ std::string percent_decode(const std::string &encoded)
     if (*pos == '%')
     {
       if (!valid_hex(pos[1]) || !valid_hex(pos[2]))
-        throw std::runtime_error("invalid encoded uri character");
+        anon_throw(std::runtime_error, "invalid encoded uri character");
       char c[2];
       c[0] = nib(pos[1]) * 16 + nib(pos[2]);
       c[1] = 0;

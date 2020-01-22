@@ -76,7 +76,7 @@ request_helper request_mapping_helper(const std::string &path_spec)
 
   pcrecpp::RE split_at_var("([^?{]*)(.*)");
   if (!split_at_var.FullMatch(path_spec, &h.non_var))
-    throw std::runtime_error("request_mapping failed, invalid path");
+    anon_throw(std::runtime_error, "request_mapping failed, invalid path");
 
   return h;
 }

@@ -378,7 +378,7 @@ void dns_entry::initiate_lookup(const char *host, int port, const std::function<
     inform_in_fiber(dnsc, ret);
     delete nc;
     dns_map.erase(dns_map.find(host));
-    throw std::runtime_error(gai_strerror(ret));
+    anon_throw(std::runtime_error, gai_strerror(ret));
   }
 }
 

@@ -246,7 +246,7 @@ void io_dispatch::start(int num_threads, bool use_this_thread, int numSigFds, in
 {
 #if defined(ANON_RUNTIME_CHECKS)
   if (io_d.running_)
-    throw std::runtime_error("io_dispatch::start already called");
+    anon_throw(std::runtime_error, "io_dispatch::start already called");
 #endif
 
   io_d.curSig_ = firstSigFdSig;
@@ -373,10 +373,7 @@ void io_dispatch::epoll_loop()
   // record this thread id
   auto index = thread_init_index_.fetch_add(1, std::memory_order_relaxed);
   if (index >= num_threads_)
-  {
-    anon_log_error("too many calls to io_dispatch::epoll_loop");
-    throw std::runtime_error("io_dispatch::epoll_loop");
-  }
+    anon_throw(std::runtime_error, "too many calls to io_dispatch::epoll_loop");
   io_thread_ids_[index] = syscall(SYS_gettid);
 
   while (running_)

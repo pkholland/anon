@@ -235,6 +235,18 @@ inline std::string errno_string()
   return error_string(errno);
 }
 
+#if defined(ANON_LOG_ALL_THROWS)
+#define anon_throw(_exc_type, _body)                                \
+  do                                                                \
+  {                                                                 \
+    auto msg = Log::fmt([&](std::ostream &msg) { msg << _body; });  \
+    anon_log(msg);                                                  \
+    throw _exc_type(msg);                                           \
+  } while (0)
+#else
+#define anon_throw(_exc_type, _body) throw _exc_type(Log::fmt([&](std::ostream &msg) { msg << _body; }))
+#endif
+
 #define do_error(fn)                                                \
   do                                                                \
   {                                                                 \
@@ -252,5 +264,3 @@ std::string fmt(Func func)
   return msg.str();
 }
 }; // namespace Log
-
-#define anon_throw(_exc_type, _body) throw _exc_type(Log::fmt([&](std::ostream &msg) { msg << _body; }))
