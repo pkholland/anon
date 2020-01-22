@@ -80,8 +80,10 @@ public:
 
     auto body = request.GetContentBody();
     std::vector<char> body_buff;
-    if (body)
-      body_buff = std::vector<char>((std::istreambuf_iterator<char>(*body)), std::istreambuf_iterator<char>());
+    if (body) {
+      body_buff = std::vector<char>(std::istreambuf_iterator<char>(*body), std::istreambuf_iterator<char>());
+      anon_log("sending " << body_buff.size() << " bytes to " << uri.GetURIString() << ", request.GetContentLength(): " << request.GetContentLength());
+    }
 
     auto method = request.GetMethod();
     std::ostringstream str;
