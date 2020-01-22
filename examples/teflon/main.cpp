@@ -117,6 +117,9 @@ public:
   {
     anon_log(tag << " " << messageStream.rdbuf()->str());
   }
+
+  void Flush() override
+  {}
 };
 
 class retryStrategy : public Aws::Client::DefaultRetryStrategy
@@ -348,8 +351,8 @@ extern "C" int main(int argc, char **argv)
 #ifdef TEFLON_AWS
   Aws::SDKOptions aws_options;
   aws_options.httpOptions.httpClientFactory_create_fn = [] { return std::static_pointer_cast<Aws::Http::HttpClientFactory>(std::make_shared<aws_http_client_factory>()); };
-  // aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
-  // aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
+  aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
+  aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
   Aws::InitAPI(aws_options);
   Aws::Client::ClientConfiguration client_cfg;
 
