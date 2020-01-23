@@ -77,36 +77,26 @@ public:
       resp->SetResponseCode(HttpResponseCode::INTERNAL_SERVER_ERROR);
       return;
     }
+    
+    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
 
-    auto body = request.GetContentBody();
-    auto method = request.GetMethod();
-    std::ostringstream str;
-    str << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
-      << uri.GetQueryString() << " HTTP/1.1\r\n";
-    auto headers = request.GetHeaders();
-    for (auto &h : headers)
-      str << h.first << ": " << h.second << "\r\n";
-    if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
-    {
-      str << "transfer-encoding: identity\r\n";
-      str << "content-length: " << request.GetContentLength() << "\r\n";
-    }
+      auto body = request.GetContentBody();
+      auto method = request.GetMethod();
+      *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
+            << uri.GetQueryString() << " HTTP/1.1\r\n";
+      auto headers = request.GetHeaders();
+      for (auto &h : headers)
+        *pipe << h.first << ": " << h.second << "\r\n";
+      if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
+      {
+        *pipe << "transfer-encoding: identity\r\n";
+        *pipe << "content-length: " << request.GetContentLength() << "\r\n";
+      }
+      *pipe << "\r\n";
+      if (body)
+        *pipe << body->rdbuf();
 
-    str << "\r\n";
-    auto header_str = str.str();
-    if (body)
-      str << body->rdbuf();
-    auto message = str.str();
-
-    if (message.size() < header_str.size() + 1024)
-      anon_log("sending:\n" << message);
-    else
-      anon_log("sending:\n" << header_str << "plus " << (message.size() - header_str.size()) << " bytes of body content");
-
-    auto read_body = method != HttpMethod::HTTP_HEAD;
-    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
-      // anon_log("sending...\n\n" << message << "\n");
-      pipe->write(message.c_str(), message.size());
+      auto read_body = method != HttpMethod::HTTP_HEAD;
       http_client_response re;
       re.parse(*pipe, read_body, false/*throw_on_server_error*/);
       if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {

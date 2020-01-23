@@ -22,6 +22,10 @@
 
 #pragma once
 
+#include <string>
+#include <streambuf>
+#include <vector>
+
 class pipe_t
 {
 public:
@@ -30,4 +34,34 @@ public:
   virtual void write(const void *buff, size_t len) const = 0;
   virtual void limit_io_block_time(int seconds) = 0;
   virtual int get_fd() const = 0;
+
+  const pipe_t& operator<<(const char* str) const {
+    write(str, strlen(str));
+    return *this;
+  }
+
+  const pipe_t& operator<<(const std::string& str) const {
+    write(&str.front(), str.size());
+    return *this;
+  }
+
+  const pipe_t& operator<<(std::streambuf* sb) const {
+    const int sz = 1024 * 16;
+    std::vector<char> buf(sz);
+    while (true) {
+      auto c = sb->sgetc();
+      if (c == std::streambuf::traits_type::eof())
+        break;
+      sb->sputbackc(c);
+      auto avail = sb->in_avail();
+      while (avail > 0) {
+        int chars = avail > sz ? sz : avail;
+        auto read = sb->sgetn(&buf[0], sz);
+        write(&buf[0], read);
+        avail -= read;
+      }
+    }
+    return *this;
+  }
 };
+
