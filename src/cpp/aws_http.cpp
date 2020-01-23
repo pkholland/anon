@@ -98,7 +98,10 @@ public:
       str << body->rdbuf();
     auto message = str.str();
 
-    anon_log("sending:\n" << header_str << "plus " << (message.size() - header_str.size()) << " bytes of body content");
+    if (message.size() < header_str.size() + 1024)
+      anon_log("sending:\n" << message);
+    else
+      anon_log("sending:\n" << header_str << "plus " << (message.size() - header_str.size()) << " bytes of body content");
 
     auto read_body = method != HttpMethod::HTTP_HEAD;
     get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
