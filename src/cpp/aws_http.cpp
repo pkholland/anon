@@ -92,6 +92,11 @@ public:
       str << "content-length: " << request.GetContentLength() << "\r\n";
     }
 
+    std::ostringstream strd;
+    if (body)
+      strd << body->rdbuf();
+    anon_log("sending:\n" << str.str() << "\nplus " << strd.str().size() << " bytes of body content");
+
     str << "\r\n";
     if (body)
       str << body->rdbuf();
