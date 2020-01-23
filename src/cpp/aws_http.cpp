@@ -80,12 +80,12 @@ public:
     
     get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
 
-      auto body = request.GetContentBody();
+      const auto& body = request.GetContentBody();
       auto method = request.GetMethod();
       *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
             << uri.GetQueryString() << " HTTP/1.1\r\n";
       auto headers = request.GetHeaders();
-      for (auto &h : headers)
+      for (const auto &h : headers)
         *pipe << h.first << ": " << h.second << "\r\n";
       if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
       {
@@ -104,9 +104,9 @@ public:
       }
       else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
-        for (auto &h : re.headers.headers)
+        for (const auto &h : re.headers.headers)
           resp->AddHeader(h.first.str(), h.second.str());
-        for (auto &data : re.body)
+        for (const auto &data : re.body)
           resp->GetResponseBody().write(&data[0], data.size());
       }
       return re.should_keep_alive;
