@@ -92,15 +92,13 @@ public:
       str << "content-length: " << request.GetContentLength() << "\r\n";
     }
 
-    std::ostringstream strd;
-    if (body)
-      strd << body->rdbuf();
-    anon_log("sending:\n" << str.str() << "\nplus " << strd.str().size() << " bytes of body content");
-
     str << "\r\n";
+    auto header_str = str.str();
     if (body)
       str << body->rdbuf();
     auto message = str.str();
+
+    anon_log("sending:\n" << header_str << "plus " << (message.size() - header_str.size()) << " bytes of body content");
 
     auto read_body = method != HttpMethod::HTTP_HEAD;
     get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &resp, &message, read_body, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
