@@ -127,7 +127,7 @@ public:
     catch (const std::exception &exc)
     {
       anon_log("failure to write request: " << exc.what());
-      resp.reset();
+      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
     }
 #endif
     catch (...)
@@ -135,7 +135,7 @@ public:
 #if ANON_LOG_NET_TRAFFIC > 0
       anon_log("unknown failure to write request");
 #endif
-      resp.reset();
+      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
     }
     return std::static_pointer_cast<HttpResponse>(resp);
   }
