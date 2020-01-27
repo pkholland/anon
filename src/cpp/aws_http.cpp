@@ -123,6 +123,10 @@ public:
     {
       MakeRequest(resp, request, request.GetUri(), readLimiter, writeLimiter, 0);
     }
+    catch(const fiber_io_error &exc) {
+      anon_log("filber_io_error: " << exc.what());
+      resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
+    }
 #if ANON_LOG_NET_TRAFFIC > 0
     catch (const std::exception &exc)
     {

@@ -137,9 +137,9 @@ public:
     {
         auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
         if (ret)
-          anon_log("retryStrategy::ShouldRetry(" << error.GetExceptionName() << "," << attemptedRetries << ") returning true");
+          anon_log("retryStrategy::ShouldRetry(\"" << error.GetExceptionName() << "\"," << attemptedRetries << ") returning true");
         else
-          anon_log("retryStrategy::ShouldRetry(" << error.GetExceptionName() << "," << attemptedRetries << ") returning false, "
+          anon_log("retryStrategy::ShouldRetry(\"" << error.GetExceptionName() << "\"," << attemptedRetries << ") returning false, "
             << "response code: " << (int)error.GetResponseCode() << ", message: " << error.GetMessage());
         return ret;
     }
