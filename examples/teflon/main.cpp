@@ -103,6 +103,7 @@ protected:
 };
 std::shared_ptr<aws_executor> aws_executor::singleton = std::make_shared<aws_executor>();
 
+#if EXTENSIVE_AWS_LOGS > 1
 class logger : public Aws::Utils::Logging::LogSystemInterface
 {
 public:
@@ -121,6 +122,7 @@ public:
   void Flush() override
   {}
 };
+#endif
 
 class retryStrategy : public Aws::Client::DefaultRetryStrategy
 {
@@ -130,7 +132,7 @@ public:
     {
     }
 
-    #if 0
+    #if EXTENSIVE_AWS_LOGS > 0
     bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
     {
         auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
@@ -147,7 +149,7 @@ public:
     {
         auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
         auto should_sleep = ShouldRetry(error, attemptedRetries) && ret > 0;
-        #if 0
+        #if EXTENSIVE_AWS_LOGS > 0
         std::ostringstream str;
         str << "retryStrategy::CalculateDelayBeforeNextRetry(" << attemptedRetries << "), error: " << (int)error.GetResponseCode() << ": " << error.GetMessage();
         if (should_sleep)
@@ -351,8 +353,10 @@ extern "C" int main(int argc, char **argv)
 #ifdef TEFLON_AWS
   Aws::SDKOptions aws_options;
   aws_options.httpOptions.httpClientFactory_create_fn = [] { return std::static_pointer_cast<Aws::Http::HttpClientFactory>(std::make_shared<aws_http_client_factory>()); };
-  // aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
-  // aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
+  #if EXTENSIVE_AWS_LOGS > 1
+  aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
+  aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
+  #endif
   Aws::InitAPI(aws_options);
   Aws::Client::ClientConfiguration client_cfg;
 
