@@ -298,7 +298,7 @@ void aws_sqs_listener::start_listen()
 
     if (ths->_consecutive_errors < 1000)
     {
-      if ((last_read_failed || !ths->_single_concurrent_message) && !ths->_exit_now)
+      if ((last_read_failed || !ths->_single_concurrent_message || out.GetResult().GetMessages().size() == 0) && !ths->_exit_now)
       {
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)
