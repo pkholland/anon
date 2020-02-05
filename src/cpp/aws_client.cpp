@@ -525,8 +525,8 @@ void aws_client_init()
       catch (...)
       {
       }
-      if (success)
-        aws_default_region = reply;
+      if (success && reply.size() > 1)
+        aws_default_region = reply.substr(0, reply.size() - 1);
       else
         aws_default_region = "us-east-1";
     }
