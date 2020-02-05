@@ -163,9 +163,6 @@ extern "C" int main(int argc, char **argv)
   dns_lookup::start_service();
   fiber::initialize();
   init_big_id_crypto();
-  #ifdef TEFLON_AWS
-  aws_client_init();
-  #endif
 
   int ret = 0;
   try
@@ -189,6 +186,10 @@ extern "C" int main(int argc, char **argv)
     std::unique_ptr<http_server> my_http;
     std::unique_ptr<http_server> my_https;
     auto create_srvs_proc = [&] {
+
+      #ifdef TEFLON_AWS
+      aws_client_init();
+      #endif
 
       server_init();
 
