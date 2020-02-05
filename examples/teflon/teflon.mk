@@ -27,7 +27,9 @@ $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c
 
 ifneq ($(TEFLON_AWS),)
-SOURCES+=$(ANON_ROOT)/src/cpp/aws_http.cpp
+SOURCES+=\
+$(ANON_ROOT)/src/cpp/aws_http.cpp\
+$(ANON_ROOT)/src/cpp/aws_client.cpp
 INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DTEFLON_AWS
 LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
