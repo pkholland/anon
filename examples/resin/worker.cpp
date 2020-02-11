@@ -343,4 +343,6 @@ void run_worker(const ec2_info &ec2i)
     timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
   }
   keep_alive_thread.join();
+
+  close(timerfd);
 }
