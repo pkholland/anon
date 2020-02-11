@@ -327,12 +327,14 @@ void run_worker(const ec2_info &ec2i)
       anon_log("no messages after wating period");
       if (should_shut_down(ec2i))
       {
-	anon_log("no reason to keep running, shutting down");
+        anon_log("no reason to keep running, shutting down");
         break;
       }
     }
   }
 
+  // tell the keep_alive thread to wake up and exit.
+  // then wait for it to have fully exited.
   {
     std::unique_lock<std::mutex> l(keep_alive_mutex);
     stop = true;
