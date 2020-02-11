@@ -79,8 +79,7 @@ secrets/ca_key.pem: secrets/raw_ca_key_password
 
 secrets/ca_cert.pem: secrets/ca_key.pem
 	$(call print_secrets,"self-signed root ca cert",$@)
-	@openssl req -new -x509 -key secrets/ca_key.pem -passin file:secrets/raw_ca_key_password -out secrets/ca_cert.pem -days 1095 -config $(ANON_ROOT)/cert_info/cert_config -batch
-	
+	@openssl req -new -x509 -key secrets/ca_key.pem -passin file:secrets/raw_ca_key_password -out secrets/ca_cert.pem -days 1095 -config $(ANON_ROOT)/cert_info/cert_config -batch -writerand secrets/randseed
 
 
 secrets/raw_srv_key_password: | secrets
@@ -104,7 +103,7 @@ secrets/srv_cert.pem: secrets/ca_cert.pem secrets/srv_key.pem secrets/raw_srv_ce
 	$(call print_secrets,"srv cert request",$@)
 	@rm -f secrets/srv_cert.csr
 	@rm -rf obj/auto_gen/certs
-	@openssl req -new -key secrets/srv_key.pem -passin file:secrets/raw_srv_key_password -passout file:secrets/raw_srv_cert_password -out secrets/srv_cert.csr -config $(ANON_ROOT)/cert_info/cert_config -batch
+	@openssl req -new -key secrets/srv_key.pem -passin file:secrets/raw_srv_key_password -passout file:secrets/raw_srv_cert_password -out secrets/srv_cert.csr -config $(ANON_ROOT)/cert_info/cert_config -batch -writerand secrets/randseed
 	@mkdir -p obj/auto_gen/certs/newcerts
 	@bash -c "printf \"%x\n\" \$$((\$$RANDOM%256))" > obj/auto_gen/certs/serial
 	@touch obj/auto_gen/certs/index.txt
