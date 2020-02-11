@@ -222,6 +222,7 @@ void run_worker(const ec2_info &ec2i)
   config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];
+  anon_log("reading tasks from: " << queue_url);
 
   Aws::SQS::SQSClient client(config);
   std::mutex keep_alive_mutex;
@@ -389,11 +390,11 @@ void run_worker(const ec2_info &ec2i)
     }
     else
     {
-      // no messages after wait_secs seconds.  Check for shutdown
-      anon_log("no messages after wating " << wait_secs << " seconds");
+      anon_log("no tasks after wating " << wait_secs << " seconds");
       if (should_shut_down(ec2i))
       {
-        anon_log("no reason to keep running, shutting down");
+        anon_log("no reason to keep running, executing done_action");
+        start_done_action(ec2i);
         break;
       }
     }
