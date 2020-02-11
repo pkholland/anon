@@ -39,10 +39,7 @@ Aws::SDKOptions options;
 
 void init_ec2(ec2_info &r)
 {
-  r.executor = std::make_shared<Aws::Utils::Threading::PooledThreadExecutor>(4 /*threads in pool*/);
-
   Aws::Client::ClientConfiguration config;
-  config.executor = r.executor;
   config.connectTimeoutMs = 100;
   config.httpRequestTimeoutMs = 100;
   config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
@@ -80,16 +77,6 @@ bool has_user_data(ec2_info &r)
 
 ec2_info ec2i;
 
-class executor_reset {
-
-public:
-  ~executor_reset()
-  {
-    ec2i.executor.reset();
-  }
-
-};
-
 } // namespace
 
 extern "C" int main(int argc, char **argv)
@@ -101,7 +88,6 @@ extern "C" int main(int argc, char **argv)
   try
   {
     init_ec2(ec2i);
-    executor_reset er;
     if (!in_ec2(ec2i))
       anon_log("resin run outside of ec2, stopping now");
     else if (!has_user_data(ec2i))

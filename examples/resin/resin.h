@@ -23,7 +23,6 @@
 #pragma once
 
 #include <aws/core/Aws.h>
-#include <aws/core/utils/threading/Executor.h>
 #include "nlohmann/json.hpp"
 
 struct ec2_info
@@ -35,7 +34,6 @@ struct ec2_info
   std::string private_ipv4;
   std::string user_data;
   nlohmann::json user_data_js;
-  std::shared_ptr<Aws::Utils::Threading::Executor> executor;
 };
 
 void run_worker(const ec2_info& ec2i);

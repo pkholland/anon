@@ -39,6 +39,8 @@
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <aws/ec2/EC2Client.h>
 #include <aws/ec2/model/DescribeInstancesRequest.h>
+#include <aws/ec2/model/TerminateInstancesRequest.h>
+#include <aws/ec2/model/StopInstancesRequest.h>
 
 namespace
 {
@@ -94,7 +96,6 @@ bool should_shut_down(const ec2_info &ec2i)
       ddb_config.region = ec2i.user_data_js["min_instance_region"];
     else
       ddb_config.region = ec2i.default_region;
-    ddb_config.executor = ec2i.executor;
     Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
     Aws::DynamoDB::Model::AttributeValue primary_key;
@@ -114,7 +115,6 @@ bool should_shut_down(const ec2_info &ec2i)
 
         Aws::Client::ClientConfiguration ec2_config;
         ec2_config.region = ec2i.default_region;
-        ec2_config.executor = ec2i.executor;
         Aws::EC2::EC2Client ec2(ec2_config);
 
         Aws::EC2::Model::DescribeInstancesRequest request;
@@ -158,6 +158,55 @@ bool should_shut_down(const ec2_info &ec2i)
   return true;
 }
 
+void do_shutdown(const ec2_info &ec2i, int attempts = 0)
+{
+  Aws::Client::ClientConfiguration ec2_config;
+  ec2_config.region = ec2i.default_region;
+  Aws::EC2::EC2Client ec2(ec2_config);
+
+  Aws::EC2::Model::TerminateInstancesRequest request;
+  request.AddInstanceIds(ec2i.instance_id);
+  auto outcome = ec2.TerminateInstances(request);
+
+  if (!outcome.IsSuccess() && attempts < 10)
+  {
+
+    anon_log("failed to stop instance " << ec2i.instance_id << ": " << outcome.GetError().GetMessage() << ", trying again");
+    auto r = std::rand();
+    auto milliseconds = (r % 5000);
+    usleep(milliseconds * 1000);
+    do_shutdown(ec2i, ++attempts);
+  }
+}
+
+void start_done_action(const ec2_info &ec2i)
+{
+  if (ec2i.user_data_js.find("done_action") != ec2i.user_data_js.end())
+  {
+    std::string done_action = ec2i.user_data_js["done_action"];
+    if (done_action == "terminate")
+    {
+      std::srand(std::time(0) + *(int *)ec2i.instance_id.c_str());
+      do_shutdown(ec2i);
+    }
+    else if (done_action == "stop")
+    {
+      Aws::Client::ClientConfiguration ec2_config;
+      ec2_config.region = ec2i.default_region;
+      Aws::EC2::EC2Client ec2(ec2_config);
+      Aws::EC2::Model::StopInstancesRequest request;
+      request.AddInstanceIds(ec2i.instance_id);
+      auto outcome = ec2.StopInstances(request);
+      if (!outcome.IsSuccess())
+        anon_log("failed to stop instance " << ec2i.instance_id << ": " << outcome.GetError().GetMessage());
+      else
+        anon_log("instance succesfully stopped");
+    }
+  }
+  else
+    anon_log("no done action specified, leaving instance running");
+}
+
 const int wait_secs = 10; // maximum time to wait for sqs messages
 const int timeout_ms = wait_secs * 2 * 1000;
 
@@ -170,7 +219,6 @@ void run_worker(const ec2_info &ec2i)
     config.region = ec2i.user_data_js["task_queue_region"];
   else
     config.region = ec2i.default_region;
-  config.executor = ec2i.executor;
   config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];
