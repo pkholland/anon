@@ -9,6 +9,8 @@ ANON_PARENT := $(patsubst ../anon/..,..,$(ANON_PARENT))
 SOURCES+=\
 $(ANON_ROOT)/examples/resin/main.cpp\
 $(ANON_ROOT)/examples/resin/worker.cpp\
+$(ANON_ROOT)/examples/resin/server.cpp\
+$(ANON_ROOT)/src/cpp/sproc_mgr.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\
 $(ANON_ROOT)/src/cpp/lock_checker.cpp

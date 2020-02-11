@@ -106,7 +106,7 @@ bool should_shut_down(const ec2_info &ec2i)
     auto outcome = ddbc.GetItem(req);
     if (outcome.IsSuccess())
     {
-      auto map = outcome.GetResult().GetItem();
+      auto &map = outcome.GetResult().GetItem();
       auto it = map.find("min_instances");
       if (it != map.end())
       {

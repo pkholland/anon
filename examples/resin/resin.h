@@ -37,3 +37,4 @@ struct ec2_info
 };
 
 void run_worker(const ec2_info& ec2i);
+void run_server(const ec2_info& ec2i);

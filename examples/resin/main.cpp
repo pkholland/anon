@@ -28,6 +28,7 @@
 #include <aws/core/config/AWSProfileConfigLoader.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
 #include "nlohmann/json.hpp"
+#include <fstream>
 #include "log.h"
 #include "resin.h"
 
@@ -36,6 +37,46 @@ using namespace nlohmann;
 namespace
 {
 Aws::SDKOptions options;
+
+// this is really only used for testing so we can
+// run outside of an ec2 instance by providing the
+// filename to a file containing the json we would
+// otherwise get from the ec2 userdata.
+void init_ec2_from_file(ec2_info &r, const char *filename)
+{
+  std::string region;
+  auto rgn = getenv("AWS_DEFAULT_REGION");
+  if (rgn)
+    region = rgn;
+
+  if (region.size() == 0)
+  {
+    auto profile = (const char*)getenv("AWS_PROFILE");
+    if (!profile)
+      profile = "default";
+
+    auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
+    Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
+    if (loader.Load())
+    {
+      auto profiles = loader.GetProfiles();
+      auto prof = profiles.find(profile);
+      if (prof != profiles.end())
+        region = prof->second.GetRegion();
+    }
+  }
+  if (region.size() == 0)
+    region = "us-east-1";
+
+  r.default_region = region;
+  json js = json::parse(std::ifstream(filename));
+  r.instance_id = js["instance_id"];
+  r.ami_id = js["ami_id"];
+  r.host_name = js["host_name"];
+  r.private_ipv4 = js["private_ipv4"];
+  r.user_data_js = js["user_data"];
+  r.user_data = r.user_data_js.dump();
+}
 
 void init_ec2(ec2_info &r)
 {
@@ -87,7 +128,10 @@ extern "C" int main(int argc, char **argv)
   Aws::InitAPI(options);
   try
   {
-    init_ec2(ec2i);
+    if (argc == 2)
+      init_ec2_from_file(ec2i, argv[1]);
+    else
+      init_ec2(ec2i);
     if (!in_ec2(ec2i))
       anon_log("resin run outside of ec2, stopping now");
     else if (!has_user_data(ec2i))
@@ -97,7 +141,10 @@ extern "C" int main(int argc, char **argv)
       std::string server_type = ec2i.user_data_js["server_type"];
       if (server_type == "bash_worker")
         run_worker(ec2i);
-      else {
+      else if (server_type == "teflon_server")
+        run_server(ec2i);
+      else
+      {
         ret = 1;
         anon_log("unknown server_type: \"" << server_type << "\", stopping now");
       }
