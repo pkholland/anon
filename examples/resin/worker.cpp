@@ -259,6 +259,7 @@ void run_worker(const ec2_info &ec2i)
           keep_alive_set[m.GetReceiptHandle()] = m.GetMessageId();
       }
       struct itimerspec t_spec = {0};
+      t_spec.it_value = cur_time();
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
       for (auto &m : messages)
@@ -343,7 +344,7 @@ void run_worker(const ec2_info &ec2i)
     }
     else
     {
-      // no messages after 10 seconds.  Check for shutdown
+      // no messages after 5 seconds.  Check for shutdown
       anon_log("no messages after wating period");
       if (should_shut_down(ec2i))
       {
