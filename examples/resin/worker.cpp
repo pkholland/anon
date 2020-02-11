@@ -209,6 +209,8 @@ void start_done_action(const ec2_info &ec2i)
 
 const int wait_secs = 10; // maximum time to wait for sqs messages
 const int timeout_ms = wait_secs * 2 * 1000;
+const int visibility_secs = 60;
+const int visibility_refresh_secs = 30;
 
 } // namespace
 
@@ -230,7 +232,7 @@ void run_worker(const ec2_info &ec2i)
   bool stop = false;
   auto timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
   struct itimerspec t_spec = {0};
-  t_spec.it_value = cur_time() + 30;
+  t_spec.it_value = cur_time() + visibility_refresh_secs;
   timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
   std::thread keep_alive_thread([&client, &keep_alive_mutex, &keep_alive_set,
@@ -240,15 +242,19 @@ void run_worker(const ec2_info &ec2i)
       struct pollfd pfd;
       pfd.fd = timerfd;
       pfd.events = POLLIN;
-      poll(&pfd, 1, 31000);
+      auto ret = poll(&pfd, 1, (visibility_refresh_secs + 1) * 1000);
+
+      if (ret < 0)
+        anon_log("poll failed: " << errno_string());
+      else if (ret > 0) {
+        // clear the data written to this pipe
+        uint64_t unused;
+        read(timerfd, &unused, sizeof(unused));
+      }
 
       std::unique_lock<std::mutex> l(keep_alive_mutex);
       if (stop)
         break;
-
-      // clear the data written to this pipe
-      uint64_t unused;
-      read(timerfd, &unused, sizeof(unused));
 
       auto num_messages = keep_alive_set.size();
       if (num_messages > 0)
@@ -263,7 +269,7 @@ void run_worker(const ec2_info &ec2i)
           if (index % 10 == 0)
             entries_v.push_back(Aws::Vector<Aws::SQS::Model::ChangeMessageVisibilityBatchRequestEntry>());
           str << "message_" << ++index;
-          ent.WithReceiptHandle(it.first).WithVisibilityTimeout(60).WithId(str.str());
+          ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_secs).WithId(str.str());
           entries_v.back().push_back(ent);
         }
         l.unlock();
@@ -277,7 +283,7 @@ void run_worker(const ec2_info &ec2i)
       }
 
       struct itimerspec t_spec = {0};
-      t_spec.it_value = cur_time() + 30;
+      t_spec.it_value = cur_time() + visibility_refresh_secs;
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
     }
   });
