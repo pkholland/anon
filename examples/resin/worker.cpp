@@ -165,7 +165,7 @@ void run_worker(const ec2_info &ec2i)
   timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
   std::thread keep_alive_thread([&client, &keep_alive_mutex, &keep_alive_set,
-                                 &stop, &timerfd, &queue_url] {
+                                 &stop, timerfd, queue_url] {
     while (true)
     {
       struct pollfd pfd;
