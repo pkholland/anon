@@ -161,7 +161,7 @@ void run_worker(const ec2_info &ec2i)
   bool stop = false;
   auto timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
   struct itimerspec t_spec = {0};
-  t_spec.it_interval.tv_sec = 30;
+  t_spec.it_value = cur_time() + 30;
   timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
   std::thread keep_alive_thread([&client, &keep_alive_mutex, &keep_alive_set,
@@ -204,7 +204,7 @@ void run_worker(const ec2_info &ec2i)
       }
 
       struct itimerspec t_spec = {0};
-      t_spec.it_interval.tv_sec = 30;
+      t_spec.it_value = cur_time() + 30;
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
     }
   });
@@ -212,10 +212,11 @@ void run_worker(const ec2_info &ec2i)
   while (true)
   {
     Aws::SQS::Model::ReceiveMessageRequest req;
-    req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(10);
+    req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(5);
     Aws::Vector<Aws::SQS::Model::QueueAttributeName> att;
     att.push_back(Aws::SQS::Model::QueueAttributeName::All);
     req.WithAttributeNames(std::move(att));
+
     auto outcome = client.ReceiveMessage(req);
     if (!outcome.IsSuccess())
     {
@@ -316,8 +317,10 @@ void run_worker(const ec2_info &ec2i)
     else
     {
       // no messages after 10 seconds.  Check for shutdown
+      anon_log("no messages after wating period");
       if (should_shut_down(ec2i))
       {
+	anon_log("no reason to keep running, shutting down");
         break;
       }
     }
@@ -327,7 +330,8 @@ void run_worker(const ec2_info &ec2i)
     std::unique_lock<std::mutex> l(keep_alive_mutex);
     stop = true;
     struct itimerspec t_spec = {0};
-    t_spec.it_interval = cur_time();
+    t_spec.it_value = cur_time();
+    timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
   }
   keep_alive_thread.join();
 }
