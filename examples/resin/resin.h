@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2015 ANON authors, see AUTHORS file.
+ Copyright (c) 2020 ANON authors, see AUTHORS file.
  
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -22,12 +22,20 @@
 
 #pragma once
 
-#include <vector>
-#include <string>
+#include <aws/core/Aws.h>
+#include <aws/core/utils/threading/Executor.h>
+#include "nlohmann/json.hpp"
 
-void sproc_mgr_init(int port);
-void sproc_mgr_term();
-void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args);
-void stop_server();
-int current_server_pid();
+struct ec2_info
+{
+  std::string default_region;
+  std::string ami_id;
+  std::string instance_id;
+  std::string host_name;
+  std::string private_ipv4;
+  std::string user_data;
+  nlohmann::json user_data_js;
+  std::shared_ptr<Aws::Utils::Threading::Executor> executor;
+};
 
+void run_worker(const ec2_info& ec2i);
