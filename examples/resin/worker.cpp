@@ -158,6 +158,9 @@ bool should_shut_down(const ec2_info &ec2i)
   return true;
 }
 
+const int wait_secs = 10; // maximum time to wait for sqs messages
+const int timeout_ms = wait_secs * 2 * 1000;
+
 } // namespace
 
 void run_worker(const ec2_info &ec2i)
@@ -168,6 +171,7 @@ void run_worker(const ec2_info &ec2i)
   else
     config.region = ec2i.default_region;
   config.executor = ec2i.executor;
+  config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];
 
@@ -232,14 +236,7 @@ void run_worker(const ec2_info &ec2i)
   while (true)
   {
     Aws::SQS::Model::ReceiveMessageRequest req;
-    // be careful with the timeout for now.
-    // we are using the default libcurl and it seems to have a timeout
-    // that is less than 10 seconds.  If we set this value to 10 seconds
-    // the aws code internally sees a timeout error from libcurl, which it
-    // then decides to retry the request.  To get it to return from this
-    // function we need to set the timeout less than whatever the libcurl
-    // timeout is set to.
-    req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(5);
+    req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(wait_secs);
     Aws::Vector<Aws::SQS::Model::QueueAttributeName> att;
     att.push_back(Aws::SQS::Model::QueueAttributeName::All);
     req.WithAttributeNames(std::move(att));
@@ -344,8 +341,8 @@ void run_worker(const ec2_info &ec2i)
     }
     else
     {
-      // no messages after 5 seconds.  Check for shutdown
-      anon_log("no messages after wating period");
+      // no messages after wait_secs seconds.  Check for shutdown
+      anon_log("no messages after wating " << wait_secs << " seconds");
       if (should_shut_down(ec2i))
       {
         anon_log("no reason to keep running, shutting down");
