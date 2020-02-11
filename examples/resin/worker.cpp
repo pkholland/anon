@@ -212,6 +212,13 @@ void run_worker(const ec2_info &ec2i)
   while (true)
   {
     Aws::SQS::Model::ReceiveMessageRequest req;
+    // be careful with the timeout for now.
+    // we are using the default libcurl and it seems to have a timeout
+    // that is less than 10 seconds.  If we set this value to 10 seconds
+    // the aws code internally sees a timeout error from libcurl, which it
+    // then decides to retry the request.  To get it to return from this
+    // function we need to set the timeout less than whatever the libcurl
+    // timeout is set to.
     req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(5);
     Aws::Vector<Aws::SQS::Model::QueueAttributeName> att;
     att.push_back(Aws::SQS::Model::QueueAttributeName::All);
