@@ -177,6 +177,10 @@ void run_worker(const ec2_info &ec2i)
       if (stop)
         break;
 
+      // clear the data written to this pipe
+      uint64_t unused;
+      read(timerfd, &unused, sizeof(unused));
+
       auto num_messages = keep_alive_set.size();
       if (num_messages > 0)
       {
