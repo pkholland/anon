@@ -98,7 +98,7 @@ extern "C" int main(int argc, char **argv)
     else
     {
       std::string server_type = ec2i.user_data_js["server_type"];
-      if (server_type == "worker")
+      if (server_type == "bash_worker")
         run_worker(ec2i);
       else {
         ret = 1;
