@@ -69,6 +69,22 @@ std::string get_body(const Aws::SQS::Model::Message &m)
   return replace_all(body, "&gt;", ">");
 }
 
+//  if user data has:
+//    {
+//      "min_instance_url": <some dynamoDB url>,
+//      "min_instance_region": optionally - a region (otherwise the current reation),
+//      "min_instance_table_name": <name of a dynamoDB table>,
+//      "min_instance_primary_key_name": <name of a key/record in that table>
+//      "min_instance_primary_key_value": <value for min_instance_primary_key_name>
+//      "min_instances": <name of a field in that record, of type "number">,
+//      "min_instance_name": <value of the "Name" tag of this ec2 instance>
+//    }
+//  then this routine sees if there are more than "min_instances" ec2 instances
+//  running that are tagged with Name: <min_instance_name>, and only shuts down
+//  this instance if there are more than that number running.  This basically keeps
+//  at least "min_instances" running all the time.
+//
+//  if one or more of these fields are not present then it shuts down this instance
 bool should_shut_down(const ec2_info &ec2i)
 {
   if (ec2i.user_data_js.find("min_instance_url") != ec2i.user_data_js.end())
