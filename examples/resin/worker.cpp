@@ -161,7 +161,7 @@ void run_worker(const ec2_info &ec2i)
   bool stop = false;
   auto timerfd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
   struct itimerspec t_spec = {0};
-  t_spec.it_interval = cur_time() + 30;
+  t_spec.it_interval.tv_sec = 30;
   timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
   std::thread keep_alive_thread([&client, &keep_alive_mutex, &keep_alive_set,
@@ -204,7 +204,7 @@ void run_worker(const ec2_info &ec2i)
       }
 
       struct itimerspec t_spec = {0};
-      t_spec.it_interval = cur_time() + 30;
+      t_spec.it_interval.tv_sec = 30;
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
     }
   });
@@ -231,7 +231,6 @@ void run_worker(const ec2_info &ec2i)
           keep_alive_set[m.GetReceiptHandle()] = m.GetMessageId();
       }
       struct itimerspec t_spec = {0};
-      t_spec.it_interval = cur_time();
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
       for (auto &m : messages)
