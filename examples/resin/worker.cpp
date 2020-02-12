@@ -45,7 +45,7 @@
 namespace
 {
 
-std::string replace_all(std::string &s, const std::string &pat, const std::string &rep)
+Aws::String replace_all(Aws::String &s, const Aws::String &pat, const Aws::String &rep)
 {
   size_t pos = 0;
   auto plen = pat.size();
@@ -68,7 +68,7 @@ std::string get_body(const Aws::SQS::Model::Message &m)
   body = replace_all(body, "&quot;", "\"");
   body = replace_all(body, "&apos;", "\'");
   body = replace_all(body, "&lt;", "<");
-  return replace_all(body, "&gt;", ">");
+  return replace_all(body, "&gt;", ">").c_str();
 }
 
 //  if user data has:
@@ -95,7 +95,7 @@ bool should_shut_down(const ec2_info &ec2i)
     if (ec2i.user_data_js.find("min_instance_region") != ec2i.user_data_js.end())
       ddb_config.region = ec2i.user_data_js["min_instance_region"];
     else
-      ddb_config.region = ec2i.default_region;
+      ddb_config.region = ec2i.default_region.c_str();
     Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
     Aws::DynamoDB::Model::AttributeValue primary_key;
@@ -114,13 +114,13 @@ bool should_shut_down(const ec2_info &ec2i)
         std::string instance_name = ec2i.user_data_js["min_instance_name"];
 
         Aws::Client::ClientConfiguration ec2_config;
-        ec2_config.region = ec2i.default_region;
+        ec2_config.region = ec2i.default_region.c_str();
         Aws::EC2::EC2Client ec2(ec2_config);
 
         Aws::EC2::Model::DescribeInstancesRequest request;
         Aws::EC2::Model::Filter filter1;
         filter1.SetName("tag:Name");
-        filter1.AddValues(instance_name);
+        filter1.AddValues(instance_name.c_str());
         request.AddFilters(filter1);
         Aws::EC2::Model::Filter filter2;
         filter2.SetName("instance-state-name");
@@ -161,11 +161,11 @@ bool should_shut_down(const ec2_info &ec2i)
 void do_shutdown(const ec2_info &ec2i, int attempts = 0)
 {
   Aws::Client::ClientConfiguration ec2_config;
-  ec2_config.region = ec2i.default_region;
+  ec2_config.region = ec2i.default_region.c_str();
   Aws::EC2::EC2Client ec2(ec2_config);
 
   Aws::EC2::Model::TerminateInstancesRequest request;
-  request.AddInstanceIds(ec2i.instance_id);
+  request.AddInstanceIds(ec2i.instance_id.c_str());
   auto outcome = ec2.TerminateInstances(request);
 
   if (!outcome.IsSuccess() && attempts < 10)
@@ -192,10 +192,10 @@ void start_done_action(const ec2_info &ec2i)
     else if (done_action == "stop")
     {
       Aws::Client::ClientConfiguration ec2_config;
-      ec2_config.region = ec2i.default_region;
+      ec2_config.region = ec2i.default_region.c_str();
       Aws::EC2::EC2Client ec2(ec2_config);
       Aws::EC2::Model::StopInstancesRequest request;
-      request.AddInstanceIds(ec2i.instance_id);
+      request.AddInstanceIds(ec2i.instance_id.c_str());
       auto outcome = ec2.StopInstances(request);
       if (!outcome.IsSuccess())
         anon_log("failed to stop instance " << ec2i.instance_id << ": " << outcome.GetError().GetMessage());
@@ -220,7 +220,7 @@ void run_worker(const ec2_info &ec2i)
   if (ec2i.user_data_js.find("task_queue_region") != ec2i.user_data_js.end())
     config.region = ec2i.user_data_js["task_queue_region"];
   else
-    config.region = ec2i.default_region;
+    config.region = ec2i.default_region.c_str();
   config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];
@@ -269,13 +269,13 @@ void run_worker(const ec2_info &ec2i)
           if (index % 10 == 0)
             entries_v.push_back(Aws::Vector<Aws::SQS::Model::ChangeMessageVisibilityBatchRequestEntry>());
           str << "message_" << ++index;
-          ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_secs).WithId(str.str());
+          ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_secs).WithId(str.str().c_str());
           entries_v.back().push_back(ent);
         }
         l.unlock();
         for (auto &entries : entries_v)
         {
-          req.WithQueueUrl(queue_url).WithEntries(entries);
+          req.WithQueueUrl(queue_url.c_str()).WithEntries(entries);
           auto outcome = client.ChangeMessageVisibilityBatch(req);
           if (!outcome.IsSuccess())
             anon_log("ChangeMessageVisibilityBatch failed: " << outcome.GetError());
@@ -291,7 +291,7 @@ void run_worker(const ec2_info &ec2i)
   while (true)
   {
     Aws::SQS::Model::ReceiveMessageRequest req;
-    req.WithQueueUrl(queue_url).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(wait_secs);
+    req.WithQueueUrl(queue_url.c_str()).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(wait_secs);
     Aws::Vector<Aws::SQS::Model::QueueAttributeName> att;
     att.push_back(Aws::SQS::Model::QueueAttributeName::All);
     req.WithAttributeNames(std::move(att));
@@ -324,7 +324,7 @@ void run_worker(const ec2_info &ec2i)
         auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
         auto approx_receive_count = 1000;
         if (arc != att.end())
-          approx_receive_count = std::stoull(arc->second);
+          approx_receive_count = std::stoull(arc->second.c_str());
 
         auto pid = fork();
         if (pid == -1)
@@ -360,7 +360,7 @@ void run_worker(const ec2_info &ec2i)
           if (script_exited_zero || approx_receive_count >= max_retries)
           {
             Aws::SQS::Model::DeleteMessageRequest req;
-            req.WithQueueUrl(queue_url).WithReceiptHandle(m.GetReceiptHandle());
+            req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
             auto outcome = client.DeleteMessage(req);
             if (!outcome.IsSuccess())
               anon_log("DeleteMessage failed: " << outcome.GetError());

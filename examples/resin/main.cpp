@@ -62,7 +62,7 @@ void init_ec2_from_file(ec2_info &r, const char *filename)
       auto profiles = loader.GetProfiles();
       auto prof = profiles.find(profile);
       if (prof != profiles.end())
-        region = prof->second.GetRegion();
+        region = prof->second.GetRegion().c_str();
     }
   }
   if (region.size() == 0)
@@ -90,17 +90,17 @@ void init_ec2(ec2_info &r)
   if (dfr)
     r.default_region = dfr;
   else
-    r.default_region = client.GetCurrentRegion();
+    r.default_region = client.GetCurrentRegion().c_str();
   if (r.default_region.size() == 0)
     r.default_region = "us-east-1";
 
-  r.ami_id = client.GetResource("/latest/meta-data/ami-id");
+  r.ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
   if (r.ami_id.size() != 0)
   {
-    r.instance_id = client.GetResource("/latest/meta-data/instance-id");
-    r.host_name = client.GetResource("/latest/meta-data/local-hostname");
-    r.private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4");
-    r.user_data = client.GetResource("/latest/user-data/");
+    r.instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
+    r.host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
+    r.private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
+    r.user_data = client.GetResource("/latest/user-data/").c_str();
     if (r.user_data.size() != 0)
       r.user_data_js = json::parse(r.user_data);
   }

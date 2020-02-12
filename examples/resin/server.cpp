@@ -51,7 +51,7 @@ std::string create_empty_directory(const std::string& id)
 
 std::string get_file_set(const std::string& working_dir, const ec2_info &ec2i, const Aws::Vector<Aws::String>& files, const Aws::String& exe_file, const Aws::String id)
 {
-  auto dir = create_empty_directory(id);
+  auto dir = create_empty_directory(id.c_str());
   std::string bucket = ec2i.user_data_js["current_server_artifacts_bucket"];
   std::string key = ec2i.user_data_js["current_server_artifacts_key"];
 
@@ -70,7 +70,7 @@ std::string get_file_set(const std::string& working_dir, const ec2_info &ec2i, c
   str << working_dir << "/" << dir << "/" << exe_file;
   chmod(str.str().c_str(), ACCESSPERMS);
 
-  return dir + "/" + exe_file;
+  return dir + "/" + exe_file.c_str();
 }
 
 void run_server(const ec2_info &ec2i)
@@ -86,7 +86,7 @@ void run_server(const ec2_info &ec2i)
   if (ec2i.user_data_js.find("current_server_region") != ec2i.user_data_js.end())
     ddb_config.region = ec2i.user_data_js["current_server_region"];
   else
-    ddb_config.region = ec2i.default_region;
+    ddb_config.region = ec2i.default_region.c_str();
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
   Aws::DynamoDB::Model::AttributeValue primary_key;
