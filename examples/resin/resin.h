@@ -23,17 +23,19 @@
 #pragma once
 
 #include <aws/core/Aws.h>
+#include <aws/ec2/EC2Client.h>
 #include "nlohmann/json.hpp"
 
 struct ec2_info
 {
-  std::string default_region;
+  Aws::String default_region;
   std::string ami_id;
   std::string instance_id;
   std::string host_name;
   std::string private_ipv4;
   std::string user_data;
   nlohmann::json user_data_js;
+  std::shared_ptr<Aws::EC2::EC2Client>  ec2_client;
 };
 
 void run_worker(const ec2_info& ec2i);

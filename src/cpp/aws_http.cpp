@@ -20,6 +20,10 @@
  THE SOFTWARE.
 */
 
+#ifndef ANON_AWS
+#define ANON_AWS 1
+#endif
+
 #include "aws_http.h"
 #include "dns_lookup.h"
 #include "http_client.h"
@@ -105,7 +109,6 @@ public:
       }
       else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
-        string_len s;
         for (const auto &h : re.headers.headers)
           resp->AddHeader(h.first.astr(), h.second.astr());
         for (const auto &data : re.body)

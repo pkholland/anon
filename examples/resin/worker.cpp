@@ -92,17 +92,22 @@ bool should_shut_down(const ec2_info &ec2i)
   if (ec2i.user_data_js.find("min_instance_url") != ec2i.user_data_js.end())
   {
     Aws::Client::ClientConfiguration ddb_config;
-    if (ec2i.user_data_js.find("min_instance_region") != ec2i.user_data_js.end())
-      ddb_config.region = ec2i.user_data_js["min_instance_region"];
+    if (ec2i.user_data_js.find("min_instance_region") != ec2i.user_data_js.end()) {
+      std::string reg = ec2i.user_data_js["min_instance_region"];
+      ddb_config.region = reg.c_str();
+    }
     else
-      ddb_config.region = ec2i.default_region.c_str();
+      ddb_config.region = ec2i.default_region;
     Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
     Aws::DynamoDB::Model::AttributeValue primary_key;
-    primary_key.SetS(ec2i.user_data_js["min_instance_primary_key_value"]);
+    std::string mi_primary_key_value = ec2i.user_data_js["min_instance_primary_key_value"];
+    primary_key.SetS(mi_primary_key_value.c_str());
     Aws::DynamoDB::Model::GetItemRequest req;
-    req.WithTableName(ec2i.user_data_js["min_instance_table_name"])
-        .AddKey(ec2i.user_data_js["min_instance_primary_key_name"], primary_key);
+    std::string mi_table_name = ec2i.user_data_js["min_instance_table_name"];
+    std::string mi_primary_key_name = ec2i.user_data_js["min_instance_primary_key_name"];
+    req.WithTableName(mi_table_name.c_str())
+        .AddKey(mi_primary_key_name.c_str(), primary_key);
     auto outcome = ddbc.GetItem(req);
     if (outcome.IsSuccess())
     {
@@ -112,10 +117,6 @@ bool should_shut_down(const ec2_info &ec2i)
       {
         auto min_instances = std::atoi(it->second.GetN().c_str());
         std::string instance_name = ec2i.user_data_js["min_instance_name"];
-
-        Aws::Client::ClientConfiguration ec2_config;
-        ec2_config.region = ec2i.default_region.c_str();
-        Aws::EC2::EC2Client ec2(ec2_config);
 
         Aws::EC2::Model::DescribeInstancesRequest request;
         Aws::EC2::Model::Filter filter1;
@@ -131,7 +132,7 @@ bool should_shut_down(const ec2_info &ec2i)
         int total_instances = 0;
         while (!done)
         {
-          auto outcome = ec2.DescribeInstances(request);
+          auto outcome = ec2i.ec2_client->DescribeInstances(request);
           if (outcome.IsSuccess())
           {
             const auto &reservations = outcome.GetResult().GetReservations();
@@ -161,7 +162,7 @@ bool should_shut_down(const ec2_info &ec2i)
 void do_shutdown(const ec2_info &ec2i, int attempts = 0)
 {
   Aws::Client::ClientConfiguration ec2_config;
-  ec2_config.region = ec2i.default_region.c_str();
+  ec2_config.region = ec2i.default_region;
   Aws::EC2::EC2Client ec2(ec2_config);
 
   Aws::EC2::Model::TerminateInstancesRequest request;
@@ -192,7 +193,7 @@ void start_done_action(const ec2_info &ec2i)
     else if (done_action == "stop")
     {
       Aws::Client::ClientConfiguration ec2_config;
-      ec2_config.region = ec2i.default_region.c_str();
+      ec2_config.region = ec2i.default_region;
       Aws::EC2::EC2Client ec2(ec2_config);
       Aws::EC2::Model::StopInstancesRequest request;
       request.AddInstanceIds(ec2i.instance_id.c_str());
@@ -217,10 +218,11 @@ const int visibility_refresh_secs = 30;
 void run_worker(const ec2_info &ec2i)
 {
   Aws::Client::ClientConfiguration config;
-  if (ec2i.user_data_js.find("task_queue_region") != ec2i.user_data_js.end())
-    config.region = ec2i.user_data_js["task_queue_region"];
-  else
-    config.region = ec2i.default_region.c_str();
+  if (ec2i.user_data_js.find("task_queue_region") != ec2i.user_data_js.end()) {
+    std::string task_region = ec2i.user_data_js["task_queue_region"];
+    config.region = task_region.c_str();
+  } else
+    config.region = ec2i.default_region;
   config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];

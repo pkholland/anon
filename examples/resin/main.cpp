@@ -44,7 +44,7 @@ Aws::SDKOptions options;
 // otherwise get from the ec2 userdata.
 void init_ec2_from_file(ec2_info &r, const char *filename)
 {
-  std::string region;
+  Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
     region = rgn;
@@ -62,7 +62,7 @@ void init_ec2_from_file(ec2_info &r, const char *filename)
       auto profiles = loader.GetProfiles();
       auto prof = profiles.find(profile);
       if (prof != profiles.end())
-        region = prof->second.GetRegion().c_str();
+        region = prof->second.GetRegion();
     }
   }
   if (region.size() == 0)
@@ -90,7 +90,7 @@ void init_ec2(ec2_info &r)
   if (dfr)
     r.default_region = dfr;
   else
-    r.default_region = client.GetCurrentRegion().c_str();
+    r.default_region = client.GetCurrentRegion();
   if (r.default_region.size() == 0)
     r.default_region = "us-east-1";
 
@@ -138,6 +138,11 @@ extern "C" int main(int argc, char **argv)
       anon_log("resin run without supplying user data, stopping now");
     else
     {
+      // we always access ec2 at the endpoint that matches the region we are in
+      Aws::Client::ClientConfiguration ec2_config;
+      ec2_config.region = ec2i.default_region;
+      ec2i.ec2_client = std::make_shared<Aws::EC2::EC2Client>(ec2_config);
+
       std::string server_type = ec2i.user_data_js["server_type"];
       if (server_type == "bash_worker")
         run_worker(ec2i);
@@ -160,6 +165,7 @@ extern "C" int main(int argc, char **argv)
     anon_log("resin threw uncaught, unknown exception, aborting now");
     ret = 1;
   }
+  ec2i.ec2_client.reset();
   Aws::ShutdownAPI(options);
   return ret;
 }

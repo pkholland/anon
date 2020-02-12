@@ -86,14 +86,17 @@ void run_server(const ec2_info &ec2i)
   if (ec2i.user_data_js.find("current_server_region") != ec2i.user_data_js.end())
     ddb_config.region = ec2i.user_data_js["current_server_region"];
   else
-    ddb_config.region = ec2i.default_region.c_str();
+    ddb_config.region = ec2i.default_region;
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
   Aws::DynamoDB::Model::AttributeValue primary_key;
-  primary_key.SetS(ec2i.user_data_js["current_server_primary_key_value"]);
+  std::string cs_primary_key = ec2i.user_data_js["current_server_primary_key_value"];
+  primary_key.SetS(cs_primary_key.c_str());
   Aws::DynamoDB::Model::GetItemRequest req;
-  req.WithTableName(ec2i.user_data_js["current_server_table_name"])
-      .AddKey(ec2i.user_data_js["current_server_primary_key_name"], primary_key);
+  std::string cs_table_name = ec2i.user_data_js["current_server_table_name"];
+  std::string cs_key_name = ec2i.user_data_js["current_server_primary_key_name"];
+  req.WithTableName(cs_table_name.c_str())
+      .AddKey(cs_key_name.c_str(), primary_key);
   auto outcome = ddbc.GetItem(req);
   if (outcome.IsSuccess()) {
     anon_log("read the table entry");
@@ -116,6 +119,7 @@ void run_server(const ec2_info &ec2i)
       stop_server();
 
       sproc_mgr_term();
+
     }
   }
   else
