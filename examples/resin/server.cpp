@@ -27,6 +27,7 @@
 #include <aws/core/utils/Outcome.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
+#include <sys/stat.h>
 
 void exe_cmd(const std::string& str)
 {
@@ -48,7 +49,7 @@ std::string create_empty_directory(const std::string& id)
   return std::string("root/") + id;
 }
 
-std::string get_file_set(const ec2_info &ec2i, const Aws::Vector<Aws::String>& files, const Aws::String& exe_file, const Aws::String id)
+std::string get_file_set(const std::string& working_dir, const ec2_info &ec2i, const Aws::Vector<Aws::String>& files, const Aws::String& exe_file, const Aws::String id)
 {
   auto dir = create_empty_directory(id);
   std::string bucket = ec2i.user_data_js["current_server_artifacts_bucket"];
@@ -65,6 +66,10 @@ std::string get_file_set(const ec2_info &ec2i, const Aws::Vector<Aws::String>& f
     exe_cmd(str.str());
   }
 
+  std::ostringstream str;
+  str << working_dir << "/" << dir << "/" << exe_file;
+  chmod(str.str().c_str(), ACCESSPERMS);
+
   return dir + "/" + exe_file;
 }
 
@@ -74,6 +79,7 @@ void run_server(const ec2_info &ec2i)
 
   std::vector<char> working_directory(2048);
   getcwd(&working_directory[0], working_directory.size());
+  std::string working_dir(&working_directory[0]);
   create_empty_directory("");
 
   Aws::Client::ClientConfiguration ddb_config;
@@ -99,7 +105,8 @@ void run_server(const ec2_info &ec2i)
       auto files_to_download = dwn_it->second.GetSS();
       auto file_to_execute = exe_it->second.GetS();
       auto id = id_it->second.GetS();
-      auto exe_file = std::string(&working_directory[0]) + "/" + get_file_set(ec2i, files_to_download, file_to_execute, id);
+      auto exe_file = working_dir + "/"
+        + get_file_set(working_dir, ec2i, files_to_download, file_to_execute, id);
 
       sproc_mgr_init(port);
       anon_log("epoxy bound to network port " << port);

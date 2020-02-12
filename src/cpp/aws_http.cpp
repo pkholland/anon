@@ -52,10 +52,11 @@ public:
   std::shared_ptr<endpoint_cluster> get_epc(const Aws::String &url) const
   {
     URI uri(url);
-    auto key = uri.GetAuthority() + ":" + std::to_string(uri.GetPort());
+    auto key = std::string(uri.GetAuthority().c_str()) + ":" + std::to_string(uri.GetPort());
     fiber_lock l(_maps->_mtx);
     auto &m = _maps->_epc_map;
-    auto epc = m.find(key);
+    Aws::String k(key.c_str());
+    auto epc = m.find(k);
     if (epc != m.end())
       return epc->second;
 
@@ -63,7 +64,7 @@ public:
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
     newepc->disable_retries();
     newepc->set_max_io_block_time(120);
-    return m[key] = newepc;
+    return m[k] = newepc;
   }
 
   void MakeRequest(const std::shared_ptr<Standard::StandardHttpResponse>& resp,
@@ -82,15 +83,15 @@ public:
 
       const auto& body = request.GetContentBody();
       auto method = request.GetMethod();
-      *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
-            << uri.GetQueryString() << " HTTP/1.1\r\n";
+      *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath().c_str())
+            << uri.GetQueryString().c_str() << " HTTP/1.1\r\n";
       auto headers = request.GetHeaders();
       for (const auto &h : headers)
-        *pipe << h.first << ": " << h.second << "\r\n";
+        *pipe << h.first.c_str() << ": " << h.second.c_str() << "\r\n";
       if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
       {
         *pipe << "transfer-encoding: identity\r\n";
-        *pipe << "content-length: " << request.GetContentLength() << "\r\n";
+        *pipe << "content-length: " << request.GetContentLength().c_str() << "\r\n";
       }
       *pipe << "\r\n";
       if (body)
@@ -100,12 +101,12 @@ public:
       http_client_response re;
       re.parse(*pipe, read_body, false/*throw_on_server_error*/);
       if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
-        MakeRequest(resp, request, URI(re.headers.get_header("location").str()), readLimiter, writeLimiter, recursion+1);
+        MakeRequest(resp, request, URI(re.headers.get_header("location").str().c_str()), readLimiter, writeLimiter, recursion+1);
       }
       else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
         for (const auto &h : re.headers.headers)
-          resp->AddHeader(h.first.str(), h.second.str());
+          resp->AddHeader(h.first.str().c_str(), h.second.str().c_str());
         for (const auto &data : re.body)
           resp->GetResponseBody().write(&data[0], data.size());
       }

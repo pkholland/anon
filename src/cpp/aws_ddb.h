@@ -78,8 +78,8 @@ public:
       {
         Aws::DynamoDB::Model::GetItemRequest req;
         Aws::DynamoDB::Model::AttributeValue primary_key;
-        primary_key.SetS(primary_key_value);
-        req.WithTableName(table_name).AddKey(primary_key_name, primary_key).WithConsistentRead(true);
+        primary_key.SetS(primary_key_value.c_str());
+        req.WithTableName(table_name.c_str()).AddKey(primary_key_name.c_str(), primary_key).WithConsistentRead(true);
         auto out = _client.GetItem(req);
         if (!out.IsSuccess())
         {

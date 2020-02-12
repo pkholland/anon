@@ -39,7 +39,7 @@
 
 class aws_sqs_listener : public std::enable_shared_from_this<aws_sqs_listener>
 {
-  static std::string replace_all(std::string& s, const std::string& pat, const std::string& rep)
+  static Aws::String replace_all(Aws::String& s, const Aws::String& pat, const Aws::String& rep)
   {
     size_t pos = 0;
     auto plen = pat.size();
@@ -97,7 +97,7 @@ public:
     body = replace_all(body, "&quot;", "\"");
     body = replace_all(body, "&apos;", "\'");
     body = replace_all(body, "&lt;", "<");
-    return replace_all(body, "&gt;", ">");
+    return replace_all(body, "&gt;", ">").c_str();
   }
 
 private:

@@ -486,14 +486,14 @@ void aws_client_init()
     aws_default_region = region_;
   else
   {
-    auto cfn = Aws::Auth::GetConfigProfileFilename();
-    Aws::Config::AWSConfigFileProfileConfigLoader loader(cfn);
+    auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
+    Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
     if (loader.Load())
     {
       auto profiles = loader.GetProfiles();
       auto prof = profiles.find(aws_profile);
       if (prof != profiles.end())
-        aws_default_region = prof->second.GetRegion();
+        aws_default_region = prof->second.GetRegion().c_str();
     }
 
     if (aws_default_region.size() == 0)
@@ -550,7 +550,7 @@ const std::string &aws_get_default_region()
 
 void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const std::string &region)
 {
-  client_cfg.region = region;
+  client_cfg.region = region.c_str();
   client_cfg.executor = aws_executor::singleton;
   client_cfg.retryStrategy = std::make_shared<fiberRetryStrategy>();
 }

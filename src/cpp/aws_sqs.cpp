@@ -338,7 +338,7 @@ void aws_sqs_listener::set_visibility_timeout()
       if (index % 10 == 0)
         entries_v.push_back(Aws::Vector<Model::ChangeMessageVisibilityBatchRequestEntry>());
       str << "message_" << ++index;
-      ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_time).WithId(str.str());
+      ent.WithReceiptHandle(it.first).WithVisibilityTimeout(visibility_time).WithId(str.str().c_str());
       entries_v.back().push_back(ent);
     }
     for (auto &entries : entries_v)
@@ -442,11 +442,11 @@ void aws_sqs_sender::send(const json &body,
                           const std::function<void(const bool success, const std::string &id, const std::string &errorReason)> &response)
 {
   Model::SendMessageRequest req;
-  req.WithQueueUrl(_queue_url).WithMessageBody(Aws::String(body.dump()));
+  req.WithQueueUrl(_queue_url).WithMessageBody(body.dump().c_str());
   _client.SendMessageAsync(req, [response](const SQSClient *, const Model::SendMessageRequest &, const Model::SendMessageOutcome &outcome, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
     fiber::rename_fiber("aws_sqs_sender::send, SendMessageAsync");
     response(outcome.IsSuccess(),
-             std::string(outcome.GetResult().GetMessageId()),
-             std::string(outcome.GetError().GetMessage()));
+             outcome.GetResult().GetMessageId().c_str(),
+             outcome.GetError().GetMessage().c_str());
   });
 }
