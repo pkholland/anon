@@ -68,7 +68,7 @@ public:
     }
   }
 
-  void with_item(const std::string &table_name, const std::string &primary_key_name, const std::string &primary_key_value,
+  void with_item(const Aws::String &table_name, const Aws::String &primary_key_name, const Aws::String &primary_key_value,
                  const std::function<void(const Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> &)> &f)
   {
     auto attempts = 0;

@@ -439,7 +439,7 @@ public:
 Aws::SDKOptions aws_options;
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
 const char *aws_profile;
-std::string aws_default_region;
+Aws::String aws_default_region;
 
 } // namespace
 
@@ -526,7 +526,7 @@ void aws_client_init()
       {
       }
       if (success && reply.size() > 1)
-        aws_default_region = reply.substr(0, reply.size() - 1);
+        aws_default_region = reply.substr(0, reply.size() - 1).c_str();
       else
         aws_default_region = "us-east-1";
     }
@@ -543,14 +543,14 @@ const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &aws_get_cred_provider(
   return aws_cred_prov;
 }
 
-const std::string &aws_get_default_region()
+const Aws::String &aws_get_default_region()
 {
   return aws_default_region;
 }
 
-void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const std::string &region)
+void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const Aws::String &region)
 {
-  client_cfg.region = region.c_str();
+  client_cfg.region = region;
   client_cfg.executor = aws_executor::singleton;
   client_cfg.retryStrategy = std::make_shared<fiberRetryStrategy>();
 }

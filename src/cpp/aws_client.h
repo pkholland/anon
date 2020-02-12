@@ -49,7 +49,7 @@ const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& aws_get_cred_provider(
 //     region that the EC2 instance is running in
 //   d) else, it will be set to "us-east-1"
 
-const std::string &aws_get_default_region();
+const Aws::String &aws_get_default_region();
 
 // set client_cfg's:
 //  1) region - set to the value passed
@@ -59,6 +59,6 @@ const std::string &aws_get_default_region();
 //      this is set to an implementation that is similar to AWS's DefaultRetryStrategy
 //      except that it uses fiber sleeping functions instead of thread-sleeping functions
 //      when it sleeps before retrying
-void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const std::string &region);
+void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const Aws::String &region);
 
 #endif
