@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-#ifdef TEFLON_AWS
+#ifdef ANON_AWS
 
 #pragma once
 

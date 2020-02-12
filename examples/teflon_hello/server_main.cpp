@@ -22,18 +22,11 @@
 
 #include "http_server.h"
 
-#ifdef TEFLON_AWS
-#include <aws/core/Aws.h>
-#include <aws/core/client/ClientConfiguration.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
-void server_init(const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &provider, const Aws::Client::ClientConfiguration &client_config)
-{
-}
-#else
+
 void server_init()
 {
 }
-#endif
+
 
 // example code - just returns a canned blob of text
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls)

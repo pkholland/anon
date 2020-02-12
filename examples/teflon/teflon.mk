@@ -26,29 +26,29 @@ $(ANON_ROOT)/src/cpp/percent_codec.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c
 
-ifneq ($(TEFLON_AWS),)
+ifneq ($(ANON_AWS),)
 SOURCES+=\
 $(ANON_ROOT)/src/cpp/aws_http.cpp\
 $(ANON_ROOT)/src/cpp/aws_client.cpp
 INC_DIRS+=$(ANON_PARENT)/json/include
-cflags+=-DTEFLON_AWS
+cflags+=-DANON_AWS
 LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
 endif
 
-ifneq ($(filter SQS,$(TEFLON_AWS)),)
+ifneq ($(filter SQS,$(ANON_AWS)),)
 SOURCES+=$(ANON_ROOT)/src/cpp/aws_sqs.cpp
-cflags+=-DTEFLON_AWS_SQS
+cflags+=-DANON_AWS_SQS
 LIBS:=-laws-cpp-sdk-sqs $(LIBS)
 endif
 
-ifneq ($(filter S3,$(TEFLON_AWS)),)
+ifneq ($(filter S3,$(ANON_AWS)),)
 LIBS:=-laws-cpp-sdk-s3 $(LIBS)
-cflags+=-DTEFLON_AWS_S3
+cflags+=-DANON_AWS_S3
 endif
 
-ifneq ($(filter DDB,$(TEFLON_AWS)),)
+ifneq ($(filter DDB,$(ANON_AWS)),)
 LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
-cflags+=-DTEFLON_AWS_DDB
+cflags+=-DANON_AWS_DDB
 endif
 
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)

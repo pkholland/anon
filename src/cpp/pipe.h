@@ -26,6 +26,10 @@
 #include <streambuf>
 #include <vector>
 
+#if defined(ANON_AWS)
+#include <aws/core/utils/StringUtils.h>
+#endif
+
 class pipe_t
 {
 public:
@@ -44,6 +48,13 @@ public:
     write(&str.front(), str.size());
     return *this;
   }
+
+  #if defined(ANON_AWS)
+  const pipe_t& operator<<(const Aws::String& str) const {
+    write(&str.front(), str.size());
+    return *this;
+  }
+  #endif
 
   const pipe_t& operator<<(std::streambuf* sb) const {
     const int sz = 1024 * 16;

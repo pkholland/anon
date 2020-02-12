@@ -28,7 +28,7 @@
 #include "http_server.h"
 #include "fiber.h"
 
-#ifdef TEFLON_AWS
+#ifdef ANON_AWS
 #include "aws_client.h"
 #endif
 
@@ -187,7 +187,7 @@ extern "C" int main(int argc, char **argv)
     std::unique_ptr<http_server> my_https;
     auto create_srvs_proc = [&] {
 
-      #ifdef TEFLON_AWS
+      #ifdef ANON_AWS
       aws_client_init();
       #endif
 
@@ -325,7 +325,7 @@ extern "C" int main(int argc, char **argv)
     // 'connect' to this server, have been closed
     server_term();
 
-    #ifdef TEFLON_AWS
+    #ifdef ANON_AWS
     aws_client_term();
     #endif
 

@@ -26,6 +26,7 @@
 #include <aws/core/http/standard/StandardHttpRequest.h>
 #include <aws/core/http/standard/StandardHttpResponse.h>
 #include <aws/core/http/Scheme.h>
+#include <aws/core/utils/StringUtils.h>
 
 using namespace Aws::Http;
 
@@ -34,7 +35,7 @@ namespace
 
 class http_client : public HttpClient
 {
-  static std::string normalize(const std::string &path)
+  static Aws::String normalize(const Aws::String &path)
   {
     if (path.find("//") == 0)
       return path.substr(1);
@@ -52,11 +53,10 @@ public:
   std::shared_ptr<endpoint_cluster> get_epc(const Aws::String &url) const
   {
     URI uri(url);
-    auto key = std::string(uri.GetAuthority().c_str()) + ":" + std::to_string(uri.GetPort());
+    auto key = uri.GetAuthority() + ":" + Aws::Utils::StringUtils::to_string(uri.GetPort());
     fiber_lock l(_maps->_mtx);
     auto &m = _maps->_epc_map;
-    Aws::String k(key.c_str());
-    auto epc = m.find(k);
+    auto epc = m.find(key);
     if (epc != m.end())
       return epc->second;
 
@@ -64,7 +64,7 @@ public:
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
     newepc->disable_retries();
     newepc->set_max_io_block_time(120);
-    return m[k] = newepc;
+    return m[key] = newepc;
   }
 
   void MakeRequest(const std::shared_ptr<Standard::StandardHttpResponse>& resp,
@@ -83,15 +83,15 @@ public:
 
       const auto& body = request.GetContentBody();
       auto method = request.GetMethod();
-      *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath().c_str())
-            << uri.GetQueryString().c_str() << " HTTP/1.1\r\n";
+      *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
+            << uri.GetQueryString() << " HTTP/1.1\r\n";
       auto headers = request.GetHeaders();
       for (const auto &h : headers)
-        *pipe << h.first.c_str() << ": " << h.second.c_str() << "\r\n";
+        *pipe << h.first << ": " << h.second << "\r\n";
       if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
       {
         *pipe << "transfer-encoding: identity\r\n";
-        *pipe << "content-length: " << request.GetContentLength().c_str() << "\r\n";
+        *pipe << "content-length: " << request.GetContentLength() << "\r\n";
       }
       *pipe << "\r\n";
       if (body)
@@ -101,12 +101,13 @@ public:
       http_client_response re;
       re.parse(*pipe, read_body, false/*throw_on_server_error*/);
       if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
-        MakeRequest(resp, request, URI(re.headers.get_header("location").str().c_str()), readLimiter, writeLimiter, recursion+1);
+        MakeRequest(resp, request, URI(re.headers.get_header("location").astr()), readLimiter, writeLimiter, recursion+1);
       }
       else {
         resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
+        string_len s;
         for (const auto &h : re.headers.headers)
-          resp->AddHeader(h.first.str().c_str(), h.second.str().c_str());
+          resp->AddHeader(h.first.astr(), h.second.astr());
         for (const auto &data : re.body)
           resp->GetResponseBody().write(&data[0], data.size());
       }

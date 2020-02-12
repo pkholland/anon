@@ -57,7 +57,7 @@ include examples/epoxy/epoxy.mk
 epoxy_SOURCES:=$(SOURCES)
 SOURCES:=
 
-ifneq ($(RESIN_AWS),)
+ifneq ($(ANON_AWS),)
 include examples/resin/resin.mk
 
 resin_SOURCES:=$(SOURCES)
@@ -91,7 +91,7 @@ $(eval $(call anon.BUILD_RULES,big_client,$(big_client_SOURCES),$(sort $(INC_DIR
 
 $(eval $(call anon.BUILD_RULES,epoxy,$(epoxy_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
-ifneq ($(RESIN_AWS),)
+ifneq ($(ANON_AWS),)
 $(eval $(call anon.BUILD_RULES,resin,$(resin_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 endif
 

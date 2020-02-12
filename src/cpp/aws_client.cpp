@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-#ifdef TEFLON_AWS
+#ifdef ANON_AWS
 #include "aws_client.h"
 
 #include <aws/core/Aws.h>

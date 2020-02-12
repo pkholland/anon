@@ -23,6 +23,9 @@
 #pragma once
 
 #include <string>
+#if defined(ANON_AWS)
+#include <aws/core/utils/StringUtils.h>
+#endif
 
 /*
   an "unmanaged" string, represented as a pointer
@@ -63,6 +66,9 @@ struct string_len
   }
 
   std::string str() const { return std::string(str_, len_); }
+  #if defined(ANON_AWS)
+  Aws::String astr() const { return Aws::String(str_, len_); }
+  #endif
   const char *ptr() const { return str_; }
   size_t len() const { return len_; }
 

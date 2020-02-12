@@ -94,6 +94,8 @@ endif
 CFLAGS_release+=-ggdb -O0 -DDEBUG
 CFLAGS_debug+=-ggdb -O0 -DDEBUG
 
+STRIP_release=strip     $1
+
 ifneq (clean,$(MAKECMDGOALS))
 #
 # helper function to compare current options to previously used options
@@ -202,6 +204,7 @@ define anon.linker_rule
 $(anon.OUT_DIR)/$(CONFIG)/$1: $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $(foreach src,$2,$(call anon.src_to_obj,$(src)))
 	$(anon.mkdir) -p $$(@D)
 	$(call anon.CALL_TOOL,$(anon.link),$(LDFLAGS) $(LDFLAGS_$(CONFIG)) $$(filter-out %.opts,$$^) -o $$@ $3,$$@)
+	$(call STRIP_$(CONFIG), $$@)
 
 endef
 
