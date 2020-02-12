@@ -49,7 +49,17 @@ public:
     return *this;
   }
 
-  #if defined(ANON_AWS)
+  #if defined(ANON_AWS) && defined(USE_AWS_MEMORY_MANAGEMENT)
+  // note, USE_AWS_MEMORY_MANAGEMENT gets turned on in some
+  // aws sdk builds but not others.  When it is turned on
+  // an Aws::String is not the same type as an std::string
+  // (because its allocator is different).  This ends up
+  // being kind of messy, but there are a few places where
+  // it is much simpler to be able to insert any "string-like"
+  // thing into a pipe, so in the case where an Aws::String
+  // is not the same as an std::string, we want this extra
+  // method to allow that insertion.  But if they are the
+  // same type then we can't have this duplicated method.
   const pipe_t& operator<<(const Aws::String& str) const {
     write(&str.front(), str.size());
     return *this;
