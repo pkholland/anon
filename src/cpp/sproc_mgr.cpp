@@ -419,9 +419,9 @@ void start_server(const char *exe_name, bool do_tls, const std::vector<std::stri
 
   std::unique_lock<std::mutex> lock(proc_map_mutex);
   auto p = proc_map.find(current_srv_pid);
+  current_srv_pid = chld;
   if (p != proc_map.end())
     write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
-  current_srv_pid = chld;
   if (write_cmd(pi->cmd_pipe[0], k_start))
   {
   }

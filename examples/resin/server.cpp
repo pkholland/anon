@@ -115,6 +115,7 @@ void run_server(const ec2_info &ec2i)
       anon_log("epoxy bound to network port " << port);
 
       start_server(exe_file.c_str(), false/*do_tls*/, std::vector<std::string>());
+      start_server(exe_file.c_str(), false/*do_tls*/, std::vector<std::string>());
 
       stop_server();
 
