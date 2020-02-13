@@ -28,6 +28,7 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <sys/stat.h>
+#include "server_control.h"
 
 void exe_cmd(const std::string& str)
 {
@@ -76,6 +77,7 @@ std::string get_file_set(const std::string& working_dir, const ec2_info &ec2i, c
 void run_server(const ec2_info &ec2i)
 {
   int port = ec2i.user_data_js["server_port"];
+  int cnt_port = ec2i.user_data_js["control_port"];
 
   std::vector<char> working_directory(2048);
   getcwd(&working_directory[0], working_directory.size());
@@ -115,7 +117,8 @@ void run_server(const ec2_info &ec2i)
       anon_log("epoxy bound to network port " << port);
 
       start_server(exe_file.c_str(), false/*do_tls*/, std::vector<std::string>());
-      start_server(exe_file.c_str(), false/*do_tls*/, std::vector<std::string>());
+      
+      run_server_control(cnt_port);
 
       stop_server();
 
