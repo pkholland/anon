@@ -74,6 +74,7 @@ void init_ec2_from_file(ec2_info &r, const char *filename)
   r.ami_id = js["ami_id"];
   r.host_name = js["host_name"];
   r.private_ipv4 = js["private_ipv4"];
+  r.public_ipv4 = js["public_ipv4"];
   r.user_data_js = js["user_data"];
   r.user_data = r.user_data_js.dump();
 }
@@ -100,6 +101,7 @@ void init_ec2(ec2_info &r)
     r.instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
     r.host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
     r.private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
+    r.public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
     r.user_data = client.GetResource("/latest/user-data/").c_str();
     if (r.user_data.size() != 0)
       r.user_data_js = json::parse(r.user_data);
