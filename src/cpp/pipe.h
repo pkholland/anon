@@ -38,6 +38,8 @@ public:
   virtual void write(const void *buff, size_t len) const = 0;
   virtual void limit_io_block_time(int seconds) = 0;
   virtual int get_fd() const = 0;
+  virtual void set_hibernating(bool hibernating) = 0;
+  virtual bool is_hibernating() const = 0;
 
   const pipe_t& operator<<(const char* str) const {
     write(str, strlen(str));

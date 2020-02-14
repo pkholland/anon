@@ -42,6 +42,8 @@ public:
   virtual void write(const void *buff, size_t len) const;
   virtual void limit_io_block_time(int seconds);
   virtual int get_fd() const { return fp_->get_fd(); }
+  virtual void set_hibernating(bool hibernating) { fp_->set_hibernating(hibernating); }
+  virtual bool is_hibernating() const { return fp_->is_hibernating(); }
 
   void shutdown();
 

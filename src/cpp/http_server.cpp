@@ -185,19 +185,19 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
         size_t bsp = 0, bep = 0;
         while (keep_alive)
         {
-
           // if there is no un-parsed data in buf then read more
           if (bsp == bep)
             bep += http_pipe->read(&buf[bep], sizeof(buf) - bep);
           //buf[bep] = 0;
           //anon_log("client sent:\n" << &buf[0] << "\n\n");
 
+          http_pipe->set_hibernating(false);
+
           // call the joyent parser
           bsp += http_parser_execute(&parser, &settings, &buf[bsp], bep - bsp);
 
           if (pcallback.message_complete)
           {
-
             // requirement of prompt send's is a one-time
             // policy.  If we make it this far, then reset
             // the io blocking time to something more generous
@@ -209,7 +209,6 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
             // if so, handle that differently
             if (parser.upgrade)
             {
-
               auto handler = m_upgrade_map_.find(pcallback.request.headers.get_header("upgrade").str());
               if (handler != m_upgrade_map_.end())
                 handler->second->exec(body_pipe, pcallback.request);
@@ -241,6 +240,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
               bep -= bsp;
               bsp = 0;
               pcallback.init();
+              http_pipe->set_hibernating(true);
             }
           }
           else

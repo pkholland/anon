@@ -287,6 +287,7 @@ extern "C" int main(int argc, char **argv)
                   // tell the app to close any outgoing (they might be
                   // cached) connections, since the next step is to
                   // wait for all connections be to closed
+                  io_params::sweep_hibernating_pipes();
                   server_close_outgoing();
 
                   // there may have been active network sessions because

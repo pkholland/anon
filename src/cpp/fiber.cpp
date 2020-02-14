@@ -230,7 +230,8 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
       max_io_block_time_(0),
       io_timeout_(forever),
       attached_(false),
-      remote_hangup_(false)
+      remote_hangup_(false),
+      hibernating_(false)
 {
   if (socket_type == network)
   {
@@ -240,7 +241,9 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
 #if defined(ANON_DEBUG_TIMERS)
       anon_log("fiber_pipe::fiber_pipe, first net pipe");
 #endif
-      io_params::next_pipe_sweep_ = io_dispatch::schedule_task(io_params::sweep_timed_out_pipes, cur_time() + k_net_io_sweep_time);
+      io_params::next_pipe_sweep_ = io_dispatch::schedule_task(
+        []{io_params::sweep_timed_out_pipes(false);},
+        cur_time() + k_net_io_sweep_time);
     }
   }
 
@@ -349,6 +352,19 @@ void fiber_pipe::write(const void *buf, size_t count) const
   }
 }
 
+void fiber_pipe::for_each_sleeping_pipe(const std::function<void(const std::string& name)>&f)
+{
+  io_dispatch::while_paused([f]{
+    auto fib = first_;
+    while (fib) {
+      if (fib->io_fiber_) {
+        f(fib->io_fiber_->fiber_name_);
+      }
+      fib = fib->next_;
+    }
+  });
+}
+
 /////////////////////////////////////////////////
 
 io_dispatch::scheduled_task io_params::next_pipe_sweep_;
@@ -425,13 +441,13 @@ void io_params::wake_all(fiber *first)
   current_fiber_ = cf;
 }
 
-void io_params::sweep_timed_out_pipes()
+void io_params::sweep_timed_out_pipes(bool orhibernating)
 {
 #if defined(ANON_RUNTIME_CHECKS)
   anon_log("io_params::sweep_timed_out_pipes");
 #endif
   auto paused = io_dispatch::while_paused2(
-      []() -> std::function<void(void)> {
+      [orhibernating]() -> std::function<void(void)> {
         // turn off all future io processing of any
         // timed-out pipe.  This means there will be at
         // most one additional io event for that pipe
@@ -442,7 +458,7 @@ void io_params::sweep_timed_out_pipes()
         auto pipe = fiber_pipe::first_;
         while (pipe)
         {
-          if (pipe->io_timeout_ < ct)
+          if ((pipe->io_timeout_ < ct) || (orhibernating && pipe->is_hibernating()))
           {
             io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pipe->fd_, 0, pipe);
             pipe->attached_ = false;
@@ -450,7 +466,7 @@ void io_params::sweep_timed_out_pipes()
           pipe = pipe->next_;
         }
 
-        return [ct] {
+        return [ct, orhibernating] {
           // this also runs while no other io processing is
           // happening, but unlike the body of while_paused2
           // above, this runs after all io threads have consumed
@@ -462,7 +478,8 @@ void io_params::sweep_timed_out_pipes()
             while (pipe)
             {
               auto next = pipe->next_;
-              if (pipe->io_timeout_ < ct && !pipe->attached_ && pipe->io_fiber_ && pipe->io_fiber_->timeout_pipe_ == pipe)
+              auto to_or_h = pipe->io_timeout_ < ct || (orhibernating && pipe->is_hibernating());
+              if (to_or_h && !pipe->attached_ && pipe->io_fiber_ && pipe->io_fiber_->timeout_pipe_ == pipe)
               {
                 // remove from main list
                 if (pipe->next_)
@@ -494,23 +511,27 @@ void io_params::sweep_timed_out_pipes()
             pipe = next;
           }
 
-          fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
-          if (fiber_pipe::num_net_pipes_ > 0)
-          {
-#if defined(ANON_DEBUG_TIMERS)
-            anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
-#endif
-            next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time);
+          if (!orhibernating) {
+            fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
+            if (fiber_pipe::num_net_pipes_ > 0)
+            {
+  #if defined(ANON_DEBUG_TIMERS)
+              anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
+  #endif
+              next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
+                cur_time() + fiber_pipe::k_net_io_sweep_time);
+            }
+            else
+              next_pipe_sweep_ = io_dispatch::scheduled_task();
           }
-          else
-            next_pipe_sweep_ = io_dispatch::scheduled_task();
         };
       });
 
   // occasionally timing hits such that a pause is not possible.
   // in that case, go ahead and reschedule the next sweep
   if (!paused)
-    next_pipe_sweep_ = io_dispatch::schedule_task(sweep_timed_out_pipes, cur_time() + fiber_pipe::k_net_io_sweep_time / 4);
+    next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
+      cur_time() + fiber_pipe::k_net_io_sweep_time / 4);
 }
 
 void io_params::sleep_until_data_available(fiber_pipe *pipe)

@@ -441,6 +441,18 @@ public:
       zero_net_pipes_cond_.wait(lock);
   }
 
+  void set_hibernating(bool hibernating) override
+  {
+    hibernating_ = hibernating;
+  }
+
+  bool is_hibernating() const override
+  {
+    return hibernating_;
+  }
+
+  static void for_each_sleeping_pipe(const std::function<void(const std::string& name)>&f);
+
 private:
   enum {
     k_net_io_sweep_time = 15
@@ -460,6 +472,7 @@ private:
   struct timespec io_timeout_;
   bool attached_;
   bool remote_hangup_;
+  bool hibernating_;
 
   fiber_pipe *next_;
   fiber_pipe *prev_;
@@ -567,7 +580,11 @@ struct io_params
   bool timeout_expired_;
 
   static io_dispatch::scheduled_task next_pipe_sweep_;
-  static void sweep_timed_out_pipes();
+  static void sweep_timed_out_pipes(bool or_hibernating);
+  static void sweep_hibernating_pipes()
+  {
+    sweep_timed_out_pipes(true);
+  }
 };
 
 inline void fiber_mutex::lock()
