@@ -33,6 +33,7 @@ struct ec2_info
   std::string instance_id;
   std::string host_name;
   std::string private_ipv4;
+  std::string public_ipv4;
   std::string user_data;
   nlohmann::json user_data_js;
   std::shared_ptr<Aws::EC2::EC2Client>  ec2_client;

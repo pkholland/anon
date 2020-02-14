@@ -22,4 +22,6 @@
 
 #pragma once
 
-void run_server_control(int port);
+#include "resin.h"
+
+void run_server_control(const ec2_info& ec2i, int port);

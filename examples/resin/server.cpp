@@ -118,7 +118,7 @@ void run_server(const ec2_info &ec2i)
 
       start_server(exe_file.c_str(), false/*do_tls*/, std::vector<std::string>());
       
-      run_server_control(cnt_port);
+      run_server_control(ec2i, cnt_port);
 
       stop_server();
 

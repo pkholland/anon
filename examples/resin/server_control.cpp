@@ -24,10 +24,14 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
-#include "http_parser.h" // github.com/joyent/http-parser
+#include "server_control.h"
+#include "http_parser.h"
 #include "log.h"
 #include <algorithm>
 #include <map>
+#include <aws/core/Aws.h>
+#include <aws/sns/SNSClient.h>
+#include <aws/sns/model/SubscribeRequest.h>
 
 namespace {
 
@@ -195,7 +199,7 @@ bool process_control_message(int fd)
 
 }
 
-void run_server_control(int port)
+void run_server_control(const ec2_info& ec2i, int port)
 {
   auto listen_sock = socket(AF_INET6, SOCK_STREAM, IPPROTO_TCP);
   if (listen_sock == -1)
@@ -220,6 +224,22 @@ void run_server_control(int port)
   }
 
   anon_log("listening to control port " << port << " with fd " << listen_sock);
+
+  if (ec2i.user_data_js.find("sns_topic") != ec2i.user_data_js.end()) {
+    Aws::Client::ClientConfiguration sns_config;
+    if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
+      sns_config.region = ec2i.user_data_js["sns_region"];
+    Aws::SNS::SNSClient client(sns_config);
+
+    Aws::SNS::Model::SubscribeRequest req;
+    std::string sns_topic = ec2i.user_data_js["sns_topic"];
+    std::string endpoint = "http://";
+    endpoint += ec2i.public_ipv4 + ":" + std::to_string(port) + "/sns";
+    req.WithTopicArn(sns_topic.c_str()).WithProtocol("http")
+      .WithEndpoint(endpoint.c_str());
+
+    client.Subscribe(req);
+  }
 
   auto cont = true;
   while (cont)

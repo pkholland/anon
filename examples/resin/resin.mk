@@ -18,4 +18,4 @@ $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c
 
 INC_DIRS+=$(ANON_PARENT)/json/include
-LIBS:=-laws-cpp-sdk-ec2 -laws-cpp-sdk-dynamodb -laws-cpp-sdk-sqs -laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
+LIBS:=-laws-cpp-sdk-ec2 -laws-cpp-sdk-dynamodb -laws-cpp-sdk-sqs -laws-cpp-sdk-s3 -laws-cpp-sdk-sns -laws-cpp-sdk-core -lcurl $(LIBS)
