@@ -170,6 +170,7 @@ bool process_control_message(int fd)
 
     if (pcallback.message_complete)
     {
+      anon_log("received complete message, has_content_length: " << (pcallback.has_content_length ? "true" : "false"));
       std::vector<char> body;
       if (pcallback.has_content_length) {
         body.resize(pcallback.content_length);
@@ -183,6 +184,7 @@ bool process_control_message(int fd)
           total_read += bytes_read;
         }
       }
+      anon_log("calling process_control_message");
       auto ret = process_control_message(http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
       auto reply = "HTTP/1.1 200 OK\r\n";
       write(fd, reply, strlen(reply));
