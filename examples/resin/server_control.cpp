@@ -173,6 +173,7 @@ bool process_control_message(int fd)
       anon_log("received complete message, has_content_length: " << (pcallback.has_content_length ? "true" : "false"));
       std::vector<char> body;
       if (pcallback.has_content_length) {
+        anon_log("pcallback.content_length: " << pcallback.content_length);
         body.resize(pcallback.content_length);
         uint64_t total_read = 0;
         while (total_read <  pcallback.content_length) {
@@ -182,6 +183,7 @@ bool process_control_message(int fd)
             return 1;
           }
           total_read += bytes_read;
+          anon_log("read " << bytes_read << " bytes, total_read: " << total_read);
         }
       }
       anon_log("calling process_control_message");
