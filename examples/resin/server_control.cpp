@@ -229,6 +229,9 @@ void run_server_control(const ec2_info& ec2i, int port)
     Aws::Client::ClientConfiguration sns_config;
     if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
       sns_config.region = ec2i.user_data_js["sns_region"];
+    else
+      sns_config.region = ec2i.default_region;
+    
     Aws::SNS::SNSClient client(sns_config);
 
     Aws::SNS::Model::SubscribeRequest req;
@@ -238,7 +241,11 @@ void run_server_control(const ec2_info& ec2i, int port)
     req.WithTopicArn(sns_topic.c_str()).WithProtocol("http")
       .WithEndpoint(endpoint.c_str());
 
-    client.Subscribe(req);
+    anon_log("subscribing to topic: " << sns_topic << ", endpoint: " << endpoint << ", region: " << sns_config.region);
+
+    auto outcome = client.Subscribe(req);
+    if (!outcome.IsSuccess())
+      anon_log("sns subscribe failed: " << outcome.GetError());
   }
 
   auto cont = true;
