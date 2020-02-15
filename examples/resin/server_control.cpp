@@ -175,7 +175,8 @@ bool process_control_message(int fd)
       if (pcallback.has_content_length) {
         anon_log("pcallback.content_length: " << pcallback.content_length);
         body.resize(pcallback.content_length);
-        uint64_t total_read = 0;
+        memcpy(&body[0], &buf[bsp], bep - bsp);
+        uint64_t total_read = bep - bsp;
         while (total_read <  pcallback.content_length) {
           auto bytes_read = read(fd, &body[total_read], body.size() - total_read);
           if (bytes_read == -1) {
