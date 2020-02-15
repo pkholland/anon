@@ -138,12 +138,14 @@ bool process_control_message(int fd)
   };
 
   settings.on_body = [](http_parser *p, const char *at, size_t length) -> int {
+    anon_log("parser on_body");
     return 1;
   };
 
   settings.on_message_complete = [](http_parser *p) -> int {
     pc *c = (pc *)p->data;
     c->message_complete = true;
+    anon_log("parser on_message_complete");
     return 0;
   };
 
