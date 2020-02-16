@@ -32,10 +32,13 @@
 #include <aws/core/Aws.h>
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/SubscribeRequest.h>
+#include <aws/sns/model/ConfirmSubscriptionRequest.h>
+
+using namespace nlohmann;
 
 namespace {
 
-bool process_control_message(const std::string& method, const std::string& url, const std::map<std::string, std::string>& headers, const std::vector<char>& body)
+bool process_control_message(const ec2_info& ec2i, const std::string& method, const std::string& url, const std::map<std::string, std::string>& headers, const std::vector<char>& body)
 {
   anon_log("received control message - " << method << ":");
   anon_log(" url: " << url);
@@ -45,12 +48,38 @@ bool process_control_message(const std::string& method, const std::string& url, 
   if (body.size())
     anon_log(" body: " << std::string(&body[0], body.size()));
 
+  if (url == "/sns") {
+    json js = json::parse(body);
+    std::string token = js["Token"];
+
+    Aws::Client::ClientConfiguration sns_config;
+    if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
+      sns_config.region = ec2i.user_data_js["sns_region"];
+    else
+      sns_config.region = ec2i.default_region;
+    
+    Aws::SNS::SNSClient client(sns_config);
+
+    Aws::SNS::Model::ConfirmSubscriptionRequest req;
+    std::string sns_topic = ec2i.user_data_js["sns_topic"];
+    req.WithTopicArn(sns_topic.c_str()).
+      WithToken(token.c_str()).WithAuthenticateOnUnsubscribe("true");
+
+    auto outcome = client.ConfirmSubscription(req);
+    if (outcome.IsSuccess()) {
+      anon_log("ConfirmSubscription succeeded");
+    } else {
+      anon_log ("ConfirmSubscription failed: " << outcome.GetError());
+    }
+
+  }
+
   if (url == "/shut/down/now")
     return false;
   return true;
 }
 
-bool process_control_message(int fd)
+bool process_control_message(const ec2_info& ec2i, int fd)
 {
   http_parser_settings settings;
 
@@ -170,10 +199,8 @@ bool process_control_message(int fd)
 
     if (pcallback.message_complete)
     {
-      anon_log("received complete message, has_content_length: " << (pcallback.has_content_length ? "true" : "false"));
       std::vector<char> body;
       if (pcallback.has_content_length) {
-        anon_log("pcallback.content_length: " << pcallback.content_length);
         body.resize(pcallback.content_length);
         memcpy(&body[0], &buf[bsp], bep - bsp);
         uint64_t total_read = bep - bsp;
@@ -184,11 +211,9 @@ bool process_control_message(int fd)
             return 1;
           }
           total_read += bytes_read;
-          anon_log("read " << bytes_read << " bytes, total_read: " << total_read);
         }
       }
-      anon_log("calling process_control_message");
-      auto ret = process_control_message(http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
+      auto ret = process_control_message(ec2i, http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
       auto reply = "HTTP/1.1 200 OK\r\n";
       write(fd, reply, strlen(reply));
       return ret;
@@ -269,7 +294,7 @@ void run_server_control(const ec2_info& ec2i, int port)
     {
       try
       {
-        cont = process_control_message(conn);
+        cont = process_control_message(ec2i, conn);
       }
       catch (const std::exception &exc)
       {
