@@ -50,26 +50,29 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
 
   if (url == "/sns") {
     json js = json::parse(body);
-    std::string token = js["Token"];
+    std::string type = js["Type"];
+    if (type == "SubscriptionConfirmation") {
+      std::string token = js["Token"];
 
-    Aws::Client::ClientConfiguration sns_config;
-    if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
-      sns_config.region = ec2i.user_data_js["sns_region"];
-    else
-      sns_config.region = ec2i.default_region;
-    
-    Aws::SNS::SNSClient client(sns_config);
+      Aws::Client::ClientConfiguration sns_config;
+      if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
+        sns_config.region = ec2i.user_data_js["sns_region"];
+      else
+        sns_config.region = ec2i.default_region;
+      
+      Aws::SNS::SNSClient client(sns_config);
 
-    Aws::SNS::Model::ConfirmSubscriptionRequest req;
-    std::string sns_topic = ec2i.user_data_js["sns_topic"];
-    req.WithTopicArn(sns_topic.c_str()).
-      WithToken(token.c_str()).WithAuthenticateOnUnsubscribe("true");
+      Aws::SNS::Model::ConfirmSubscriptionRequest req;
+      std::string sns_topic = ec2i.user_data_js["sns_topic"];
+      req.WithTopicArn(sns_topic.c_str()).
+        WithToken(token.c_str()).WithAuthenticateOnUnsubscribe("true");
 
-    auto outcome = client.ConfirmSubscription(req);
-    if (outcome.IsSuccess()) {
-      anon_log("ConfirmSubscription succeeded");
-    } else {
-      anon_log ("ConfirmSubscription failed: " << outcome.GetError());
+      auto outcome = client.ConfirmSubscription(req);
+      if (outcome.IsSuccess()) {
+        anon_log("ConfirmSubscription succeeded");
+      } else {
+        anon_log ("ConfirmSubscription failed: " << outcome.GetError());
+      }
     }
 
   }
