@@ -24,6 +24,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <poll.h>
 #include "server_control.h"
 #include "http_parser.h"
 #include "log.h"
@@ -33,23 +34,32 @@
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/SubscribeRequest.h>
 #include <aws/sns/model/ConfirmSubscriptionRequest.h>
+#include "start_teflon_app.h"
 
 using namespace nlohmann;
 
 namespace {
 
+bool subscription_confirmed = false;
+
 bool process_control_message(const ec2_info& ec2i, const std::string& method, const std::string& url, const std::map<std::string, std::string>& headers, const std::vector<char>& body)
 {
-  anon_log("received control message - " << method << ":");
-  anon_log(" url: " << url);
-  anon_log(" headers: ");
-  for (auto& h : headers)
-    anon_log("  " << h.first << ": " << h.second);
-  if (body.size())
-    anon_log(" body: " << std::string(&body[0], body.size()));
+  if (false) {
+    anon_log("received control message - " << method << ":");
+    anon_log(" url: " << url);
+    anon_log(" headers: ");
+    for (auto& h : headers)
+      anon_log("  " << h.first << ": " << h.second);
+    if (body.size())
+      anon_log(" body: " << std::string(&body[0], body.size()));
+  }
 
-  if (url == "/sns") {
+  if (subscription_confirmed && url == "/sns") {
     json js = json::parse(body);
+    if (js.find("Type") == js.end()
+      || js.find("Token") == js.end()) {
+      anon_log("sys confirmation message arived without needed fields in body");
+    }
     std::string type = js["Type"];
     if (type == "SubscriptionConfirmation") {
       std::string token = js["Token"];
@@ -73,6 +83,10 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       } else {
         anon_log ("ConfirmSubscription failed: " << outcome.GetError());
       }
+      subscription_confirmed = true;
+    }
+    else if (type == "Notification") {
+      start_teflon_app(ec2i);
     }
 
   }
@@ -185,15 +199,31 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   parser.data = &pcallback;
   http_parser_init(&parser, HTTP_REQUEST);
 
+  auto start_time = std::chrono::system_clock::now();
+
   char buf[4096];
   size_t bsp = 0, bep = 0;
   while (!pcallback.message_complete)
   {
+    auto cur_time = std::chrono::system_clock::now();
+    std::chrono::duration<double> dur = cur_time - start_time;
+    if (dur.count() > 2) {
+      anon_log("control message taking too long to fully arive");
+      return true;
+    }
     if (bsp == bep) {
+      struct pollfd pfd;
+      pfd.fd = fd;
+      pfd.events = POLLIN;
+      auto ret = poll(&pfd, 1, 500);
+      if (ret <= 0) {
+        anon_log("control message taking too long to fully arive");
+        return true;
+      }
       auto bytes_read = read(fd, &buf[bep], sizeof(buf) - bep);
-      if (bytes_read == -1) {
+      if (bytes_read <= 0) {
         anon_log("error reading from control socket: " << errno_string());
-        return 1;
+        return true;
       }
       bep += bytes_read;
     }
@@ -208,6 +238,19 @@ bool process_control_message(const ec2_info& ec2i, int fd)
         memcpy(&body[0], &buf[bsp], bep - bsp);
         uint64_t total_read = bep - bsp;
         while (total_read <  pcallback.content_length) {
+          std::chrono::duration<double> dur = cur_time - start_time;
+          if (dur.count() > 2) {
+            anon_log("control message taking too long to fully arive");
+            return true;
+          }
+          struct pollfd pfd;
+          pfd.fd = fd;
+          pfd.events = POLLIN;
+          auto ret = poll(&pfd, 1, 500);
+          if (ret <= 0) {
+            anon_log("control message taking too long to fully arive");
+            return true;
+          }
           auto bytes_read = read(fd, &body[total_read], body.size() - total_read);
           if (bytes_read == -1) {
             anon_log("error reading from control socket: " << errno_string());
