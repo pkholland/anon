@@ -44,7 +44,7 @@ bool subscription_confirmed = false;
 
 bool process_control_message(const ec2_info& ec2i, const std::string& method, const std::string& url, const std::map<std::string, std::string>& headers, const std::vector<char>& body)
 {
-  if (true) {
+  if (false) {
     anon_log("received control message - " << method << ":");
     anon_log(" url: " << url);
     anon_log(" headers: ");
@@ -61,7 +61,7 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       anon_log("sys confirmation message arived without needed fields in body");
     }
     std::string type = js["Type"];
-    if (!subscription_confirmed && type == "SubscriptionConfirmation") {
+    if (!subscription_confirmed && method == "POST" && type == "SubscriptionConfirmation") {
       std::string token = js["Token"];
 
       Aws::Client::ClientConfiguration sns_config;

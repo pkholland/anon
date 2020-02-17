@@ -219,7 +219,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   if (!create_empty_directory(ec2i, current_server_id))
     return teflon_server_failed;
   files_cmd << "wait < <(jobs -p)\n";
-  anon_log("executing script:\n" << files_cmd.str());
   if (!exe_cmd(files_cmd.str()))
     return teflon_server_failed;
 
