@@ -193,6 +193,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   std::string key = ec2i.user_data_js["current_server_artifacts_key"];
 
   std::ostringstream files_cmd;
+  files_cmd << "FAIL=0\n";
   for (const auto &f : files_needed)
   {
     if (ids.find(f) == ids.end())
@@ -217,6 +218,15 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   }
   if (!create_empty_directory(ec2i, current_server_id))
     return teflon_server_failed;
+  files_cmd << "for job in `jobs -p`\n"
+            << "do\n"
+            << " wait $job || let \"FAIL+=1\"\n"
+            << "done\n"
+            << "f [ \"$FAIL\" == \"0\" ];\n"
+            << "then\n"
+            << " exit 0\n"
+            << "else\n"
+            << " exit 1";
   if (!exe_cmd(files_cmd.str()))
     return teflon_server_failed;
 
