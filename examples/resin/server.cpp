@@ -36,7 +36,7 @@ void exe_cmd(const std::string& str)
   if (f) {
     auto exit_code = pclose(f);
     if (exit_code != 0)
-      anon_log("command: " << str << "  failed: " << errno_string());
+      anon_log("command: " << str << " exited non-zero: " << error_string(exit_code));
   }
   else
     anon_log("popen failed: " << errno_string());
