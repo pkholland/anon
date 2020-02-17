@@ -77,7 +77,7 @@ bool create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
     dir += id.c_str();
   }
   std::ostringstream str;
-  str << "rm -rf " << id << " && mkdir " << id;
+  str << "rm -rf " << dir << " && mkdir " << dir;
   return exe_cmd(str.str());
 }
 
