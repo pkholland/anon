@@ -34,79 +34,81 @@
 
 using namespace nlohmann;
 
-namespace
-{
-Aws::SDKOptions options;
-
-// this is really only used for testing so we can
-// run outside of an ec2 instance by providing the
-// filename to a file containing the json we would
-// otherwise get from the ec2 userdata.
-void init_ec2_from_file(ec2_info &r, const char *filename)
+ec2_info::ec2_info(const char *filename)
 {
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
     region = rgn;
 
-  if (region.size() == 0)
+  if (filename != 0)
   {
-    auto profile = (const char*)getenv("AWS_PROFILE");
-    if (!profile)
-      profile = "default";
-
-    auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
-    Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
-    if (loader.Load())
+    if (region.size() == 0)
     {
-      auto profiles = loader.GetProfiles();
-      auto prof = profiles.find(profile);
-      if (prof != profiles.end())
-        region = prof->second.GetRegion();
+      auto profile = (const char *)getenv("AWS_PROFILE");
+      if (!profile)
+        profile = "default";
+
+      auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
+      Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
+      if (loader.Load())
+      {
+        auto profiles = loader.GetProfiles();
+        auto prof = profiles.find(profile);
+        if (prof != profiles.end())
+          region = prof->second.GetRegion();
+      }
+    }
+    if (region.size() == 0)
+      region = "us-east-1";
+
+    default_region = region;
+    json js = json::parse(std::ifstream(filename));
+    instance_id = js["instance_id"];
+    ami_id = js["ami_id"];
+    host_name = js["host_name"];
+    private_ipv4 = js["private_ipv4"];
+    public_ipv4 = js["public_ipv4"];
+    user_data_js = js["user_data"];
+    user_data = user_data_js.dump();
+  }
+  else
+  {
+    Aws::Client::ClientConfiguration config;
+    config.connectTimeoutMs = 100;
+    config.httpRequestTimeoutMs = 100;
+    config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
+    Aws::Internal::EC2MetadataClient client(config);
+
+    if (region.size() == 0)
+      region = client.GetCurrentRegion();
+    if (region.size() == 0)
+      region = "us-east-1";
+
+    default_region = region;
+
+    ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
+    if (ami_id.size() != 0)
+    {
+      instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
+      host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
+      private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
+      public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
+      user_data = client.GetResource("/latest/user-data/").c_str();
+      if (user_data.size() != 0)
+        user_data_js = json::parse(user_data);
     }
   }
-  if (region.size() == 0)
-    region = "us-east-1";
 
-  r.default_region = region;
-  json js = json::parse(std::ifstream(filename));
-  r.instance_id = js["instance_id"];
-  r.ami_id = js["ami_id"];
-  r.host_name = js["host_name"];
-  r.private_ipv4 = js["private_ipv4"];
-  r.public_ipv4 = js["public_ipv4"];
-  r.user_data_js = js["user_data"];
-  r.user_data = r.user_data_js.dump();
+  auto cwd = getcwd(0, 0);
+  root_dir = cwd;
+  root_dir += "/root";
+  free(cwd);
 }
 
-void init_ec2(ec2_info &r)
+namespace
 {
-  Aws::Client::ClientConfiguration config;
-  config.connectTimeoutMs = 100;
-  config.httpRequestTimeoutMs = 100;
-  config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
-  Aws::Internal::EC2MetadataClient client(config);
-
-  auto dfr = getenv("AWS_DEFAULT_REGION");
-  if (dfr)
-    r.default_region = dfr;
-  else
-    r.default_region = client.GetCurrentRegion();
-  if (r.default_region.size() == 0)
-    r.default_region = "us-east-1";
-
-  r.ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
-  if (r.ami_id.size() != 0)
-  {
-    r.instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
-    r.host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
-    r.private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
-    r.public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
-    r.user_data = client.GetResource("/latest/user-data/").c_str();
-    if (r.user_data.size() != 0)
-      r.user_data_js = json::parse(r.user_data);
-  }
-}
+Aws::SDKOptions options;
 
 bool in_ec2(ec2_info &r)
 {
@@ -118,8 +120,6 @@ bool has_user_data(ec2_info &r)
   return r.user_data.size() != 0;
 }
 
-ec2_info ec2i;
-
 } // namespace
 
 extern "C" int main(int argc, char **argv)
@@ -130,10 +130,8 @@ extern "C" int main(int argc, char **argv)
   Aws::InitAPI(options);
   try
   {
-    if (argc == 2)
-      init_ec2_from_file(ec2i, argv[1]);
-    else
-      init_ec2(ec2i);
+    const char* filename = argc >= 2 ? argv[1] : (const char*)0;
+    ec2_info ec2i(filename);
     if (!in_ec2(ec2i))
       anon_log("resin run outside of ec2, stopping now");
     else if (!has_user_data(ec2i))
@@ -167,7 +165,6 @@ extern "C" int main(int argc, char **argv)
     anon_log("resin threw uncaught, unknown exception, aborting now");
     ret = 1;
   }
-  ec2i.ec2_client.reset();
   Aws::ShutdownAPI(options);
   return ret;
 }

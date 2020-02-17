@@ -28,6 +28,8 @@
 
 struct ec2_info
 {
+  ec2_info(const char* filename);
+
   Aws::String default_region;
   std::string ami_id;
   std::string instance_id;
@@ -36,6 +38,7 @@ struct ec2_info
   std::string public_ipv4;
   std::string user_data;
   nlohmann::json user_data_js;
+  std::string root_dir;
   std::shared_ptr<Aws::EC2::EC2Client>  ec2_client;
 };
 

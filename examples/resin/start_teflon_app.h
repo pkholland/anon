@@ -24,4 +24,10 @@
 
 #include "resin.h"
 
-void start_teflon_app(const ec2_info& ec2i);
+enum  teflon_state {
+    teflon_server_failed,
+    teflon_server_running,
+    teflon_shut_down
+};
+
+teflon_state start_teflon_app(const ec2_info& ec2i);
