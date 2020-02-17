@@ -50,7 +50,8 @@ struct tef_app
 
 bool exe_cmd(const std::string &str)
 {
-  auto f = popen(str.c_str(), "r");
+  std::string cmd = "bash -c '" + str + "'";
+  auto f = popen(cmd.c_str(), "r");
   if (f)
   {
     auto exit_code = pclose(f);
@@ -193,7 +194,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   std::string key = ec2i.user_data_js["current_server_artifacts_key"];
 
   std::ostringstream files_cmd;
-  files_cmd << "FAIL=0\n";
   for (const auto &f : files_needed)
   {
     if (ids.find(f) == ids.end())
@@ -207,37 +207,30 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // to the new directory
       auto existing_file = curr_app->files[f];
       files_cmd << "ln " << ec2i.root_dir << "/" << curr_app->id << "/" << curr_app->files[f]
-               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " &\n";
+               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " || exit 1 &\n";
     }
     else
     {
       // does not match an existing file, so download it from s3
       files_cmd << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key << "/" << f
-               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet &\n";
+               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
     }
   }
   if (!create_empty_directory(ec2i, current_server_id))
     return teflon_server_failed;
-  files_cmd << "for job in `jobs -p`\n"
-            << "do\n"
-            << " wait $job || let \"FAIL+=1\"\n"
-            << "done\n"
-            << "if [ \"$FAIL\" == \"0\" ];\n"
-            << "then\n"
-            << " exit 0\n"
-            << "else\n"
-            << " exit 1";
+  files_cmd << "wait < <(jobs -p)\n";
   anon_log("executing script:\n" << files_cmd.str());
   if (!exe_cmd(files_cmd.str()))
     return teflon_server_failed;
 
   std::ostringstream ef;
   ef << ec2i.root_dir << "/" << current_server_id << "/" << file_to_execute;
-  chmod(ef.str().c_str(), ACCESSPERMS);
+  auto efs = ef.str();
+  chmod(efs.c_str(), ACCESSPERMS);
 
   try {
     auto new_app = std::make_shared<tef_app>(current_server_id, files_needed, ids);
-    start_server(file_to_execute.c_str(), false/*do_tls*/, std::vector<std::string>());
+    start_server(efs.c_str(), false/*do_tls*/, std::vector<std::string>());
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
     curr_app = new_app;
