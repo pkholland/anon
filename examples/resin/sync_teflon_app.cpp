@@ -77,7 +77,7 @@ bool create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
     dir += id.c_str();
   }
   std::ostringstream str;
-  str << "rm -rf " << id << " && mkdir " << id;
+  str << "rm -rf " << dir << " && mkdir " << dir;
   return exe_cmd(str.str());
 }
 
@@ -222,11 +222,12 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
             << "do\n"
             << " wait $job || let \"FAIL+=1\"\n"
             << "done\n"
-            << "f [ \"$FAIL\" == \"0\" ];\n"
+            << "if [ \"$FAIL\" == \"0\" ];\n"
             << "then\n"
             << " exit 0\n"
             << "else\n"
             << " exit 1";
+  anon_log("executing script:\n" << files_cmd.str());
   if (!exe_cmd(files_cmd.str()))
     return teflon_server_failed;
 
