@@ -54,14 +54,14 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       anon_log(" body: " << std::string(&body[0], body.size()));
   }
 
-  if (subscription_confirmed && url == "/sns") {
+  if (url == "/sns") {
     json js = json::parse(body);
     if (js.find("Type") == js.end()
       || js.find("Token") == js.end()) {
       anon_log("sys confirmation message arived without needed fields in body");
     }
     std::string type = js["Type"];
-    if (type == "SubscriptionConfirmation") {
+    if (!subscription_confirmed && type == "SubscriptionConfirmation") {
       std::string token = js["Token"];
 
       Aws::Client::ClientConfiguration sns_config;
@@ -209,7 +209,6 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   settings.on_message_complete = [](http_parser *p) -> int {
     pc *c = (pc *)p->data;
     c->message_complete = true;
-    anon_log("parser on_message_complete");
     return 0;
   };
 
@@ -321,7 +320,7 @@ void run_server_control(const ec2_info& ec2i, int port)
     req.WithTopicArn(sns_topic.c_str()).WithProtocol("http")
       .WithEndpoint(endpoint.c_str());
 
-    anon_log("subscribing to topic: " << sns_topic << ", endpoint: " << endpoint << ", region: " << sns_config.region);
+    //anon_log("subscribing to topic: " << sns_topic << ", endpoint: " << endpoint << ", region: " << sns_config.region);
 
     auto outcome = client.Subscribe(req);
     if (!outcome.IsSuccess())
