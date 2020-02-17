@@ -30,4 +30,4 @@ enum  teflon_state {
     teflon_shut_down
 };
 
-teflon_state start_teflon_app(const ec2_info& ec2i);
+teflon_state sync_teflon_app(const ec2_info& ec2i);

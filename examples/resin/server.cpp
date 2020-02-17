@@ -23,7 +23,7 @@
 #include "resin.h"
 #include "sproc_mgr.h"
 #include "log.h"
-#include "start_teflon_app.h"
+#include "sync_teflon_app.h"
 #include "server_control.h"
 
 void run_server(const ec2_info &ec2i)
@@ -40,16 +40,17 @@ void run_server(const ec2_info &ec2i)
   sproc_mgr_init(port);
   anon_log("epoxy bound to network port " << port);
 
-  if (start_teflon_app(ec2i) != teflon_server_running) {
+  if (sync_teflon_app(ec2i) != teflon_server_running) {
     anon_log_error("cannot start teflon app - shutting down");
     sproc_mgr_term();
     return;
   }
 
+  // stays here until we get an sns message
+  // that causes us to shut down the server
   run_server_control(ec2i, cnt_port);
 
   stop_server();
 
   sproc_mgr_term();
-
 }

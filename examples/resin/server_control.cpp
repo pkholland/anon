@@ -34,7 +34,7 @@
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/SubscribeRequest.h>
 #include <aws/sns/model/ConfirmSubscriptionRequest.h>
-#include "start_teflon_app.h"
+#include "sync_teflon_app.h"
 
 using namespace nlohmann;
 
@@ -86,13 +86,11 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       subscription_confirmed = true;
     }
     else if (type == "Notification") {
-      start_teflon_app(ec2i);
+      if (sync_teflon_app(ec2i) == teflon_shut_down)
+        return false;
     }
 
   }
-
-  if (url == "/shut/down/now")
-    return false;
   return true;
 }
 

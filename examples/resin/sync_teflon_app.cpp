@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-#include "start_teflon_app.h"
+#include "sync_teflon_app.h"
 #include "log.h"
 #include "sproc_mgr.h"
 #include <sys/stat.h>
@@ -99,7 +99,7 @@ std::shared_ptr<tef_app> curr_app;
 
 } // namespace
 
-teflon_state start_teflon_app(const ec2_info &ec2i)
+teflon_state sync_teflon_app(const ec2_info &ec2i)
 {
   if (ec2i.user_data_js.find("current_server_primary_key_value") == ec2i.user_data_js.end() || ec2i.user_data_js.find("current_server_primary_key_name") == ec2i.user_data_js.end())
   {
