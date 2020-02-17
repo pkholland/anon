@@ -56,12 +56,17 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
 
   if (url == "/sns") {
     json js = json::parse(body);
-    if (js.find("Type") == js.end()
-      || js.find("Token") == js.end()) {
-      anon_log("sys confirmation message arived without needed fields in body");
+    if (js.find("Type") == js.end())
+    {
+      anon_log("sns message arived without required \"Type\" field - ignoring");
+      return true;
     }
     std::string type = js["Type"];
     if (!subscription_confirmed && method == "POST" && type == "SubscriptionConfirmation") {
+      if (js.find("Token") == js.end()) {
+        anon_log("sns confirmation message arived without required \"Token\" field - ignoring");
+        return true;
+      }
       std::string token = js["Token"];
 
       Aws::Client::ClientConfiguration sns_config;
@@ -86,6 +91,7 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       subscription_confirmed = true;
     }
     else if (type == "Notification") {
+      anon_log("recieved sns message, checking server definition");
       if (sync_teflon_app(ec2i) == teflon_shut_down)
         return false;
     }
