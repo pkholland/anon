@@ -63,7 +63,7 @@ std::string get_file_set(const std::string& working_dir, const ec2_info &ec2i, c
 
   for (auto& f : files) {
     std::ostringstream str;
-    str << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key << "/" << f << " " << dir << "/" << f;
+    str << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key << "/" << f << " " << dir << "/" << f << " --quiet";
     exe_cmd(str.str());
   }
 
