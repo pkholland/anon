@@ -11,7 +11,7 @@ $(ANON_ROOT)/examples/resin/main.cpp\
 $(ANON_ROOT)/examples/resin/worker.cpp\
 $(ANON_ROOT)/examples/resin/server.cpp\
 $(ANON_ROOT)/examples/resin/server_control.cpp\
-$(ANON_ROOT)/examples/resin/start_teflon_app.cpp\
+$(ANON_ROOT)/examples/resin/sync_teflon_app.cpp\
 $(ANON_ROOT)/src/cpp/sproc_mgr.cpp\
 $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\

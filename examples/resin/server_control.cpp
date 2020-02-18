@@ -34,7 +34,7 @@
 #include <aws/sns/SNSClient.h>
 #include <aws/sns/model/SubscribeRequest.h>
 #include <aws/sns/model/ConfirmSubscriptionRequest.h>
-#include "start_teflon_app.h"
+#include "sync_teflon_app.h"
 
 using namespace nlohmann;
 
@@ -56,12 +56,17 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
 
   if (url == "/sns") {
     json js = json::parse(body);
-    if (js.find("Type") == js.end()
-      || js.find("Token") == js.end()) {
-      anon_log("sys confirmation message arived without needed fields in body");
+    if (js.find("Type") == js.end())
+    {
+      anon_log("sns message arived without required \"Type\" field - ignoring");
+      return true;
     }
     std::string type = js["Type"];
-    if (!subscription_confirmed && type == "SubscriptionConfirmation") {
+    if (!subscription_confirmed && method == "POST" && type == "SubscriptionConfirmation") {
+      if (js.find("Token") == js.end()) {
+        anon_log("sns confirmation message arived without required \"Token\" field - ignoring");
+        return true;
+      }
       std::string token = js["Token"];
 
       Aws::Client::ClientConfiguration sns_config;
@@ -86,19 +91,38 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       subscription_confirmed = true;
     }
     else if (type == "Notification") {
-      start_teflon_app(ec2i);
+      anon_log("recieved sns message, checking server definition");
+      if (sync_teflon_app(ec2i) == teflon_shut_down)
+        return false;
     }
 
   }
-
-  if (url == "/shut/down/now")
-    return false;
   return true;
 }
 
+ssize_t timed_read(int fd, void* buff, size_t nbytes)
+{
+  struct pollfd pfd;
+  pfd.fd = fd;
+  pfd.events = POLLIN;
+  auto ret = poll(&pfd, 1, 500);
+  if (ret == 0) {
+    anon_log("control message taking too long to fully arive");
+    errno = EINTR;
+    return -1;
+  }
+  if (ret < 0)
+    return ret;
+  return read(fd, buff, nbytes);
+}
+
+// returns:
+// true  -> "keep running the loop waiting for messages"
+// false -> "shut down the app"
 bool process_control_message(const ec2_info& ec2i, int fd)
 {
   http_parser_settings settings;
+  const double max_message_time = 2.0;
 
   struct pc
   {
@@ -206,20 +230,12 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   {
     auto cur_time = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = cur_time - start_time;
-    if (dur.count() > 2) {
+    if (dur.count() > max_message_time) {
       anon_log("control message taking too long to fully arive");
       return true;
     }
     if (bsp == bep) {
-      struct pollfd pfd;
-      pfd.fd = fd;
-      pfd.events = POLLIN;
-      auto ret = poll(&pfd, 1, 500);
-      if (ret <= 0) {
-        anon_log("control message taking too long to fully arive");
-        return true;
-      }
-      auto bytes_read = read(fd, &buf[bep], sizeof(buf) - bep);
+      auto bytes_read = timed_read(fd, &buf[bep], sizeof(buf) - bep);
       if (bytes_read <= 0) {
         anon_log("error reading from control socket: " << errno_string());
         return true;
@@ -238,22 +254,14 @@ bool process_control_message(const ec2_info& ec2i, int fd)
         uint64_t total_read = bep - bsp;
         while (total_read <  pcallback.content_length) {
           std::chrono::duration<double> dur = cur_time - start_time;
-          if (dur.count() > 2) {
+          if (dur.count() > max_message_time) {
             anon_log("control message taking too long to fully arive");
             return true;
           }
-          struct pollfd pfd;
-          pfd.fd = fd;
-          pfd.events = POLLIN;
-          auto ret = poll(&pfd, 1, 500);
-          if (ret <= 0) {
-            anon_log("control message taking too long to fully arive");
-            return true;
-          }
-          auto bytes_read = read(fd, &body[total_read], body.size() - total_read);
+          auto bytes_read = timed_read(fd, &body[total_read], body.size() - total_read);
           if (bytes_read == -1) {
             anon_log("error reading from control socket: " << errno_string());
-            return 1;
+            return true;
           }
           total_read += bytes_read;
         }
