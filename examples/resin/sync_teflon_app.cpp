@@ -146,7 +146,10 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto state = state_it->second.GetS();
   if (state == "stop")
   {
-    anon_log("stopping server");
+    if (curr_app)
+      anon_log("stopping server");
+    else
+      anon_log("resin booted with server record in stopped state - server will not run");
     return teflon_shut_down;
   }
 
