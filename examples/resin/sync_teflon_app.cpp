@@ -34,12 +34,13 @@ namespace
 
 struct tef_app
 {
-  tef_app(const Aws::String& id,
-    const Aws::Vector<Aws::String>& filesv,
-    Aws::Map<Aws::String, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>>& fids)
-    : id(id)
+  tef_app(const Aws::String &id,
+          const Aws::Vector<Aws::String> &filesv,
+          Aws::Map<Aws::String, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> &fids)
+      : id(id)
   {
-    for (auto &f : filesv) {
+    for (auto &f : filesv)
+    {
       files[fids[f]->GetS()] = f;
     }
   }
@@ -210,13 +211,14 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // to the new directory
       auto existing_file = curr_app->files[f];
       files_cmd << "ln " << ec2i.root_dir << "/" << curr_app->id << "/" << curr_app->files[f]
-               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " || exit 1 &\n";
+                << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " || exit 1 &\n";
     }
     else
     {
       // does not match an existing file, so download it from s3
-      files_cmd << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key << "/" << f
-               << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
+      files_cmd << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key
+                << "/" << ids[f]->GetS() << "/" << f << " "
+                << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
     }
   }
   if (!create_empty_directory(ec2i, current_server_id))
@@ -230,20 +232,21 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto efs = ef.str();
   chmod(efs.c_str(), ACCESSPERMS);
 
-  try {
+  try
+  {
     auto new_app = std::make_shared<tef_app>(current_server_id, files_needed, ids);
-    start_server(efs.c_str(), false/*do_tls*/, std::vector<std::string>());
+    start_server(efs.c_str(), false /*do_tls*/, std::vector<std::string>());
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
     curr_app = new_app;
   }
-  catch(const std::exception& exc)
+  catch (const std::exception &exc)
   {
     anon_log_error("start_server failed: " << exc.what());
     remove_directory(ec2i, current_server_id);
     return teflon_server_failed;
   }
-  catch(...)
+  catch (...)
   {
     anon_log_error("start_server");
     remove_directory(ec2i, current_server_id);
