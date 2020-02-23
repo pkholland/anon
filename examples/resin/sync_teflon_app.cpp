@@ -116,8 +116,10 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   }
 
   Aws::Client::ClientConfiguration ddb_config;
-  if (ec2i.user_data_js.find("current_server_region") != ec2i.user_data_js.end())
-    ddb_config.region = ec2i.user_data_js["current_server_region"];
+  if (ec2i.user_data_js.find("current_server_region") != ec2i.user_data_js.end()) {
+    std::string reg = ec2i.user_data_js["current_server_region"];
+    ddb_config.region = reg.c_str();
+  }
   else
     ddb_config.region = ec2i.default_region;
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
@@ -196,6 +198,11 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   }
   std::string bucket = ec2i.user_data_js["current_server_artifacts_bucket"];
   std::string key = ec2i.user_data_js["current_server_artifacts_key"];
+  auto artif_region = ec2i.default_region;
+  if (ec2i.user_data_js.find("current_server_artifacts_region") != ec2i.user_data_js.end()) {
+    std::string reg = ec2i.user_data_js["current_server_artifacts_region"];
+    artif_region = reg.c_str();
+  }
 
   std::ostringstream files_cmd;
   for (const auto &f : files_needed)
@@ -216,7 +223,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     else
     {
       // does not match an existing file, so download it from s3
-      files_cmd << "aws s3 --region " << ec2i.default_region << " cp s3://" << bucket << "/" << key
+      files_cmd << "aws s3 --region " << artif_region << " cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
                 << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
     }

@@ -70,8 +70,10 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
       std::string token = js["Token"];
 
       Aws::Client::ClientConfiguration sns_config;
-      if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
-        sns_config.region = ec2i.user_data_js["sns_region"];
+      if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end()) {
+        std::string reg = ec2i.user_data_js["sns_region"];
+        sns_config.region = reg.c_str();
+      }
       else
         sns_config.region = ec2i.default_region;
       
@@ -312,8 +314,10 @@ void run_server_control(const ec2_info& ec2i, int port)
 
   if (ec2i.user_data_js.find("sns_topic") != ec2i.user_data_js.end()) {
     Aws::Client::ClientConfiguration sns_config;
-    if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end())
-      sns_config.region = ec2i.user_data_js["sns_region"];
+    if (ec2i.user_data_js.find("sns_region") != ec2i.user_data_js.end()) {
+      std::string reg = ec2i.user_data_js["sns_region"];
+      sns_config.region = reg.c_str();
+    }
     else
       sns_config.region = ec2i.default_region;
     
