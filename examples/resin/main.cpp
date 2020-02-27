@@ -64,12 +64,12 @@ ec2_info::ec2_info(const char *filename)
 
     default_region = region;
     json js = json::parse(std::ifstream(filename));
-    instance_id = js["instance_id"];
-    ami_id = js["ami_id"];
-    host_name = js["host_name"];
-    private_ipv4 = js["private_ipv4"];
-    public_ipv4 = js["public_ipv4"];
-    user_data_js = js["user_data"];
+    instance_id = "instance_id";
+    ami_id = "ami_id";
+    host_name = "host_name";
+    private_ipv4 = "private_ipv4";
+    public_ipv4 = "public_ipv4";
+    user_data_js = js;
     user_data = user_data_js.dump();
   }
   else
@@ -102,7 +102,7 @@ ec2_info::ec2_info(const char *filename)
 
   auto cwd = getcwd(0, 0);
   root_dir = cwd;
-  root_dir += "/root";
+  root_dir += "/resin_root";
   free(cwd);
 }
 

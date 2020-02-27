@@ -58,13 +58,13 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
     json js = json::parse(body);
     if (js.find("Type") == js.end())
     {
-      anon_log("sns message arived without required \"Type\" field - ignoring");
+      anon_log("sns message arrived without required \"Type\" field - ignoring");
       return true;
     }
     std::string type = js["Type"];
     if (!subscription_confirmed && method == "POST" && type == "SubscriptionConfirmation") {
       if (js.find("Token") == js.end()) {
-        anon_log("sns confirmation message arived without required \"Token\" field - ignoring");
+        anon_log("sns confirmation message arrived without required \"Token\" field - ignoring");
         return true;
       }
       std::string token = js["Token"];
@@ -109,7 +109,7 @@ ssize_t timed_read(int fd, void* buff, size_t nbytes)
   pfd.events = POLLIN;
   auto ret = poll(&pfd, 1, 500);
   if (ret == 0) {
-    anon_log("control message taking too long to fully arive");
+    anon_log("control message taking too long to fully arrive");
     errno = EINTR;
     return -1;
   }
@@ -118,11 +118,23 @@ ssize_t timed_read(int fd, void* buff, size_t nbytes)
   return read(fd, buff, nbytes);
 }
 
-// returns:
-// true  -> "keep running the loop waiting for messages"
-// false -> "shut down the app"
+// return true to continue, false to terminate process
 bool process_control_message(const ec2_info& ec2i, int fd)
 {
+  // to reduce risk of hacking attacks, we only attempt
+  // to read/parse full http at this layer until we have
+  // succeeded at registering our sns listener - this will
+  // generally happen within the first second or so of the
+  // process booting.  After that, all messages to our
+  // control port are assumed to be notifications that tell
+  // us to check the database to see what we are supposed
+  // to be doing next.
+  if (subscription_confirmed) {
+    auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
+    write(fd, reply, strlen(reply));
+    return sync_teflon_app(ec2i) != teflon_shut_down;
+  }
+
   http_parser_settings settings;
   const double max_message_time = 2.0;
 
@@ -210,7 +222,6 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   };
 
   settings.on_body = [](http_parser *p, const char *at, size_t length) -> int {
-    anon_log("parser on_body");
     return 1;
   };
 
@@ -233,7 +244,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
     auto cur_time = std::chrono::system_clock::now();
     std::chrono::duration<double> dur = cur_time - start_time;
     if (dur.count() > max_message_time) {
-      anon_log("control message taking too long to fully arive");
+      anon_log("control message taking too long to fully arrive");
       return true;
     }
     if (bsp == bep) {
@@ -257,7 +268,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
         while (total_read <  pcallback.content_length) {
           std::chrono::duration<double> dur = cur_time - start_time;
           if (dur.count() > max_message_time) {
-            anon_log("control message taking too long to fully arive");
+            anon_log("control message taking too long to fully arrive");
             return true;
           }
           auto bytes_read = timed_read(fd, &body[total_read], body.size() - total_read);
@@ -269,7 +280,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
         }
       }
       auto ret = process_control_message(ec2i, http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
-      auto reply = "HTTP/1.1 200 OK\r\n";
+      auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
       write(fd, reply, strlen(reply));
       return ret;
     }

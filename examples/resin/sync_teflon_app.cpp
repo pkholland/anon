@@ -70,6 +70,28 @@ bool exe_cmd(const std::string &str)
   return true;
 }
 
+std::pair<int, std::string> exe_cmd1(const std::string &cmd)
+{
+  auto f = popen(cmd.c_str(), "r");
+  if (f)
+  {
+    std::ostringstream str;
+    char buff[1024];
+    auto indx = 0;
+    int c;
+    while ((c = getc(f)) != EOF && c != '\n') {
+      if (indx == sizeof(buff)) {
+        str << std::string(&buff[0], indx);
+        indx = 0;
+      }
+      buff[indx++] = (char)c;
+    }
+    str << std::string(&buff[0], indx);
+    return std::make_pair(pclose(f), str.str());
+  }
+  return std::make_pair(errno, std::string());
+}
+
 bool create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
 {
   auto dir = ec2i.root_dir;
@@ -103,6 +125,11 @@ std::shared_ptr<tef_app> curr_app;
 
 teflon_state sync_teflon_app(const ec2_info &ec2i)
 {
+  auto machine_name = exe_cmd1("uname -m");
+  if (machine_name.first != 0) {
+    anon_log_error("uname -m failed");
+    return teflon_server_failed;
+  }
   if (ec2i.user_data_js.find("current_server_primary_key_value") == ec2i.user_data_js.end() || ec2i.user_data_js.find("current_server_primary_key_name") == ec2i.user_data_js.end())
   {
     anon_log_error("no current server info specified in user data - cannot start teflon app");
@@ -126,6 +153,8 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
 
   Aws::DynamoDB::Model::AttributeValue primary_key;
   std::string cs_primary_key = ec2i.user_data_js["current_server_primary_key_value"];
+  cs_primary_key += "_";
+  cs_primary_key += machine_name.second;
   primary_key.SetS(cs_primary_key.c_str());
   Aws::DynamoDB::Model::GetItemRequest req;
   std::string cs_table_name = ec2i.user_data_js["current_server_table_name"];
