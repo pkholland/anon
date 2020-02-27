@@ -555,4 +555,9 @@ void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const 
   client_cfg.retryStrategy = std::make_shared<fiberRetryStrategy>();
 }
 
+std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRetries, long scaleFactor)
+{
+  return std::make_shared<fiberRetryStrategy>(maxRetries, scaleFactor);
+}
+
 #endif

@@ -26,6 +26,7 @@
 
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/client/RetryStrategy.h>
 
 void aws_client_init();
 void aws_client_term();
@@ -60,5 +61,7 @@ const Aws::String &aws_get_default_region();
 //      except that it uses fiber sleeping functions instead of thread-sleeping functions
 //      when it sleeps before retrying
 void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const Aws::String &region);
+
+std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRetries = 10, long scaleFactor = 25);
 
 #endif
