@@ -24,8 +24,11 @@
 
 #include <string>
 #include <utility>
+#include <functional>
 
 // execute the given command (is 'sh' - using popen) and return:
 //  1) exit code of command in .first
 //  2) the first line of the command's stdout in .second
-std::pair<int, std::string> exe_cmd(const std::string& cmd);
+std::pair<int, std::string> exe_cmd_(const std::function<void(std::ostream &formatter)>& fn);
+
+#define exe_cmd(_body) exe_cmd_([&](std::ostream &formatter) { formatter << _body; })

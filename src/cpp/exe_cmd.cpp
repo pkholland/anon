@@ -23,9 +23,11 @@
 #include "exe_cmd.h"
 #include <sstream>
 
-std::pair<int, std::string> exe_cmd(const std::string &cmd)
+std::pair<int, std::string> exe_cmd_(const std::function<void(std::ostream &formatter)>& fn)
 {
-  auto f = popen(cmd.c_str(), "r");
+  std::ostringstream cmd;
+  fn(cmd);
+  auto f = popen(cmd.str().c_str(), "r");
   if (f)
   {
     std::ostringstream str;
