@@ -28,6 +28,7 @@
 void sproc_mgr_init(int port);
 void sproc_mgr_term();
 void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args);
+void send_sync();
 void stop_server();
 int current_server_pid();
 

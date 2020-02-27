@@ -27,6 +27,7 @@
 enum  teflon_state {
     teflon_server_failed,
     teflon_server_running,
+    teflon_server_still_running,
     teflon_shut_down
 };
 

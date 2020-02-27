@@ -163,6 +163,7 @@ bool read_ok(int fd0, int fd1)
 
 #define k_start 0
 #define k_stop 1
+#define k_sync 2
 
 bool write_cmd(int fd, char cmd)
 {
@@ -435,6 +436,14 @@ void stop_server()
   current_srv_pid = 0; // so death_thread doesn't try to relaunch the child
   if (p != proc_map.end())
     write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
+}
+
+void send_sync()
+{
+  std::unique_lock<std::mutex> lock(proc_map_mutex);
+  auto p = proc_map.find(current_srv_pid);
+  if (p != proc_map.end())
+    write_cmd(p->second->cmd_pipe[0], k_sync);
 }
 
 int current_server_pid()

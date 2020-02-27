@@ -48,6 +48,10 @@ void server_respond(http_server::pipe_t &pipe, const http_request &request, bool
   pipe.respond(response);
 }
 
+void server_sync()
+{
+}
+
 void server_term()
 {
 }

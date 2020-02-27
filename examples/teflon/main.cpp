@@ -42,6 +42,7 @@
 
 void server_init();
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls);
+void server_sync();
 void server_term();
 void server_close_outgoing();
 
@@ -262,6 +263,8 @@ extern "C" int main(int argc, char **argv)
                     }
                     else if (cmd == 1)
                       break;
+                    else if (cmd == 2)
+                      server_sync();
                     else
                       anon_log_error("unknown command: " << (int)cmd);
                   }

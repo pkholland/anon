@@ -204,7 +204,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   if (curr_app && current_server_id == curr_app->id)
   {
     anon_log("current server definition matches running server, no-op");
-    return teflon_server_running;
+    return teflon_server_still_running;
   }
 
   auto files_it = map.find("files");

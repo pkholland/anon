@@ -35,6 +35,7 @@
 #include <aws/sns/model/SubscribeRequest.h>
 #include <aws/sns/model/ConfirmSubscriptionRequest.h>
 #include "sync_teflon_app.h"
+#include "sproc_mgr.h"
 
 using namespace nlohmann;
 
@@ -132,7 +133,10 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   if (subscription_confirmed) {
     auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
     write(fd, reply, strlen(reply));
-    return sync_teflon_app(ec2i) != teflon_shut_down;
+    auto state = sync_teflon_app(ec2i);
+    if (state == teflon_server_still_running)
+      send_sync();
+    return state != teflon_shut_down;
   }
 
   http_parser_settings settings;
