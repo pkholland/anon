@@ -239,14 +239,12 @@
 class request_dispatcher
 {
   std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>>>> _map;
-  pcrecpp::RE _split_at_q;
   pcrecpp::RE _split_at_var;
   std::string _root_path;
 
 public:
   request_dispatcher(const std::string &root_path)
-      : _split_at_q("([^?]*)(.*)"),
-        _split_at_var("([^?{]*)(.*)"),
+      : _split_at_var("([^?{]*)(.*)"),
         _root_path(root_path)
   {
   }

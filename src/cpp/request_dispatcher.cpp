@@ -136,7 +136,7 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
     for (auto &it : h.query_string_items)
     {
       size_t pos = 0;
-      size_t skip_len = it.size() + 1; // for the "="
+      auto skip_len = it.size() + 1; // for the "="
       while (true)
       {
         pos = quer.find(it + "=", pos);
@@ -146,7 +146,7 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
         if (pos == std::string::npos)
           throw_request_error(HTTP_STATUS_BAD_REQUEST, "missing, required query field: " << it);
       }
-      auto v = quer.substr(pos);
+      auto v = quer.substr(pos + skip_len);
       ret.second.push_back(v.substr(0, v.find("&", 0)));
     }
   }
@@ -172,9 +172,8 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     auto m = _map.find(request.method_str());
     if (m == _map.end())
       throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << request.method_str());
-    std::string path, query;
-    if (!_split_at_q.FullMatch(request.get_url_field(UF_PATH), &path, &query))
-      throw_request_error(400, "path split failed, invalid path: " << request.get_url_field(UF_PATH));
+    auto path = request.get_url_field(UF_PATH);
+    auto query = request.get_url_field(UF_QUERY);
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
       throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (1)");
