@@ -127,6 +127,8 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
       break;
     ret.second.push_back(v);
   }
+  if (ret.second.size() != h.num_path_substitutions)
+    return ret;
 
   if (h.query_string_items.size() > 0)
   {
