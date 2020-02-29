@@ -22,8 +22,9 @@
 
 #include "exe_cmd.h"
 #include <sstream>
+#include "log.h"
 
-std::pair<int, std::string> exe_cmd_(const std::function<void(std::ostream &formatter)>& fn)
+std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, bool first_line_only)
 {
   std::ostringstream cmd;
   fn(cmd);
@@ -34,7 +35,9 @@ std::pair<int, std::string> exe_cmd_(const std::function<void(std::ostream &form
     char buff[1024];
     auto indx = 0;
     int c;
-    while ((c = getc(f)) != EOF && c != '\n') {
+    while ((c = getc(f)) != EOF) {
+      if (first_line_only && c == '\n')
+        break;
       if (indx == sizeof(buff)) {
         str << std::string(&buff[0], indx);
         indx = 0;
@@ -42,7 +45,12 @@ std::pair<int, std::string> exe_cmd_(const std::function<void(std::ostream &form
       buff[indx++] = (char)c;
     }
     str << std::string(&buff[0], indx);
-    return std::make_pair(pclose(f), str.str());
+    auto pc = pclose(f);
+    if (pc == -1)
+      anon_log_error("pclose failed");
+    else if (pc > 0)
+      anon_throw(std::runtime_error, "command - " << cmd.str() << " - failed: " << error_string(pc));
+    return str.str();
   }
-  return std::make_pair(errno, std::string());
+  anon_throw(std::runtime_error, "popen failed: " << errno_string());
 }
