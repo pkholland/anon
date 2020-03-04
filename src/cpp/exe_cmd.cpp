@@ -71,6 +71,8 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   auto bash_cmd = cmd.str();
   std::string error_str;
 
+  // fork, etc... are unhappy when executed from a fiber,
+  // so create a new thread and do the work from that thread
   std::thread t([comp_pipe, std_out, bash_cmd, &error_str]{
 
     int iop[2];
@@ -147,6 +149,10 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
     }
     
   });
+
+  // detach here.  We might come back from fp->read on a different
+  // os thread, and we don't want thread's dtor trying to do anything
+  // with the thread itself.
   t.detach();
 
   int exit_code;
@@ -170,4 +176,3 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
     return ret.substr(0, ret.find("\n"));
   return ret;
 }
-
