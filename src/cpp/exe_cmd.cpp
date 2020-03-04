@@ -206,6 +206,7 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
       // the child process
       dup2(iop.sv[0], 1); // reset stdout (1) to iop.sv[1] 
       iop.close(0);
+      iop.close(1);
 
       auto bash_file_name = "/bin/bash";
       auto bash_fd = open(bash_file_name, O_RDONLY);
