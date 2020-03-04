@@ -33,3 +33,6 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
 
 #define exe_cmd1(_body) exe_cmd_([&](std::ostream &formatter) { formatter << _body; }, true)
 #define exe_cmd(_body) exe_cmd_([&](std::ostream &formatter) { formatter << _body; }, false)
+
+void exe_cmd_init();
+void exe_cmd_term();

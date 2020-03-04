@@ -27,6 +27,7 @@
 #include "dns_lookup.h"
 #include "http_server.h"
 #include "fiber.h"
+#include "exe_cmd.h"
 
 #ifdef ANON_AWS
 #include "aws_client.h"
@@ -164,6 +165,7 @@ extern "C" int main(int argc, char **argv)
   dns_lookup::start_service();
   fiber::initialize();
   init_big_id_crypto();
+  exe_cmd_init();
 
   int ret = 0;
   try
@@ -328,6 +330,8 @@ extern "C" int main(int argc, char **argv)
     // created as a consequence of clients calling
     // 'connect' to this server, have been closed
     server_term();
+
+    exe_cmd_term();
 
     #ifdef ANON_AWS
     aws_client_term();
