@@ -24,6 +24,7 @@ $(ANON_ROOT)/src/cpp/mcdc.cpp\
 $(ANON_ROOT)/src/cpp/b64.cpp\
 $(ANON_ROOT)/src/cpp/percent_codec.cpp\
 $(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
+$(ANON_ROOT)/src/cpp/exe_cmd.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c
 
 ifneq ($(ANON_AWS),)

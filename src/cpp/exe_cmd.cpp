@@ -243,7 +243,7 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
     anon_log("bash stopped by signal: " << WSTOPSIG(pe.status));
 
   if (exit_code != 0)
-    anon_throw(std::runtime_error, "bash script failed");
+    anon_throw(std::runtime_error, "bash script failed: " << bash_cmd);
 
   auto ret = oss.str();
   if (first_line_only)
