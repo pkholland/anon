@@ -36,3 +36,6 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
 
 void exe_cmd_init();
 void exe_cmd_term();
+
+void reset_exe_cmd_count();
+int get_exe_cmd_count();

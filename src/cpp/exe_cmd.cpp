@@ -92,6 +92,8 @@ void handle_sigchld(int sig)
   }
 }
 
+std::atomic_int cmd_count;
+
 }
 
 void exe_cmd_init()
@@ -156,6 +158,8 @@ void exe_cmd_term()
 
 std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, bool first_line_only)
 {
+  ++cmd_count;
+
   sock_pr iop;
   proc_exit pe;
   std::ostringstream cmd;
@@ -249,4 +253,14 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   if (first_line_only)
     return ret.substr(0, ret.find("\n"));
   return ret;
+}
+
+void reset_exe_cmd_count()
+{
+  cmd_count = 0;
+}
+
+int get_exe_cmd_count()
+{
+  return cmd_count;
 }
