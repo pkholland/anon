@@ -252,6 +252,15 @@ public:
     }
   }
 
+  // executes all of the given 'fns' in parallel, in fibers, and
+  // does not return untill all have completed.  If no 'fn' exits
+  // with an exception then this will exit without an exception.
+  // If at least one exits with an exception, then this will throw
+  // the same exception - if that exception was a subclass of
+  // std::exception.  Otherwise it will thrown a std::runtime_error
+  // with the "what()" set to "unknown exception"
+  static void run_in_parallel(const std::vector<std::function<void()>>& fns, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown3");
+
   // note that this is an os thread blocking wait, and
   // should NOT be called from a fiber.  Doing so will
   // dead-lock the calling fiber since the running fiber

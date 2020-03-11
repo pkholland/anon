@@ -36,7 +36,7 @@ public:
   create(const char *host, int port,
          bool do_tls = false,
          const tls_context *tls_ctx = 0,
-         int max_conn_per_ep = 40,
+         int max_conn_per_ep = 64,
          int lookup_frequency_in_seconds = 20)
   {
     return std::make_shared<endpoint_cluster>(host, port, do_tls, tls_ctx, max_conn_per_ep, lookup_frequency_in_seconds);

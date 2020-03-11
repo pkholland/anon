@@ -194,6 +194,54 @@ int fiber::get_current_fiber_id()
   return params->current_fiber_ ? params->current_fiber_->fiber_id_ : 0;
 }
 
+void
+fiber::run_in_parallel(const std::vector<std::function<void()>>& fns, size_t stack_size, const char *fiber_name)
+{
+  auto num_fns = fns.size();
+  decltype(num_fns) num_completed = 0;
+  fiber_mutex mtx;
+  fiber_cond cond;
+  std::string error_str;
+  bool hit_error = false;
+
+  for (const auto& fn : fns)
+  {
+    run_in_fiber([fn, num_fns, &num_completed, &mtx, &cond, &error_str, &hit_error]{
+      try {
+        fn();
+      }
+      catch(const std::exception& exc)
+      {
+        fiber_lock l(mtx);
+        if (!hit_error)
+        {
+          error_str = exc.what();
+          hit_error = true;
+        }
+      }
+      catch(...)
+      {
+        fiber_lock l(mtx);
+        if (!hit_error)
+        {
+          error_str = "unknown";
+          hit_error = true;
+        }
+      }
+      fiber_lock l(mtx);
+      if (++num_completed == num_fns)
+        cond.notify_all();
+    }, stack_size, fiber_name);
+  }
+
+  fiber_lock l(mtx);
+  while (num_completed < num_fns)
+    cond.wait(l);
+
+  if (hit_error)
+    anon_throw(std::runtime_error, "run_in_parallel caught exception: " << error_str);
+}
+
 int get_current_fiber_id()
 {
   return fiber::get_current_fiber_id();
