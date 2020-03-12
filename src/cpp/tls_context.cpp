@@ -162,7 +162,7 @@ static const char *ssl_errors(unsigned long err)
   case X509_V_ERR_UNABLE_TO_GET_CRL:
     return "X509_V_ERR_UNABLE_TO_GET_CRL";
   case X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE:
-    return "X509_V_OK";
+    return "X509_V_ERR_UNABLE_TO_DECRYPT_CERT_SIGNATURE";
   case X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE:
     return "X509_V_ERR_UNABLE_TO_DECRYPT_CRL_SIGNATURE";
   case X509_V_ERR_UNABLE_TO_DECODE_ISSUER_PUBLIC_KEY:
@@ -226,7 +226,7 @@ static const char *ssl_errors(unsigned long err)
 
 void throw_ssl_error(unsigned long err)
 {
-  anon_throw(std::runtime_error,ssl_errors(err));
+  anon_throw(fiber_io_error,ssl_errors(err));
 }
 
 void throw_ssl_error()
