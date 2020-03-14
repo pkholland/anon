@@ -67,7 +67,7 @@ public:
     auto newepc = endpoint_cluster::create(uri.GetAuthority().c_str(), uri.GetPort(),
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
     newepc->disable_retries();
-    newepc->set_max_io_block_time(120);
+    //newepc->set_max_io_block_time(120);
     return m[key] = newepc;
   }
 
@@ -128,9 +128,15 @@ public:
     {
       MakeRequest(resp, request, request.GetUri(), readLimiter, writeLimiter, 0);
     }
-    catch(const fiber_io_error &exc) {
+    catch (const fiber_io_error &exc) {
 #if ANON_LOG_NET_TRAFFIC > 0
       anon_log("filber_io_error: " << exc.what());
+#endif
+      resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
+    }
+    catch (const fiber_io_timeout_error &exc) {
+#if ANON_LOG_NET_TRAFFIC > 0
+      anon_log("fiber_io_timeout_error: " << exc.what());
 #endif
       resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
     }

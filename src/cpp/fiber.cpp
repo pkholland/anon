@@ -194,6 +194,10 @@ int fiber::get_current_fiber_id()
   return params->current_fiber_ ? params->current_fiber_->fiber_id_ : 0;
 }
 
+namespace {
+  int parallel_count;
+}
+
 void
 fiber::run_in_parallel(const std::vector<std::function<void()>>& fns, size_t stack_size, const char *fiber_name)
 {
@@ -203,6 +207,8 @@ fiber::run_in_parallel(const std::vector<std::function<void()>>& fns, size_t sta
   fiber_cond cond;
   std::string error_str;
   bool hit_error = false;
+
+  parallel_count += num_fns;
 
   for (const auto& fn : fns)
   {
@@ -240,6 +246,16 @@ fiber::run_in_parallel(const std::vector<std::function<void()>>& fns, size_t sta
 
   if (hit_error)
     anon_throw(std::runtime_error, "run_in_parallel caught exception: " << error_str);
+}
+
+void fiber::clear_parallel_count()
+{
+  parallel_count = 0;
+}
+
+int fiber::get_parallel_count()
+{
+  return parallel_count;
 }
 
 int get_current_fiber_id()

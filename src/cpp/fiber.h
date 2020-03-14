@@ -261,6 +261,9 @@ public:
   // with the "what()" set to "unknown exception"
   static void run_in_parallel(const std::vector<std::function<void()>>& fns, size_t stack_size = k_default_stack_size, const char *fiber_name = "unknown3");
 
+  static void clear_parallel_count();
+  static int get_parallel_count();
+
   // note that this is an os thread blocking wait, and
   // should NOT be called from a fiber.  Doing so will
   // dead-lock the calling fiber since the running fiber
