@@ -311,7 +311,7 @@ void http_server::pipe_t::respond(const http_response &response)
     }
     rp << "\r\n";
   }
-  rp << "Content-Length: " << response.get_body().length() << "\r\n\r\n";
+  rp << "content-length: " << response.get_body().length() << "\r\n\r\n";
   if (response.get_body().length())
     rp << response.get_body();
 
