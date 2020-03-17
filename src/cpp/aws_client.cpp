@@ -439,7 +439,7 @@ public:
 Aws::SDKOptions aws_options;
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
 const char *aws_profile;
-Aws::String aws_default_region;
+std::string aws_default_region;
 
 } // namespace
 
@@ -543,14 +543,14 @@ const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &aws_get_cred_provider(
   return aws_cred_prov;
 }
 
-const Aws::String &aws_get_default_region()
+const std::string &aws_get_default_region()
 {
   return aws_default_region;
 }
 
-void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const Aws::String &region)
+void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const std::string &region)
 {
-  client_cfg.region = region;
+  client_cfg.region = region.c_str();
   client_cfg.executor = aws_executor::singleton;
   client_cfg.retryStrategy = std::make_shared<fiberRetryStrategy>();
 }
@@ -559,5 +559,119 @@ std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRet
 {
   return std::make_shared<fiberRetryStrategy>(maxRetries, scaleFactor);
 }
+
+namespace {
+
+fiber_mutex config_mtx;
+std::map<std::string, Aws::Client::ClientConfiguration> config_map;
+
+//#ifdef ANON_AWS_EC2
+std::map<std::string, Aws::EC2::EC2Client> ec2_map;
+//#endif
+
+//#ifdef ANON_AWS_DDB
+std::map<std::string, std::unique_ptr<Aws::DynamoDB::DynamoDBClient>> ddb_map;
+//#endif
+
+//#ifdef ANON_AWS_ROUTE53
+std::map<std::string, Aws::Route53::Route53Client> r53_map;
+//#endif
+
+//#ifdef ANON_AWS_S3
+std::map<std::string, Aws::S3::S3Client> s3_map;
+//#endif
+
+//#ifdef ANON_AWS_ACM
+std::map<std::string, Aws::ACM::ACMClient> acm_map;
+//#endif
+
+//#ifdef ANON_AWS_SQS
+std::map<std::string, Aws::SQS::SQSClient> sqs_map;
+//#endif
+
+const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
+{
+  if (config_map.find(region) == config_map.end())
+    aws_init_client_config(config_map[region], region);
+  return config_map[region];
+}
+
+}
+
+const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  return aws_get_client_config_nl(region);
+}
+
+//#ifdef ANON_AWS_EC2
+const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (ec2_map.find(region) == ec2_map.end())
+    ec2_map.emplace(std::make_pair(region,
+      Aws::EC2::EC2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return ec2_map[region];
+}
+//#endif
+
+//#ifdef ANON_AWS_DDB
+const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (ddb_map.find(region) == ddb_map.end())
+  {
+    std::unique_ptr<Aws::DynamoDB::DynamoDBClient>
+    c(new Aws::DynamoDB::DynamoDBClient(aws_get_cred_provider(), aws_get_client_config_nl(region)));
+    ddb_map[region] = std::move(c);
+  }
+  return *ddb_map[region];
+}
+//#endif
+
+//#ifdef ANON_AWS_ROUTE53
+const Aws::Route53::Route53Client& aws_get_r53_client()
+{
+  fiber_lock l(config_mtx);
+  std::string region = "us-east-1";
+  if (r53_map.find(region) == r53_map.end())
+    r53_map.emplace(std::make_pair(region,
+      Aws::Route53::Route53Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return r53_map[region];
+}
+//#endif
+
+//#ifdef ANON_AWS_S3
+const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (s3_map.find(region) == s3_map.end())
+    s3_map.emplace(std::make_pair(region,
+      Aws::S3::S3Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return s3_map[region];
+}
+//#endif
+
+//#ifdef ANON_AWS_ACM
+const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (acm_map.find(region) == acm_map.end())
+    acm_map.emplace(std::make_pair(region,
+      Aws::ACM::ACMClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return acm_map[region];
+}
+//#endif
+
+//#ifdef ANON_AWS_SQS
+const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (sqs_map.find(region) == sqs_map.end())
+    sqs_map.emplace(std::make_pair(region,
+      Aws::SQS::SQSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return sqs_map[region];
+}
+//#endif
 
 #endif

@@ -52,6 +52,21 @@ LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
 cflags+=-DANON_AWS_DDB
 endif
 
+ifneq ($(filter ROUTE53,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-route53 $(LIBS)
+cflags+=-DANON_AWS_ROUTE53
+endif
+
+ifneq ($(filter EC2,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-ec2 $(LIBS)
+cflags+=-DANON_AWS_EC2
+endif
+
+ifneq ($(filter ACM,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-acm $(LIBS)
+cflags+=-DANON_AWS_ACM
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\
