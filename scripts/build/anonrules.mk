@@ -195,7 +195,7 @@ define anon.cxx_compile_rule
 -include $(call anon.src_to_dep,$1)
 
 $(call anon.src_to_obj,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$1))dir.stamp
-	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 -std=c++11 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
+	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 -std=c++17 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
 
 endef
 
