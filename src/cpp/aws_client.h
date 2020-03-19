@@ -27,12 +27,34 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/client/RetryStrategy.h>
+
+#ifdef ANON_AWS_EC2
 #include <aws/ec2/EC2Client.h>
+#endif
+
+#ifdef ANON_AWS_DDB
 #include <aws/dynamodb/DynamoDBClient.h>
+#endif
+
+#ifdef ANON_AWS_ROUTE53
 #include <aws/route53/Route53Client.h>
+#endif
+
+#ifdef ANON_AWS_S3
 #include <aws/s3/S3Client.h>
+#endif
+
+#ifdef ANON_AWS_ACM
 #include <aws/acm/ACMClient.h>
+#endif
+
+#ifdef ANON_AWS_SQS
 #include <aws/sqs/SQSClient.h>
+#endif
+
+#ifdef ANON_AWS_ELBV2
+#include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
+#endif
 
 void aws_client_init();
 void aws_client_term();
@@ -73,12 +95,32 @@ std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRet
 // a cache of configs set up with aws_init_client_config
 const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region);
 
+#ifdef ANON_AWS_EC2
 const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region);
-const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region);
-const Aws::Route53::Route53Client& aws_get_r53_client();
-const Aws::S3::S3Client& aws_get_s3_client(const std::string& region);
-const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region);
-const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region);
+#endif
 
+#ifdef ANON_AWS_DDB
+const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_ROUTE53
+const Aws::Route53::Route53Client& aws_get_r53_client();
+#endif
+
+#ifdef ANON_AWS_S3
+const Aws::S3::S3Client& aws_get_s3_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_ACM
+const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_SQS
+const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_ELBV2
+const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client& aws_get_elbv2_client(const std::string& region);
+#endif
 
 #endif

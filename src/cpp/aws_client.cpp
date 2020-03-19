@@ -565,29 +565,33 @@ namespace {
 fiber_mutex config_mtx;
 std::map<std::string, Aws::Client::ClientConfiguration> config_map;
 
-//#ifdef ANON_AWS_EC2
+#ifdef ANON_AWS_EC2
 std::map<std::string, Aws::EC2::EC2Client> ec2_map;
-//#endif
+#endif
 
-//#ifdef ANON_AWS_DDB
+#ifdef ANON_AWS_DDB
 std::map<std::string, std::unique_ptr<Aws::DynamoDB::DynamoDBClient>> ddb_map;
-//#endif
+#endif
 
-//#ifdef ANON_AWS_ROUTE53
+#ifdef ANON_AWS_ROUTE53
 std::map<std::string, Aws::Route53::Route53Client> r53_map;
-//#endif
+#endif
 
-//#ifdef ANON_AWS_S3
+#ifdef ANON_AWS_S3
 std::map<std::string, Aws::S3::S3Client> s3_map;
-//#endif
+#endif
 
-//#ifdef ANON_AWS_ACM
+#ifdef ANON_AWS_ACM
 std::map<std::string, Aws::ACM::ACMClient> acm_map;
-//#endif
+#endif
 
-//#ifdef ANON_AWS_SQS
+#ifdef ANON_AWS_SQS
 std::map<std::string, Aws::SQS::SQSClient> sqs_map;
-//#endif
+#endif
+
+#ifdef ANON_AWS_ELBV2
+std::map<std::string, Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client> elbv2_map;
+#endif
 
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
@@ -604,7 +608,7 @@ const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string&
   return aws_get_client_config_nl(region);
 }
 
-//#ifdef ANON_AWS_EC2
+#ifdef ANON_AWS_EC2
 const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
@@ -613,9 +617,9 @@ const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
       Aws::EC2::EC2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return ec2_map[region];
 }
-//#endif
+#endif
 
-//#ifdef ANON_AWS_DDB
+#ifdef ANON_AWS_DDB
 const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
@@ -627,9 +631,9 @@ const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& regio
   }
   return *ddb_map[region];
 }
-//#endif
+#endif
 
-//#ifdef ANON_AWS_ROUTE53
+#ifdef ANON_AWS_ROUTE53
 const Aws::Route53::Route53Client& aws_get_r53_client()
 {
   fiber_lock l(config_mtx);
@@ -639,9 +643,9 @@ const Aws::Route53::Route53Client& aws_get_r53_client()
       Aws::Route53::Route53Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return r53_map[region];
 }
-//#endif
+#endif
 
-//#ifdef ANON_AWS_S3
+#ifdef ANON_AWS_S3
 const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
@@ -650,9 +654,9 @@ const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
       Aws::S3::S3Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return s3_map[region];
 }
-//#endif
+#endif
 
-//#ifdef ANON_AWS_ACM
+#ifdef ANON_AWS_ACM
 const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
@@ -661,9 +665,9 @@ const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
       Aws::ACM::ACMClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return acm_map[region];
 }
-//#endif
+#endif
 
-//#ifdef ANON_AWS_SQS
+#ifdef ANON_AWS_SQS
 const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
@@ -672,6 +676,18 @@ const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region)
       Aws::SQS::SQSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return sqs_map[region];
 }
-//#endif
+#endif
+
+#ifdef ANON_AWS_ELBV2
+const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client&
+aws_get_elbv2_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (elbv2_map.find(region) == elbv2_map.end())
+    elbv2_map.emplace(std::make_pair(region,
+      Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return elbv2_map[region];
+}
+#endif
 
 #endif
