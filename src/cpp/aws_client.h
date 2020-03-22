@@ -56,6 +56,10 @@
 #include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
 #endif
 
+#ifdef ANON_AWS_ACCEL
+#include <aws/globalaccelerator/GlobalAcceleratorClient.h>
+#endif
+
 void aws_client_init();
 void aws_client_term();
 
@@ -121,6 +125,10 @@ const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region);
 
 #ifdef ANON_AWS_ELBV2
 const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client& aws_get_elbv2_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_ACCEL
+const Aws::GlobalAccelerator::GlobalAcceleratorClient& aws_get_accel_client();
 #endif
 
 #endif

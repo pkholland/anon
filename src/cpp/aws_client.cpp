@@ -593,6 +593,10 @@ std::map<std::string, Aws::SQS::SQSClient> sqs_map;
 std::map<std::string, Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client> elbv2_map;
 #endif
 
+#ifdef ANON_AWS_ACCEL
+std::map<std::string, Aws::GlobalAccelerator::GlobalAcceleratorClient> accel_map;
+#endif
+
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
   if (config_map.find(region) == config_map.end())
@@ -687,6 +691,19 @@ aws_get_elbv2_client(const std::string& region)
     elbv2_map.emplace(std::make_pair(region,
       Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return elbv2_map[region];
+}
+#endif
+
+#ifdef ANON_AWS_ACCEL
+const Aws::GlobalAccelerator::GlobalAcceleratorClient&
+aws_get_accel_client()
+{
+  fiber_lock l(config_mtx);
+  std::string region = "us-east-1";
+  if (accel_map.find(region) == accel_map.end())
+    accel_map.emplace(std::make_pair(region,
+      Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return accel_map[region];
 }
 #endif
 

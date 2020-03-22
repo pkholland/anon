@@ -72,6 +72,11 @@ LIBS:=-laws-cpp-sdk-elasticloadbalancingv2 $(LIBS)
 cflags+=-DANON_AWS_ELBV2
 endif
 
+ifneq ($(filter ACCEL,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-globalaccelerator $(LIBS)
+cflags+=-DANON_AWS_ACCEL
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\
