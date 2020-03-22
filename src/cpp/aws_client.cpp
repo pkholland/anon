@@ -699,7 +699,7 @@ const Aws::GlobalAccelerator::GlobalAcceleratorClient&
 aws_get_accel_client()
 {
   fiber_lock l(config_mtx);
-  std::string region = "us-east-1";
+  std::string region = "us-west-1";
   if (accel_map.find(region) == accel_map.end())
     accel_map.emplace(std::make_pair(region,
       Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
