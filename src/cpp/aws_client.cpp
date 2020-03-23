@@ -38,6 +38,43 @@
 #include "aws_http.h"
 #include "http_client.h"
 
+#ifdef ANON_AWS_EC2
+#include <aws/ec2/EC2Client.h>
+#endif
+
+#ifdef ANON_AWS_DDB
+#include <aws/dynamodb/DynamoDBClient.h>
+#endif
+
+#ifdef ANON_AWS_ROUTE53
+#include <aws/route53/Route53Client.h>
+#endif
+
+#ifdef ANON_AWS_S3
+#include <aws/s3/S3Client.h>
+#endif
+
+#ifdef ANON_AWS_ACM
+#include <aws/acm/ACMClient.h>
+#endif
+
+#ifdef ANON_AWS_SQS
+#include <aws/sqs/SQSClient.h>
+#endif
+
+#ifdef ANON_AWS_ELBV2
+#include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
+#endif
+
+#ifdef ANON_AWS_ACCEL
+#include <aws/globalaccelerator/GlobalAcceleratorClient.h>
+#endif
+
+#ifdef ANON_AWS_AUTOSCALING
+#include <aws/autoscaling/AutoScalingClient.h>
+#endif
+
+
 namespace Aws
 {
 namespace Client
@@ -597,6 +634,10 @@ std::map<std::string, Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client>
 std::map<std::string, Aws::GlobalAccelerator::GlobalAcceleratorClient> accel_map;
 #endif
 
+#ifdef ANON_AWS_AUTOSCALING
+std::map<std::string, Aws::AutoScaling::AutoScalingClient> auto_map;
+#endif
+
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
   if (config_map.find(region) == config_map.end())
@@ -704,6 +745,18 @@ aws_get_accel_client()
     accel_map.emplace(std::make_pair(region,
       Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return accel_map[region];
+}
+#endif
+
+#ifdef ANON_AWS_AUTOSCALING
+const Aws::AutoScaling::AutoScalingClient&
+aws_get_autoscaling_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (auto_map.find(region) == auto_map.end())
+    auto_map.emplace(std::make_pair(region,
+      Aws::AutoScaling::AutoScalingClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return auto_map[region];
 }
 #endif
 

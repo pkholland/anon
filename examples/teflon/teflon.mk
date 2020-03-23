@@ -77,6 +77,11 @@ LIBS:=-laws-cpp-sdk-globalaccelerator $(LIBS)
 cflags+=-DANON_AWS_ACCEL
 endif
 
+ifneq ($(filter AUTOSCALING,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-autoscaling $(LIBS)
+cflags+=-DANON_AWS_AUTOSCALING
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\

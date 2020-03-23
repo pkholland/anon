@@ -29,35 +29,75 @@
 #include <aws/core/client/RetryStrategy.h>
 
 #ifdef ANON_AWS_EC2
-#include <aws/ec2/EC2Client.h>
+namespace Aws {
+namespace EC2 {
+class EC2Client;
+}
+}
 #endif
 
 #ifdef ANON_AWS_DDB
-#include <aws/dynamodb/DynamoDBClient.h>
+namespace Aws {
+namespace DynamoDB {
+class DynamoDBClient;
+}
+}
 #endif
 
 #ifdef ANON_AWS_ROUTE53
-#include <aws/route53/Route53Client.h>
+namespace Aws {
+namespace Route53 {
+class Route53Client;
+}
+}
 #endif
 
 #ifdef ANON_AWS_S3
-#include <aws/s3/S3Client.h>
+namespace Aws {
+namespace S3 {
+class S3Client;
+}
+}
 #endif
 
 #ifdef ANON_AWS_ACM
-#include <aws/acm/ACMClient.h>
+namespace Aws {
+namespace ACM {
+class ACMClient;
+}
+}
 #endif
 
 #ifdef ANON_AWS_SQS
-#include <aws/sqs/SQSClient.h>
+namespace Aws {
+namespace SQS {
+class SQSClient;
+}
+}
 #endif
 
 #ifdef ANON_AWS_ELBV2
-#include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Client.h>
+namespace Aws {
+namespace ElasticLoadBalancingv2 {
+class ElasticLoadBalancingv2Client;
+}
+}
 #endif
 
 #ifdef ANON_AWS_ACCEL
-#include <aws/globalaccelerator/GlobalAcceleratorClient.h>
+namespace Aws {
+namespace GlobalAccelerator {
+class GlobalAcceleratorClient;
+}
+}
+#endif
+
+#ifdef ANON_AWS_AUTOSCALING
+namespace Aws {
+namespace AutoScaling {
+class AutoScalingClient;
+}
+}
 #endif
 
 void aws_client_init();
@@ -129,6 +169,10 @@ const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client& aws_get_elbv2_c
 
 #ifdef ANON_AWS_ACCEL
 const Aws::GlobalAccelerator::GlobalAcceleratorClient& aws_get_accel_client();
+#endif
+
+#ifdef ANON_AWS_AUTOSCALING
+const Aws::AutoScaling::AutoScalingClient& aws_get_autoscaling_client(const std::string& region);
 #endif
 
 #endif
