@@ -40,7 +40,20 @@ void run_server(const ec2_info &ec2i)
   sproc_mgr_init(port);
   anon_log("epoxy bound to network port " << port);
 
-  if (sync_teflon_app(ec2i) != teflon_server_running) {
+  teflon_state st = teflon_server_failed;
+  try {
+    st = sync_teflon_app(ec2i);
+  }
+  catch(const std::exception& exc)
+  {
+    anon_log_error("server failed to start: " << exc.what());
+  }
+  catch(...)
+  {
+    anon_log_error("server failed to start");
+  }
+
+  if (st != teflon_server_running) {
     anon_log_error("cannot start teflon app - shutting down");
     sproc_mgr_term();
     return;

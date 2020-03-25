@@ -23,11 +23,15 @@
 #include "sync_teflon_app.h"
 #include "log.h"
 #include "sproc_mgr.h"
+#include "nlohmann/json.hpp"
 #include <sys/stat.h>
 #include <aws/core/Aws.h>
 #include <aws/core/utils/Outcome.h>
 #include <aws/dynamodb/DynamoDBClient.h>
-#include <aws/dynamodb/model/GetItemRequest.h>
+#include <aws/dynamodb/model/QueryRequest.h>
+
+using namespace nlohmann;
+using namespace Aws::DynamoDB::Model;
 
 namespace
 {
@@ -36,7 +40,7 @@ struct tef_app
 {
   tef_app(const Aws::String &id,
           const Aws::Vector<Aws::String> &filesv,
-          Aws::Map<Aws::String, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> &fids)
+          Aws::Map<Aws::String, const std::shared_ptr<AttributeValue>> &fids)
       : id(id)
   {
     for (auto &f : filesv)
@@ -49,7 +53,7 @@ struct tef_app
   std::map<Aws::String, Aws::String> files;
 };
 
-bool exe_cmd(const std::string &str)
+void exe_cmd(const std::string &str)
 {
   std::string cmd = "bash -c '" + str + "'";
   auto f = popen(cmd.c_str(), "r");
@@ -57,42 +61,15 @@ bool exe_cmd(const std::string &str)
   {
     auto exit_code = pclose(f);
     if (exit_code != 0)
-    {
-      anon_log_error("command: " << str << " exited non-zero: " << error_string(exit_code));
-      return false;
-    }
+      anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
   }
   else
   {
-    anon_log_error("popen failed: " << errno_string());
-    return false;
+    anon_throw(std::runtime_error, "popen failed: " << errno_string());
   }
-  return true;
 }
 
-std::pair<int, std::string> exe_cmd1(const std::string &cmd)
-{
-  auto f = popen(cmd.c_str(), "r");
-  if (f)
-  {
-    std::ostringstream str;
-    char buff[1024];
-    auto indx = 0;
-    int c;
-    while ((c = getc(f)) != EOF && c != '\n') {
-      if (indx == sizeof(buff)) {
-        str << std::string(&buff[0], indx);
-        indx = 0;
-      }
-      buff[indx++] = (char)c;
-    }
-    str << std::string(&buff[0], indx);
-    return std::make_pair(pclose(f), str.str());
-  }
-  return std::make_pair(errno, std::string());
-}
-
-bool create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
+void create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
 {
   auto dir = ec2i.root_dir;
   if (id.size() != 0)
@@ -100,9 +77,9 @@ bool create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
     dir += "/";
     dir += id.c_str();
   }
-  std::ostringstream str;
-  str << "rm -rf " << dir << " && mkdir " << dir;
-  return exe_cmd(str.str());
+  std::ostringstream oss;
+  oss << "rm -rf " << dir << " && mkdir " << dir;
+  exe_cmd(oss.str());
 }
 
 void remove_directory(const ec2_info &ec2i, const Aws::String &id)
@@ -113,10 +90,28 @@ void remove_directory(const ec2_info &ec2i, const Aws::String &id)
     dir += "/";
     dir += id.c_str();
   }
-  std::ostringstream str;
-  str << "rm -rf " << id;
-  if (!exe_cmd(str.str()))
-    anon_log_error("failed to remove " << id << " directory");
+  std::ostringstream oss;
+  oss << "rm -rf " << id;
+  exe_cmd(oss.str());
+}
+
+bool validate_user_data_string(const json& ud, const char* key)
+{
+  if (ud.find(key) == ud.end() || !ud[key].is_string()) {
+    anon_log_error("no " << key << " in user data");
+    return false;
+  }
+  return true;
+}
+
+bool validate_all_user_data_strings(const json& ud)
+{
+  return validate_user_data_string(ud, "artifacts_ddb_table_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_region")
+    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key")
+    && validate_user_data_string(ud, "artifacts_s3_bucket")
+    && validate_user_data_string(ud, "artifacts_s3_key")
+    && validate_user_data_string(ud, "teflon_service");
 }
 
 std::shared_ptr<tef_app> curr_app;
@@ -125,122 +120,70 @@ std::shared_ptr<tef_app> curr_app;
 
 teflon_state sync_teflon_app(const ec2_info &ec2i)
 {
-  auto machine_name = exe_cmd1("uname -m");
-  if (machine_name.first != 0) {
-    anon_log_error("uname -m failed");
+  auto &ud = ec2i.user_data_js;
+  if (!validate_all_user_data_strings(ud))
     return teflon_server_failed;
-  }
-  if (ec2i.user_data_js.find("current_server_primary_key_value") == ec2i.user_data_js.end() || ec2i.user_data_js.find("current_server_primary_key_name") == ec2i.user_data_js.end())
-  {
-    anon_log_error("no current server info specified in user data - cannot start teflon app");
-    return teflon_server_failed;
-  }
-
-  if (!curr_app)
-  {
-    if (!create_empty_directory(ec2i, ""))
-      return teflon_server_failed;
-  }
 
   Aws::Client::ClientConfiguration ddb_config;
-  if (ec2i.user_data_js.find("current_server_region") != ec2i.user_data_js.end()) {
-    std::string reg = ec2i.user_data_js["current_server_region"];
-    ddb_config.region = reg.c_str();
-  }
-  else
-    ddb_config.region = ec2i.default_region;
+  std::string region = ud["artifacts_ddb_table_region"];
+  ddb_config.region = region.c_str();
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
-  Aws::DynamoDB::Model::AttributeValue primary_key;
-  std::string cs_primary_key = ec2i.user_data_js["current_server_primary_key_value"];
-  cs_primary_key += "_";
-  cs_primary_key += machine_name.second;
-  primary_key.SetS(cs_primary_key.c_str());
-  Aws::DynamoDB::Model::GetItemRequest req;
-  std::string cs_table_name = ec2i.user_data_js["current_server_table_name"];
-  std::string cs_key_name = ec2i.user_data_js["current_server_primary_key_name"];
-  req.WithTableName(cs_table_name.c_str())
-      .AddKey(cs_key_name.c_str(), primary_key);
-  auto outcome = ddbc.GetItem(req);
+  if (!curr_app)
+    create_empty_directory(ec2i, "");
+
+  std::string table_name = ud["artifacts_ddb_table_name"];
+  Aws::String table_name_ = table_name.c_str();
+  std::string key_name = ud["artifacts_ddb_table_primary_key"];
+  Aws::String key_name_ = key_name.c_str();
+  std::string service = ud["teflon_service"];
+  Aws::String sevice_ = service.c_str();
+
+  QueryRequest  q_req;
+  q_req.WithTableName(table_name_)
+    .WithKeyConditionExpression("#A = :a")
+    .WithScanIndexForward(false)
+    .AddExpressionAttributeNames("#A", key_name_)
+    .AddExpressionAttributeValues(":a", AttributeValue(sevice_));
+
+  auto outcome = ddbc.Query(q_req);
   if (!outcome.IsSuccess())
-  {
-    anon_log_error("GetItem failed: " << outcome.GetError());
-    return teflon_server_failed;
-  }
+    anon_throw(std::runtime_error, "Query failed: " << outcome.GetError());
+  auto &result = outcome.GetResult();
+  auto &items = result.GetItems();
+  if (items.size() == 0)
+    anon_throw(std::runtime_error, "no item for " << service << " in ddb table " << table_name);
+  auto &cur_def = items[0];
+  auto sha_it = cur_def.find("exe-sha");
+  if (sha_it == cur_def.end())
+    anon_throw(std::runtime_error, "item missing \"exe-sha\" entry");
 
-  auto &map = outcome.GetResult().GetItem();
-  auto state_it = map.find("state");
-  if (state_it == map.end())
-  {
-    anon_log_error("current_server record missing required \"state\" field");
-    return teflon_server_failed;
-  }
-  auto state = state_it->second.GetS();
-  if (state == "stop")
-  {
-    if (curr_app)
-      anon_log("stopping server");
-    else
-      anon_log("resin booted with server record in stopped state - server will not run");
-    return teflon_shut_down;
-  }
-
-  if (state != "run")
-  {
-    anon_log_error("unknown teflon server state: " << state);
-    return teflon_server_failed;
-  }
-
-  auto id_it = map.find("current_server_id");
-
-  auto end = map.end();
-  if (id_it == end)
-  {
-    anon_log_error("current_server record missing required \"current_server_id\" field");
-    return teflon_server_failed;
-  }
-
-  auto current_server_id = id_it->second.GetS();
+  auto current_server_id = sha_it->second.GetS();
   if (curr_app && current_server_id == curr_app->id)
   {
     anon_log("current server definition matches running server, no-op");
     return teflon_server_still_running;
   }
 
-  auto files_it = map.find("files");
-  auto exe_it = map.find("entry");
-  auto ids_it = map.find("fids");
+  auto end = cur_def.end();
+  auto files_it = cur_def.find("files");
+  auto exe_it = cur_def.find("entry");
+  auto ids_it = cur_def.find("fids");
   if (files_it == end || exe_it == end || ids_it == end)
-  {
-    anon_log_error("current_server record missing required \"files\", \"entry\", and/or \"fids\" field(s)");
-    return teflon_server_failed;
-  }
+    anon_throw(std::runtime_error, "current_server record missing required \"files\", \"entry\", and/or \"fids\" field(s)");
 
   auto files_needed = files_it->second.GetSS();
   auto file_to_execute = exe_it->second.GetS();
   auto ids = ids_it->second.GetM();
 
-  if (ec2i.user_data_js.find("current_server_artifacts_bucket") == ec2i.user_data_js.end() || ec2i.user_data_js.find("current_server_artifacts_key") == ec2i.user_data_js.end())
-  {
-    anon_log_error("user data missing required fields \"current_server_artifacts_bucket\" and/or \"current_server_artifacts_key\"");
-    return teflon_server_failed;
-  }
-  std::string bucket = ec2i.user_data_js["current_server_artifacts_bucket"];
-  std::string key = ec2i.user_data_js["current_server_artifacts_key"];
-  auto artif_region = ec2i.default_region;
-  if (ec2i.user_data_js.find("current_server_artifacts_region") != ec2i.user_data_js.end()) {
-    std::string reg = ec2i.user_data_js["current_server_artifacts_region"];
-    artif_region = reg.c_str();
-  }
+  std::string bucket = ud["artifacts_s3_bucket"];
+  std::string key = ud["artifacts_s3_key"];
 
   std::ostringstream files_cmd;
   for (const auto &f : files_needed)
   {
     if (ids.find(f) == ids.end())
-    {
-      anon_log_error("file: \"" << f << "\" missing in fids");
-      return teflon_server_failed;
-    }
+      anon_throw(std::runtime_error, "file: \"" << f << "\" missing in fids");
     if (curr_app && curr_app->files.find(f) != curr_app->files.end())
     {
       // f matches a file we have already downloaded, so just hard link it
@@ -252,16 +195,14 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     else
     {
       // does not match an existing file, so download it from s3
-      files_cmd << "aws s3 --region " << artif_region << " cp s3://" << bucket << "/" << key
+      files_cmd << "aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
                 << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
     }
   }
-  if (!create_empty_directory(ec2i, current_server_id))
-    return teflon_server_failed;
+  create_empty_directory(ec2i, current_server_id);
   files_cmd << "wait < <(jobs -p)\n";
-  if (!exe_cmd(files_cmd.str()))
-    return teflon_server_failed;
+  exe_cmd(files_cmd.str());
 
   std::ostringstream ef;
   ef << ec2i.root_dir << "/" << current_server_id << "/" << file_to_execute;
