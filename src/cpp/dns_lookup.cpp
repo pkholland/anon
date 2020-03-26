@@ -268,14 +268,14 @@ public:
 #ifdef ANON_LOG_DNS_LOOKUP
     anon_log("looking up " << host << ":" << port);
 #endif
-    write(singleton->cmd_writeFd, &cr, sizeof(cr));
+    if (write(singleton->cmd_writeFd, &cr, sizeof(cr))) {}
   }
 
   ~addrinfo_service()
   {
     anon_log("addrinfo_service::~addrinfo_service");
     cmd_rec *cr = 0;
-    write(cmd_writeFd, &cr, sizeof(cr));
+    if (write(cmd_writeFd, &cr, sizeof(cr))) {}
     read_thread.join();
     close(cmd_readFd);
     close(cmd_writeFd);

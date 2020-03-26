@@ -150,7 +150,7 @@ void exe_cmd_init()
 void exe_cmd_term()
 {
   proc_exit_status pes = {0,0};
-  ::write(death_pipe[0], &pes, sizeof(pes));
+  if (::write(death_pipe[0], &pes, sizeof(pes))){};
   death_fiber->join();
   delete death_fiber;
   ::close(death_pipe[0]);

@@ -67,6 +67,19 @@ anon.src_to_obj=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$
 # $1 = Source Name
 #
 anon.src_to_dep=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$(subst ..,__,$1))).d
+
+#
+# Convert a source proto(buf) file into its two *.pb.h and *.pb.cc files - in the same directory as $1
+#
+
+anon.src_to_pb=$(basename $1).pb.h $(basename $1).pb.cc
+
+#
+# Convert a source proto(buf) file into hust the *.pb.cc file
+#
+anon.src_to_pb_cc=$(basename $1).pb.cc
+
+
 #
 # Convert a (re)source path to it's equivalent auto_gen file
 #
@@ -90,8 +103,8 @@ endif
 #
 # compiler flags that are used in release and debug builds
 #
-#CFLAGS_release+=-O2 -DNDEBUG
-CFLAGS_release+=-ggdb -O0 -DDEBUG
+CFLAGS_release+=-O2 -DNDEBUG
+#CFLAGS_release+=-ggdb -O0 -DDEBUG
 CFLAGS_debug+=-ggdb -O0 -DDEBUG
 
 STRIP_release=strip     $1
@@ -172,6 +185,7 @@ help:
 anon.cc=gcc
 anon.cxx=gcc
 anon.link=gcc
+anon.protoc=protoc
 
 
 #
@@ -199,6 +213,16 @@ $(call anon.src_to_obj,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.op
 
 endef
 
+define anon.protoc_compile_rule
+
+$(call anon.src_to_pb,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_pb,$1))dir.stamp
+	$(call anon.CALL_TOOL,$(anon.protoc),--cpp_out . $$<,$$@)
+
+$(call anon.src_to_obj,$(basename $1)): $(basename $1).pb.cc $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$1))dir.stamp
+	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 -std=c++17 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
+
+endef
+
 define anon.linker_rule
 
 $(anon.OUT_DIR)/$(CONFIG)/$1: $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $(foreach src,$2,$(call anon.src_to_obj,$(src)))
@@ -207,6 +231,8 @@ $(anon.OUT_DIR)/$(CONFIG)/$1: $(anon.INTERMEDIATE_DIR)/$(CONFIG)/linker.opts $(f
 	$(call STRIP_$(CONFIG), $$@)
 
 endef
+
+
 
 anon.all_sources:=
 
@@ -225,6 +251,7 @@ define anon.BUILD_RULES
 
 $(foreach cpp_src,$(filter %.cc %.cpp,$(filter-out $(anon.all_sources),$2 $(call anon.all_resource_files,$1))),$(call anon.cxx_compile_rule,$(cpp_src),$(foreach inc,$3,-I$(inc)),$5))
 $(foreach c_src,$(filter %.c,$(filter-out $(anon.all_sources),$2)),$(call anon.c_compile_rule,$(c_src),$(foreach inc,$3,-I$(inc)),$5))
+$(foreach proto_src,$(filter %.proto,$(filter-out $(anon.all_sources),$2 $(call anon.all_resource_files,$1))),$(call anon.protoc_compile_rule,$(proto_src),$(foreach inc,$3,-I$(inc)),$5))
 $(call anon.linker_rule,$1,$2 $(call anon.all_resource_files,$1),$4)
 
 all: $(anon.OUT_DIR)/$(CONFIG)/$1
