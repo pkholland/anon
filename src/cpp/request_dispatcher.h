@@ -47,7 +47,7 @@
  *        "hello",
  *        [](http_server::pipe_t &pipe, const http_request &request){
  *          http_response response;
- *          response.add_header("Content-Type", "text/plain");
+ *          response.add_header("content-type", "text/plain");
  *          response << "myapi says hello\n";
  *          pipe.respond(response);
  *        });
@@ -73,7 +73,7 @@
  *        "{client_name}/hello",
  *        [](http_server::pipe_t &pipe, const http_request &request, const std::string& client_name){
  *          http_response response;
- *          response.add_header("Content-Type", "text/plain");
+ *          response.add_header("content-type", "text/plain");
  *          response << "hi " << client_name << ", how's it going?\n";
  *          pipe.respond(response);
  *        });

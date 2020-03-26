@@ -114,7 +114,7 @@ extern "C" int main(int argc, char **argv)
     my_http.start(http_port,
                   [](http_server::pipe_t &pipe, const http_request &request) {
                     http_response response;
-                    response.add_header("Content-Type", "text/plain");
+                    response.add_header("content-type", "text/plain");
                     response << "hello browser!\n\n";
                     response << "src addr: " << *request.src_addr << "\n";
                     response << "http version major: " << request.http_major << "\n";
@@ -654,11 +654,11 @@ extern "C" int main(int argc, char **argv)
 
                   std::ostringstream oss;
                   oss << "POST /account/amfgateway2 HTTP/1.1\r\n";
-                  oss << "Host: " << host << "\r\n";
-                  oss << "Content-Length: " << body_st.length() << "\r\n";
-                  oss << "User-Agent: anon_agent\r\n";
-                  oss << "Content-Type: text/xml;charset=utf-8\r\n";
-                  oss << "Accept: text/xml;charset=utf-8\r\n";
+                  oss << "host: " << host << "\r\n";
+                  oss << "content-length: " << body_st.length() << "\r\n";
+                  oss << "user-agent: anon_agent\r\n";
+                  oss << "content-type: text/xml;charset=utf-8\r\n";
+                  oss << "accept: text/xml;charset=utf-8\r\n";
                   oss << "\r\n";
                   oss << body_st.c_str();
 

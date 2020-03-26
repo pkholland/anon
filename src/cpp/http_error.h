@@ -76,16 +76,16 @@ void throw_request_error_(int code, T err)
 inline void reply_back_error(const char* error_type, const char* msg, const char* response_code,
                     http_server::pipe_t &pipe)
 {
-  anon_log("request_wrap caught " << error_type << ": " << msg);
+  //anon_log("request_wrap caught " << error_type << ": " << msg);
   http_response response;
-  response.add_header("Content-Type", "text/plain");
+  response.add_header("content-type", "text/plain");
   response.set_status_code(response_code);
   response << msg << "\n";
   try {
     pipe.respond(response);
   }
   catch(...) {
-    anon_log("request_wrap caught exception trying to respond with error");
+    //anon_log("request_wrap caught exception trying to respond with error");
   }
 }
 

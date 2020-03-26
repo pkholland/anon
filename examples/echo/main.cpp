@@ -54,7 +54,7 @@ extern "C" int main(int argc, char **argv)
   http_server my_http(http_port,
                       [](http_server::pipe_t &pipe, const http_request &request) {
                         http_response response;
-                        response.add_header("Content-Type", "text/plain");
+                        response.add_header("content-type", "text/plain");
                         response << "\n\n   Hello World!\n";
                         //response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
                         pipe.respond(response);

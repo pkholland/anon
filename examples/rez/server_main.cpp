@@ -116,8 +116,8 @@ void server_init()
         anon_log("etags do not match, returning 200 with " << (permits_gzip(request.headers.get_header("accept-encoding")) ? "gzip" : "identity") << " encoding");
 
         http_response response;
-        response.add_header("ETag", ent->etag);
-        response.add_header("Content-Type", ent->content_type);
+        response.add_header("etag", ent->etag);
+        response.add_header("content-type", ent->content_type);
         if (permits_gzip(request.headers.get_header("accept-encoding")))
         {
           response.add_header("content-encoding", "gzip");
@@ -148,7 +148,7 @@ void server_respond(http_server::pipe_t &pipe, const http_request &request, bool
   anon_log("returning 404 for \"" << request.method_str() << " " << request.get_url_field(UF_PATH) << "\"");
 
   http_response response;
-  response.add_header("Content-Type", "text/plain");
+  response.add_header("content-type", "text/plain");
   response << "404 - not found\n";
   response << request.get_url_field(UF_PATH) << "\n";
   pipe.respond(response);

@@ -51,8 +51,8 @@ void http2_handler::exec(http_server::pipe_t &pipe, const http_request &request)
   // acknowledg the 1.x -> 2 upgrade
   http_response resp;
   resp.set_status_code("101 Switching Protocols");
-  resp.add_header("Connection", "Upgrade");
-  resp.add_header("Upgrade", http2::http2_name);
+  resp.add_header("connection", "Upgrade");
+  resp.add_header("upgrade", http2::http2_name);
   pipe.respond(resp);
 
   // send the server "preface" (section 3.5)

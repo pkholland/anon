@@ -32,7 +32,7 @@ void server_init()
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
   http_response response;
-  response.add_header("Content-Type", "text/plain");
+  response.add_header("content-type", "text/plain");
   response << "Hello from Teflon!\n";
   response << "your url query was: " << request.get_url_field(UF_QUERY) << "\n";
   response << "server response generated from:\n";

@@ -384,7 +384,10 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
         pipe = std::unique_ptr<pipe_t>(conn.second.release());
       sock = std::shared_ptr<endpoint::sock>(new endpoint::sock(std::move(pipe)));
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("epc established new connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_);
+      sockaddr_in6 local_addr;
+      auto local_addr_len = (socklen_t)sizeof(local_addr);
+      getsockname(sock->pipe_->get_fd(), (struct sockaddr*)&local_addr, &local_addr_len);
+      anon_log("epc established new connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_ << " from " << local_addr);
 #endif
     }
   }
