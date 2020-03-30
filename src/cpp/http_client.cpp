@@ -131,6 +131,9 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_
       string_len val(c->last_value_start, c->last_value_len);
       c->cr->headers.headers[fld] = val;
     }
+    c->cr->has_content_length = (p->flags & F_CONTENTLENGTH) != 0;
+    c->cr->content_length = p->content_length;
+
     if (c->read_body_)
     {
       if (p->flags & F_CONTENTLENGTH)

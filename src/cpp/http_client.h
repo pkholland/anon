@@ -30,7 +30,9 @@ struct http_client_response
   http_client_response()
       : http_major_(0),
         http_minor_(0),
-        should_keep_alive(false)
+        should_keep_alive(false),
+        has_content_length(false),
+        content_length(0)
   {
   }
 
@@ -50,6 +52,8 @@ struct http_client_response
   int get_http_minor() const { return http_minor_; }
 
   const char *get_header_buf() const { return &header_buf_[0]; }
+  bool has_content_length;
+  size_t content_length;
 
 private:
   char header_buf_[4096];
