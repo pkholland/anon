@@ -25,6 +25,7 @@
 #include "log.h"
 #include "sync_teflon_app.h"
 #include "server_control.h"
+#include <signal.h>
 
 void run_server(const ec2_info &ec2i)
 {
@@ -36,6 +37,11 @@ void run_server(const ec2_info &ec2i)
   }
   int port = ec2i.user_data_js["server_port"];
   int cnt_port = ec2i.user_data_js["control_port"];
+
+  sigset_t sigs;
+  sigemptyset(&sigs);
+  sigaddset(&sigs, SIGPIPE);
+  pthread_sigmask(SIG_BLOCK, &sigs, NULL);
 
   sproc_mgr_init(port);
   anon_log("epoxy bound to network port " << port);

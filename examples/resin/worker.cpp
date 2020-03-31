@@ -251,7 +251,7 @@ void run_worker(const ec2_info &ec2i)
       else if (ret > 0) {
         // clear the data written to this pipe
         uint64_t unused;
-        read(timerfd, &unused, sizeof(unused));
+        if (read(timerfd, &unused, sizeof(unused))) {}
       }
 
       std::unique_lock<std::mutex> l(keep_alive_mutex);
