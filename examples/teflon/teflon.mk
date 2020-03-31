@@ -30,7 +30,8 @@ $(ANON_PARENT)/http-parser/http_parser.c
 ifneq ($(ANON_AWS),)
 SOURCES+=\
 $(ANON_ROOT)/src/cpp/aws_http.cpp\
-$(ANON_ROOT)/src/cpp/aws_client.cpp
+$(ANON_ROOT)/src/cpp/aws_client.cpp\
+$(ANON_ROOT)/src/cpp/aws_throttle.cpp
 INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DANON_AWS
 LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
