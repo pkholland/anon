@@ -140,14 +140,19 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
       while (true)
       {
         pos = quer.find(it + "=", pos);
-        if (pos == 0 || (pos != std::string::npos && quer[pos - 1] == '&'))
+        if (pos == std::string::npos)
+          break;
+        if (pos == 0 || (quer[pos - 1] == '&'))
           break;
         pos = quer.find("&", pos + skip_len);
-        if (pos == std::string::npos)
-          throw_request_error(HTTP_STATUS_BAD_REQUEST, "missing, required query field: " << it);
       }
-      auto v = quer.substr(pos + skip_len);
-      ret.second.push_back(v.substr(0, v.find("&", 0)));
+      if (pos == std::string::npos)
+        ret.second.push_back("");
+      else
+      {
+        auto v = quer.substr(pos + skip_len);
+        ret.second.push_back(v.substr(0, v.find("&", 0)));
+      }
     }
   }
 
