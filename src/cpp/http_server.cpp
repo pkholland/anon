@@ -77,7 +77,8 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
         settings.on_url = [](http_parser *p, const char *at, size_t length) -> int {
           pc *c = (pc *)p->data;
           c->request.url_str += std::string(at, length);
-          http_parser_parse_url(at, length, true, &c->request.p_url);
+          auto &url = c->request.url_str;
+          http_parser_parse_url(url.c_str(), url.length(), true, &c->request.p_url);
           return 0;
         };
 
@@ -187,9 +188,11 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
         {
           // if there is no un-parsed data in buf then read more
           if (bsp == bep)
-            bep += http_pipe->read(&buf[bep], sizeof(buf) - bep);
-          //buf[bep] = 0;
-          //anon_log("client sent:\n" << &buf[0] << "\n\n");
+          {
+            auto bytes_read = http_pipe->read(&buf[bep], sizeof(buf) - bep);
+            //anon_log("client sent: " << std::string(&buf[bep], bytes_read));
+            bep += bytes_read;
+          }
 
           http_pipe->set_hibernating(false);
 

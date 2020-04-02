@@ -132,7 +132,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   // to be doing next.
   if (subscription_confirmed) {
     auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
-    write(fd, reply, strlen(reply));
+    if (write(fd, reply, strlen(reply))){}
     auto state = sync_teflon_app(ec2i);
     if (state == teflon_server_still_running)
       send_sync();
@@ -181,7 +181,8 @@ bool process_control_message(const ec2_info& ec2i, int fd)
   settings.on_url = [](http_parser *p, const char *at, size_t length) -> int {
     pc *c = (pc *)p->data;
     c->url_str += std::string(at, length);
-    http_parser_parse_url(at, length, true, &c->p_url);
+    auto &url = c->url_str;
+    http_parser_parse_url(url.c_str(), url.size(), true, &c->p_url);
     return 0;
   };
 
@@ -285,7 +286,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
       }
       auto ret = process_control_message(ec2i, http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
       auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
-      write(fd, reply, strlen(reply));
+      if (write(fd, reply, strlen(reply))){}
       return ret;
     }
     else if (bsp == sizeof(buf))
