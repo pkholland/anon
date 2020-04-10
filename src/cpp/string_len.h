@@ -23,6 +23,7 @@
 #pragma once
 
 #include <string>
+#include <string.h>
 #if defined(ANON_AWS)
 #include <aws/core/utils/StringUtils.h>
 #endif

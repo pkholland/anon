@@ -22,6 +22,7 @@
 
 #include "tcp_server.h"
 #include <mutex>
+#include <netinet/tcp.h>
 
 void tcp_server::init_socket(int tcp_port, int listen_backlog, bool port_is_fd)
 {
@@ -94,7 +95,14 @@ void tcp_server::io_avail(const struct epoll_event &event)
 #if ANON_LOG_NET_TRAFFIC > 2
       anon_log("new tcp connection on socket: " << conn << ", from addr: " << addr);
 #endif
-      fiber::run_in_fiber([conn, addr, addr_len, this] { new_conn_->exec(conn, (struct sockaddr *)&addr, addr_len); }, stack_size_, "tcp_server::io_avail");
+      fiber::run_in_fiber(
+        [conn, addr, addr_len, this]
+        {
+          int flag = 1;
+          if (setsockopt(conn, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) != 0)
+            anon_log("setsockopt(conn, SOL_SOCKET, TCP_NODELAY,...) failed");
+          new_conn_->exec(conn, (struct sockaddr *)&addr, addr_len);
+        }, stack_size_, "tcp_server::io_avail");
     }
   }
   else
