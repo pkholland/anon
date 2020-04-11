@@ -156,8 +156,15 @@ static void output(const char *file_name, int line_num, Func func, bool err)
 inline std::string error_string2(int err)
 {
   char buff[256];
-  strerror_r(err, &buff[0], sizeof(buff));
-  return &buff[0];
+  auto ret = strerror_r(err, &buff[0], sizeof(buff));
+#if defined(__APPLE__)
+  if (ret == 0)
+    return &buff[0];
+  else
+    return "";
+#else
+  return ret;
+#endif
 }
 
 inline std::string error_string1(int err)
