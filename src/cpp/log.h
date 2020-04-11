@@ -34,6 +34,9 @@
 #include <string.h>
 #include <vector>
 #include <mutex>
+#if defined(__APPLE__)
+#include <pthread.h>
+#endif
 
 #if defined(ANON_SYS_LOG)
 #include <syslog.h>
@@ -98,7 +101,7 @@ static void output(const char *file_name, int line_num, Func func, bool err)
   if (std::strftime(mbstr, sizeof(mbstr), "%H:%M:%S.", std::localtime(&t)))
   {
     format << mbstr;
-    std::chrono::system_clock::time_point realtime = std::chrono::high_resolution_clock::now();
+    auto realtime = std::chrono::high_resolution_clock::now();
     std::ostringstream tm;
     tm << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3);
     tm << (std::chrono::duration_cast<std::chrono::milliseconds>(realtime.time_since_epoch()).count() % 1000);
@@ -107,7 +110,13 @@ static void output(const char *file_name, int line_num, Func func, bool err)
 
   // (threadID, file_name, line_num)
   std::ostringstream loc;
+ #if defined(__APPLE__)
+  uint64_t mac_tid;
+  pthread_threadid_np(0, &mac_tid);
+  loc << " (" << mac_tid;
+ #else
   loc << " (" << syscall(SYS_gettid);
+ #endif
 #if defined(ANON_LOG_FIBER_IDS)
   std::ostringstream fb;
   fb << ":";
@@ -147,7 +156,8 @@ static void output(const char *file_name, int line_num, Func func, bool err)
 inline std::string error_string2(int err)
 {
   char buff[256];
-  return strerror_r(err, &buff[0], sizeof(buff));
+  strerror_r(err, &buff[0], sizeof(buff));
+  return &buff[0];
 }
 
 inline std::string error_string1(int err)
