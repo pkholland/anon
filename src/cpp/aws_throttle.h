@@ -155,7 +155,8 @@ public:
   {
     auto ret = e == Aws::DynamoDB::DynamoDBErrors::GLOBAL_TABLE_ALREADY_EXISTS
       || e == Aws::DynamoDB::DynamoDBErrors::REPLICA_ALREADY_EXISTS
-      || e == Aws::DynamoDB::DynamoDBErrors::TABLE_ALREADY_EXISTS;
+      || e == Aws::DynamoDB::DynamoDBErrors::TABLE_ALREADY_EXISTS
+      || e == Aws::DynamoDB::DynamoDBErrors::CONDITIONAL_CHECK_FAILED;
     return ret;
   }
 };
