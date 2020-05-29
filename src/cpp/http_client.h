@@ -36,7 +36,20 @@ struct http_client_response
   {
   }
 
-  void parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error = true);
+  struct body_pipe_t
+  {
+    body_pipe_t(http_client_response *cr)
+        : cr(cr)
+    {
+    }
+    size_t read(void *buff, size_t len);
+
+  private:
+    http_client_response *cr;
+  };
+  friend struct body_pipe_t;
+
+  body_pipe_t parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error = true);
 
   int status_code;
   http_headers headers;
@@ -61,4 +74,7 @@ private:
   int http_major_;
   int http_minor_;
   size_t header_len_;
+  size_t bsp;
+  size_t bep;
+  const pipe_t *pipe_;
 };

@@ -62,8 +62,11 @@ struct pc
 
 } // namespace
 
-void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error)
+http_client_response::body_pipe_t
+http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_server_error)
 {
+  pipe_ = &pipe;
+
   // joyent data structure, set its callback functions
   http_parser_settings settings;
   settings.on_message_begin = [](http_parser *p) -> int {
@@ -209,7 +212,8 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_
   // done in a loop because certain response status codes
   // indicate that we should just try reading the next
   // message
-  size_t bsp = 0, bep = 0;
+  bsp = 0;
+  bep = 0;
 
   std::vector<char> bdy_tmp(4096);
 
@@ -292,4 +296,19 @@ void http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_
       should_keep_alive = http_should_keep_alive(&parser);
     break;
   }
+  return body_pipe_t(this);
+}
+
+size_t http_client_response::body_pipe_t::read(void *buff, size_t len)
+{
+  if (cr->bsp != cr->bep)
+  {
+    if (len > cr->bep - cr->bsp)
+      len = cr->bep - cr->bsp;
+    memcpy(buff, &cr->header_buf_[cr->bsp], len);
+    cr->bsp += len;
+    return len;
+  }
+  return cr->pipe_->read(buff, len);
+
 }
