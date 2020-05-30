@@ -24,6 +24,7 @@
 #include "tcp_server.h"
 #include "dns_cache.h"
 #include <netdb.h>
+#include <netinet/tcp.h>
 
 namespace tcp_client
 {
@@ -68,6 +69,11 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
 #if ANON_LOG_NET_TRAFFIC > 0
       anon_log("async connect(" << *addr << ") completed with error: " << (result > 0 ? error_string(result) : gai_strerror(result)));
 #endif
+
+      int flag = 1;
+      if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &flag, sizeof(flag)) != 0)
+        anon_log("setsockopt(fd, SOL_SOCKET, TCP_NODELAY,...) failed");
+
 
       return std::make_pair(result, std::unique_ptr<fiber_pipe>());
     }
