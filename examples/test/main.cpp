@@ -46,7 +46,7 @@ class my_udp : public udp_dispatch
 {
 public:
   my_udp(int port)
-      : udp_dispatch(port)
+      : udp_dispatch(port, true)
   {
   }
 

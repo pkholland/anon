@@ -75,7 +75,7 @@ anon.src_to_dep=$(anon.INTERMEDIATE_DIR)/$(CONFIG)/$(basename $(patsubst ./%,%,$
 anon.src_to_pb=$(basename $1).pb.h $(basename $1).pb.cc
 
 #
-# Convert a source proto(buf) file into hust the *.pb.cc file
+# Convert a source proto(buf) file into just the *.pb.cc file
 #
 anon.src_to_pb_cc=$(basename $1).pb.cc
 

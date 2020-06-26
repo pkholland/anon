@@ -23,23 +23,37 @@
 #include "udp_dispatch.h"
 #include <arpa/inet.h>
 
-udp_dispatch::udp_dispatch(int udp_port)
+udp_dispatch::udp_dispatch(int udp_port, bool ipv6)
+  : msg_buff_(65536)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   // when we do a child swap
-  sock_ = socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+  sock_ = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
   if (sock_ == -1)
     do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
 
   // bind to any address that will route to this machine
   struct sockaddr_in6 addr = {0};
-  addr.sin6_family = AF_INET6;
-  addr.sin6_port = htons(udp_port);
-  addr.sin6_addr = in6addr_any;
-  if (bind(sock_, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+  socklen_t sz;
+  if (ipv6)
+  {
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(udp_port);
+    addr.sin6_addr = in6addr_any;
+    sz = sizeof(sockaddr_in6);
+  }
+  else
+  {
+    auto addr4 = (struct sockaddr_in*)&addr;
+    addr4->sin_family = AF_INET;
+    addr4->sin_port = htons(udp_port);
+    addr4->sin_addr.s_addr = INADDR_ANY;
+    sz = sizeof(sockaddr_in);
+  }
+  if (bind(sock_, (struct sockaddr *)&addr, sz) != 0)
   {
     close(sock_);
-    do_error("bind(<AF_INET6 SOCK_DGRAM socket>, <" << udp_port << ", in6addr_any>, sizeof(addr))");
+    do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << udp_port << ", in6addr_any/INADDR_ANY>, sizeof(...))");
   }
 
   anon_log("listening for udp on port " << udp_port << ", socket " << sock_);
@@ -51,29 +65,26 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
 {
   if (event.events & EPOLLIN)
   {
-
-    unsigned char msgBuff[8192];
     while (true)
     {
       struct sockaddr_storage host;
-      socklen_t host_addr_size = sizeof(struct sockaddr_storage);
-      auto dlen = recvfrom(sock_, &msgBuff[0], sizeof(msgBuff), 0, (struct sockaddr *)&host, &host_addr_size);
+      socklen_t host_addr_size = sizeof(host);
+      auto dlen = recvfrom(sock_, &msg_buff_[0], msg_buff_.size(), 0, (struct sockaddr *)&host, &host_addr_size);
       if (dlen == -1)
       {
 #if ANON_LOG_NET_TRAFFIC > 1
         if (errno != EAGAIN)
           anon_log("recvfrom failed with errno: " << errno_string());
 #endif
-        return;
       }
-      else if (dlen == sizeof(msgBuff))
+      else if (dlen == sizeof(msg_buff_.size()))
       {
 #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
 #endif
       }
       else
-        recv_msg(&msgBuff[0], dlen, &host, host_addr_size);
+        recv_msg(&msg_buff_[0], dlen, &host, host_addr_size);
     }
   }
   else

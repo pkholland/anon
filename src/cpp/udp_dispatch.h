@@ -27,7 +27,7 @@
 class udp_dispatch : public io_dispatch::handler
 {
 public:
-  udp_dispatch(int port);
+  udp_dispatch(int port, bool ipv6 = false);
 
   ~udp_dispatch()
   {
@@ -46,4 +46,5 @@ public:
 
 private:
   int sock_;
+  std::vector<unsigned char> msg_buff_;
 };
