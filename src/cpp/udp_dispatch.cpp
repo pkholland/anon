@@ -22,9 +22,9 @@
 
 #include "udp_dispatch.h"
 #include <arpa/inet.h>
+#include "fiber.h"
 
 udp_dispatch::udp_dispatch(int udp_port, bool ipv6)
-  : msg_buff_(65536)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   // when we do a child swap
@@ -69,24 +69,54 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
     {
       struct sockaddr_storage host;
       socklen_t host_addr_size = sizeof(host);
-      auto dlen = recvfrom(sock_, &msg_buff_[0], msg_buff_.size(), 0, (struct sockaddr *)&host, &host_addr_size);
+      auto buff = get_avail_buff();
+      auto dlen = recvfrom(sock_, &(*buff)[0], buff->size(), 0, (struct sockaddr *)&host, &host_addr_size);
       if (dlen == -1)
       {
 #if ANON_LOG_NET_TRAFFIC > 1
         if (errno != EAGAIN)
           anon_log("recvfrom failed with errno: " << errno_string());
 #endif
+        return;
       }
-      else if (dlen == sizeof(msg_buff_.size()))
+      else if (dlen == sizeof(buff->size()))
       {
 #if ANON_LOG_NET_TRAFFIC > 1
         anon_log("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
 #endif
       }
       else
-        recv_msg(&msg_buff_[0], dlen, &host, host_addr_size);
+      {
+        std::weak_ptr<udp_dispatch> wp = shared_from_this();
+        fiber::run_in_fiber([wp, buff, dlen, host, host_addr_size] {
+          auto ths = wp.lock();
+          if (ths)
+          {
+            ths->recv_msg(&(*buff)[0], dlen, &host, host_addr_size);
+            ths->release_buff(buff);
+          }
+        });
+      }
     }
   }
   else
     anon_log_error("udp_dispatch::io_avail called with no EPOLLIN. event.events = " << event_bits_to_string(event.events));
+}
+
+std::shared_ptr<std::vector<unsigned char>> udp_dispatch::get_avail_buff()
+{
+  std::unique_lock<std::mutex> l(mtx);
+  if (free_buffs.size() > 0)
+  {
+    auto b = free_buffs.front();
+    free_buffs.pop();
+    return b;
+  }
+  return std::make_shared<std::vector<unsigned char>>(65536);
+}
+
+void udp_dispatch::release_buff(const std::shared_ptr<std::vector<unsigned char>>& buff)
+{
+  std::unique_lock<std::mutex> l(mtx);
+  free_buffs.push(buff);
 }

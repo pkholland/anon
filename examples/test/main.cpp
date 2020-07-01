@@ -101,7 +101,7 @@ extern "C" int main(int argc, char **argv)
 
     epc_test_init();
 
-    my_udp m_udp(udp_port);
+    auto m_udp = std::make_shared<my_udp>(udp_port);
 
     http_server my_http;
 
@@ -199,7 +199,7 @@ extern "C" int main(int argc, char **argv)
           {
             std::ostringstream msg;
             msg << "hello world (" << std::to_string(i) << ")" /*<< rand_id()*/;
-            if (sendto(m_udp.get_sock(), msg.str().c_str(), strlen(msg.str().c_str()) + 1, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
+            if (sendto(m_udp->get_sock(), msg.str().c_str(), strlen(msg.str().c_str()) + 1, 0, (struct sockaddr *)&addr, sizeof(addr)) == -1)
               anon_log_error("sendto failed with errno: " << errno_string());
           }
         }

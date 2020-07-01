@@ -23,8 +23,10 @@
 #pragma once
 
 #include "io_dispatch.h"
+#include <queue>
+#include <mutex>
 
-class udp_dispatch : public io_dispatch::handler
+class udp_dispatch : public io_dispatch::handler, public std::enable_shared_from_this<udp_dispatch>
 {
 public:
   udp_dispatch(int port, bool ipv6 = false);
@@ -46,5 +48,9 @@ public:
 
 private:
   int sock_;
-  std::vector<unsigned char> msg_buff_;
+  std::queue<std::shared_ptr<std::vector<unsigned char>>> free_buffs;
+  std::mutex mtx;
+
+  std::shared_ptr<std::vector<unsigned char>> get_avail_buff();
+  void release_buff(const std::shared_ptr<std::vector<unsigned char>>& buff);
 };
