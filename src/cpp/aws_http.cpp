@@ -72,7 +72,7 @@ public:
   }
 
   void MakeRequest(const std::shared_ptr<Standard::StandardHttpResponse>& resp,
-                                            HttpRequest &request,
+                                            const std::shared_ptr<HttpRequest> &request,
                                             URI uri,
                                             Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
                                             Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter,
@@ -85,17 +85,17 @@ public:
     
     get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
 
-      const auto& body = request.GetContentBody();
-      auto method = request.GetMethod();
+      const auto& body = request->GetContentBody();
+      auto method = request->GetMethod();
       *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
             << uri.GetQueryString() << " HTTP/1.1\r\n";
-      auto headers = request.GetHeaders();
+      auto headers = request->GetHeaders();
       for (const auto &h : headers)
         *pipe << h.first << ": " << h.second << "\r\n";
-      if (body && !request.HasHeader(CONTENT_LENGTH_HEADER))
+      if (body && !request->HasHeader(CONTENT_LENGTH_HEADER))
       {
         *pipe << "transfer-encoding: identity\r\n";
-        *pipe << "content-length: " << request.GetContentLength() << "\r\n";
+        *pipe << "content-length: " << request->GetContentLength() << "\r\n";
       }
       *pipe << "\r\n";
       if (body)
@@ -119,14 +119,14 @@ public:
 
   }
 
-  std::shared_ptr<HttpResponse> MakeRequest(HttpRequest &request,
-                                            Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
-                                            Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
+  std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest>& request,
+                Aws::Utils::RateLimits::RateLimiterInterface* readLimiter,
+                Aws::Utils::RateLimits::RateLimiterInterface* writeLimiter) const
   {
     auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
     try
     {
-      MakeRequest(resp, request, request.GetUri(), readLimiter, writeLimiter, 0);
+      MakeRequest(resp, request, request->GetUri(), readLimiter, writeLimiter, 0);
     }
     catch (const fiber_io_error &exc) {
 #if ANON_LOG_NET_TRAFFIC > 0
@@ -155,13 +155,6 @@ public:
       resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
     }
     return std::static_pointer_cast<HttpResponse>(resp);
-  }
-
-  std::shared_ptr<HttpResponse> MakeRequest(const std::shared_ptr<HttpRequest> &request,
-                                            Aws::Utils::RateLimits::RateLimiterInterface *readLimiter,
-                                            Aws::Utils::RateLimits::RateLimiterInterface *writeLimiter) const override
-  {
-    return MakeRequest(*request, readLimiter, writeLimiter);
   }
 
   std::shared_ptr<aws_http_client_factory::epc_map> _maps;
