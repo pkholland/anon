@@ -29,7 +29,7 @@
 class udp_dispatch : public io_dispatch::handler, public std::enable_shared_from_this<udp_dispatch>
 {
 public:
-  udp_dispatch(int port, bool ipv6 = false);
+  udp_dispatch(int port_or_socket, bool is_socket, bool ipv6 = false);
 
   ~udp_dispatch()
   {

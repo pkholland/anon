@@ -46,18 +46,25 @@ void server_respond(http_server::pipe_t &pipe, const http_request &request, bool
 void server_sync();
 void server_term();
 void server_close_outgoing();
+std::vector<int> teflon_udp_ports_or_sockets;
+bool teflon_udps_are_file_descriptors = false;
+
 
 #define SERVER_STACK_SIZE 64 * 1024 - 128
 
 static void show_help()
 {
-  printf("usage: teflon -http_fd <socket file descript number to use for listening for plain tcp connections>\n");
+  printf("usage: teflon -http_fd <socket file descriptor number to use for listening for plain tcp connections>\n");
   printf("              or\n");
   printf("              -http_port <port number to listen on unencrypted>\n");
   printf("              and\n");
-  printf("              -https_fd <socket file descript number to use for listening for tls tcp connections\n");
+  printf("              -https_fd <socket file descriptor number to use for listening for tls tcp connections>\n");
   printf("              or\n");
-  printf("              -https_port <port number to listen on encrypted\n");
+  printf("              -https_port <port number to listen on encrypted>\n");
+  printf("              and\n");
+  printf("              -udp_ports <comma separated list of port numbers for udp ports>\n");
+  printf("              or\n");
+  printf("              -udp_fds <comma separated list of file descriptors for udp ports>\n");
   printf("              plus...\n");
   printf("              -cert_verify_dir <directory of trusted root certificates in c_rehash form>\n");
   printf("              -server_cert <certificate file for the server>\n");
@@ -66,6 +73,16 @@ static void show_help()
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
 }
 
+static void get_ints(const std::string& arg, std::vector<int>& ints)
+{
+  std::size_t pos = 0;
+  while (pos != std::string::npos)
+  {
+    auto next_pos = arg.find(",", pos);
+    ints.push_back(atoi(arg.substr(pos, next_pos - pos).c_str()));
+    pos = next_pos == std::string::npos ? next_pos : next_pos + 1;
+  }
+}
 
 extern "C" int main(int argc, char **argv)
 {
@@ -106,6 +123,15 @@ extern "C" int main(int argc, char **argv)
     else if (!strcmp("-https_port", argv[i]))
     {
       https_port = atoi(argv[++i]);
+    }
+    else if (!strcmp("-udp_ports", argv[i]))
+    {
+      get_ints(argv[++i], teflon_udp_ports_or_sockets);
+    }
+    else if (!strcmp("-udp_fds", argv[i]))
+    {
+      get_ints(argv[++i], teflon_udp_ports_or_sockets);
+      teflon_udps_are_file_descriptors = true;
     }
     else if (!strcmp("-cert_verify_dir", argv[i]))
     {
@@ -209,6 +235,7 @@ extern "C" int main(int argc, char **argv)
                                                                  server_respond(pipe, request, false);
                                                                },
                                                                tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
+
     };
 
     // if we have been run by a tool capable of giving
