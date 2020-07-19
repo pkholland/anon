@@ -236,6 +236,41 @@ extern "C" int main(int argc, char **argv)
                                                                },
                                                                tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
 
+      auto udp_is_ipv6 = false;
+      if (!teflon_udps_are_file_descriptors)
+      {
+        for (auto &udp: teflon_udp_ports_or_sockets)
+        {
+          auto sock = socket(udp_is_ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+          if (sock == -1)
+            do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
+
+          struct sockaddr_in6 addr = {0};
+          socklen_t sz;
+          if (udp_is_ipv6)
+          {
+            addr.sin6_family = AF_INET6;
+            addr.sin6_port = htons(udp);
+            addr.sin6_addr = in6addr_any;
+            sz = sizeof(sockaddr_in6);
+          }
+          else
+          {
+            auto addr4 = (struct sockaddr_in*)&addr;
+            addr4->sin_family = AF_INET;
+            addr4->sin_port = htons(udp);
+            addr4->sin_addr.s_addr = INADDR_ANY;
+            sz = sizeof(sockaddr_in);
+          }
+          if (bind(sock, (struct sockaddr *)&addr, sz) != 0)
+          {
+            close(sock);
+            do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << sock << ", in6addr_any/INADDR_ANY>, sizeof(...))");
+          }
+          udp = sock;
+        }
+      }
+
     };
 
     // if we have been run by a tool capable of giving

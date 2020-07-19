@@ -314,7 +314,7 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
     do_error("listen(" << listen_sock << ", SOMAXCONN)");
   }
 
-  for (auto upd : udp_ports)
+  for (auto udp : udp_ports)
   {
     auto sock = socket(udp_is_ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
     if (sock == -1)
@@ -326,7 +326,7 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
     if (udp_is_ipv6)
     {
       addr.sin6_family = AF_INET6;
-      addr.sin6_port = htons(upd);
+      addr.sin6_port = htons(udp);
       addr.sin6_addr = in6addr_any;
       sz = sizeof(sockaddr_in6);
     }
@@ -334,7 +334,7 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
     {
       auto addr4 = (struct sockaddr_in*)&addr;
       addr4->sin_family = AF_INET;
-      addr4->sin_port = htons(upd);
+      addr4->sin_port = htons(udp);
       addr4->sin_addr.s_addr = INADDR_ANY;
       sz = sizeof(sockaddr_in);
     }
