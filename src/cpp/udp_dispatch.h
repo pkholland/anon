@@ -45,9 +45,11 @@ public:
   virtual void io_avail(const struct epoll_event &event);
 
   int get_sock() { return sock_; }
+  int get_port() { return port_num_; }
 
 private:
   int sock_;
+  int port_num_;
   std::queue<std::shared_ptr<std::vector<unsigned char>>> free_buffs;
   std::mutex mtx;
 

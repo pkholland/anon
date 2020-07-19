@@ -31,7 +31,14 @@ udp_dispatch::udp_dispatch(int port_or_socket, bool is_socket, bool ipv6)
   int udd_port;
   if (is_socket) {
     sock_ = port_or_socket;
+    struct sockaddr_in sin;
+    socklen_t len = sizeof(sin);
+    if (getsockname(sock_, (struct sockaddr *)&sin, &len) == -1)
+      anon_throw(std::runtime_error, "getsockname(socket, (struct sockaddr *)&sin, &len) == -1, errno: " << errno_string());
+    else
+      port_num_ = ntohs(sin.sin_port);
   } else {
+    port_num_ = port_or_socket;
     sock_ = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
     if (sock_ == -1)
       do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
