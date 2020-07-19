@@ -68,7 +68,7 @@ udp_dispatch::udp_dispatch(int port_or_socket, bool is_socket, bool ipv6)
     }
   }
 
-  anon_log("listening for udp on socket " << sock_);
+  anon_log("udp port " << port_num_ << " bound to socket " << sock_);
 
   io_dispatch::epoll_ctl(EPOLL_CTL_ADD, sock_, EPOLLIN, this);
 }

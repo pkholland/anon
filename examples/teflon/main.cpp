@@ -220,22 +220,6 @@ extern "C" int main(int argc, char **argv)
       aws_client_init();
       #endif
 
-      server_init();
-
-      if (https_port > 0)
-        my_https = std::unique_ptr<http_server>(new http_server(https_port,
-                                                                [](http_server::pipe_t &pipe, const http_request &request) {
-                                                                  server_respond(pipe, request, true);
-                                                                },
-                                                                tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
-
-      if (http_port > 0)
-        my_http = std::unique_ptr<http_server>(new http_server(http_port,
-                                                               [](http_server::pipe_t &pipe, const http_request &request) {
-                                                                 server_respond(pipe, request, false);
-                                                               },
-                                                               tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
-
       auto udp_is_ipv6 = false;
       if (!teflon_udps_are_file_descriptors)
       {
@@ -270,6 +254,22 @@ extern "C" int main(int argc, char **argv)
           udp = sock;
         }
       }
+
+      server_init();
+
+      if (https_port > 0)
+        my_https = std::unique_ptr<http_server>(new http_server(https_port,
+                                                                [](http_server::pipe_t &pipe, const http_request &request) {
+                                                                  server_respond(pipe, request, true);
+                                                                },
+                                                                tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
+
+      if (http_port > 0)
+        my_http = std::unique_ptr<http_server>(new http_server(http_port,
+                                                               [](http_server::pipe_t &pipe, const http_request &request) {
+                                                                 server_respond(pipe, request, false);
+                                                               },
+                                                               tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
 
     };
 
