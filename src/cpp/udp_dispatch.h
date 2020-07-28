@@ -29,7 +29,7 @@
 class udp_dispatch : public io_dispatch::handler, public std::enable_shared_from_this<udp_dispatch>
 {
 public:
-  udp_dispatch(int port, bool ipv6 = false);
+  udp_dispatch(int port_or_socket, bool is_socket, bool ipv6 = false);
 
   ~udp_dispatch()
   {
@@ -45,9 +45,11 @@ public:
   virtual void io_avail(const struct epoll_event &event);
 
   int get_sock() { return sock_; }
+  int get_port() { return port_num_; }
 
 private:
   int sock_;
+  int port_num_;
   std::queue<std::shared_ptr<std::vector<unsigned char>>> free_buffs;
   std::mutex mtx;
 

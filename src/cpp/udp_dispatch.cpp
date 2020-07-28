@@ -24,39 +24,51 @@
 #include <arpa/inet.h>
 #include "fiber.h"
 
-udp_dispatch::udp_dispatch(int udp_port, bool ipv6)
+udp_dispatch::udp_dispatch(int port_or_socket, bool is_socket, bool ipv6)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   // when we do a child swap
-  sock_ = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
-  if (sock_ == -1)
-    do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
+  int udd_port;
+  if (is_socket) {
+    sock_ = port_or_socket;
+    struct sockaddr_in sin;
+    socklen_t len = sizeof(sin);
+    if (getsockname(sock_, (struct sockaddr *)&sin, &len) == -1)
+      anon_throw(std::runtime_error, "getsockname(socket, (struct sockaddr *)&sin, &len) == -1, errno: " << errno_string());
+    else
+      port_num_ = ntohs(sin.sin_port);
+  } else {
+    port_num_ = port_or_socket;
+    sock_ = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+    if (sock_ == -1)
+      do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
 
-  // bind to any address that will route to this machine
-  struct sockaddr_in6 addr = {0};
-  socklen_t sz;
-  if (ipv6)
-  {
-    addr.sin6_family = AF_INET6;
-    addr.sin6_port = htons(udp_port);
-    addr.sin6_addr = in6addr_any;
-    sz = sizeof(sockaddr_in6);
-  }
-  else
-  {
-    auto addr4 = (struct sockaddr_in*)&addr;
-    addr4->sin_family = AF_INET;
-    addr4->sin_port = htons(udp_port);
-    addr4->sin_addr.s_addr = INADDR_ANY;
-    sz = sizeof(sockaddr_in);
-  }
-  if (bind(sock_, (struct sockaddr *)&addr, sz) != 0)
-  {
-    close(sock_);
-    do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << udp_port << ", in6addr_any/INADDR_ANY>, sizeof(...))");
+    // bind to any address that will route to this machine
+    struct sockaddr_in6 addr = {0};
+    socklen_t sz;
+    if (ipv6)
+    {
+      addr.sin6_family = AF_INET6;
+      addr.sin6_port = htons(port_or_socket);
+      addr.sin6_addr = in6addr_any;
+      sz = sizeof(sockaddr_in6);
+    }
+    else
+    {
+      auto addr4 = (struct sockaddr_in*)&addr;
+      addr4->sin_family = AF_INET;
+      addr4->sin_port = htons(port_or_socket);
+      addr4->sin_addr.s_addr = INADDR_ANY;
+      sz = sizeof(sockaddr_in);
+    }
+    if (bind(sock_, (struct sockaddr *)&addr, sz) != 0)
+    {
+      close(sock_);
+      do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << port_or_socket << ", in6addr_any/INADDR_ANY>, sizeof(...))");
+    }
   }
 
-  anon_log("listening for udp on port " << udp_port << ", socket " << sock_);
+  anon_log("udp port " << port_num_ << " bound to socket " << sock_);
 
   io_dispatch::epoll_ctl(EPOLL_CTL_ADD, sock_, EPOLLIN, this);
 }

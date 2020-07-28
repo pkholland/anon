@@ -49,6 +49,7 @@ namespace
 int listen_sock = -1;
 int current_srv_pid = 0;
 int death_pipe[2];
+std::vector<int> udps;
 std::thread death_thread;
 
 struct proc_info
@@ -197,11 +198,12 @@ int start_child(proc_info &pi)
   }
   else
   {
-
     // we are the child, so fexecve to the child code
     close(pi.cmd_pipe[0]);
 
     std::vector<char *> args2;
+    std::ostringstream oss;
+    std::string oss_s;
 
     args2.push_back(const_cast<char *>(pi.exe_name_.c_str()));
 
@@ -212,6 +214,21 @@ int start_child(proc_info &pi)
     char lsock_buf[10];
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
+
+    if (udps.size() > 0)
+    {
+      args2.push_back(const_cast<char *>("-udp_fds"));
+      auto is_first = true;
+      for (auto p : udps)
+      {
+        if (!is_first)
+          oss << ",";
+        oss << p;
+        is_first = false;
+      }
+      oss_s = oss.str();
+      args2.push_back(const_cast<char *>(oss_s.c_str()));
+    }
 
     // although these are going to be closed when we execute fexecve below,
     // we go ahead and close them here because they are low-numbered file
@@ -270,7 +287,7 @@ void handle_sigchld(int sig)
 
 } // namespace
 
-void sproc_mgr_init(int port)
+void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   listen_sock = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
@@ -295,6 +312,38 @@ void sproc_mgr_init(int port)
   {
     close(listen_sock);
     do_error("listen(" << listen_sock << ", SOMAXCONN)");
+  }
+
+  for (auto udp : udp_ports)
+  {
+    auto sock = socket(udp_is_ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0);
+    if (sock == -1)
+      do_error("socket(AF_INET6, SOCK_DGRAM | SOCK_NONBLOCK, 0)");
+
+    // bind to any address that will route to this machine
+    struct sockaddr_in6 addr = {0};
+    socklen_t sz;
+    if (udp_is_ipv6)
+    {
+      addr.sin6_family = AF_INET6;
+      addr.sin6_port = htons(udp);
+      addr.sin6_addr = in6addr_any;
+      sz = sizeof(sockaddr_in6);
+    }
+    else
+    {
+      auto addr4 = (struct sockaddr_in*)&addr;
+      addr4->sin_family = AF_INET;
+      addr4->sin_port = htons(udp);
+      addr4->sin_addr.s_addr = INADDR_ANY;
+      sz = sizeof(sockaddr_in);
+    }
+    if (bind(sock, (struct sockaddr *)&addr, sz) != 0)
+    {
+      close(sock);
+      do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << sock << ", in6addr_any/INADDR_ANY>, sizeof(...))");
+    }
+    udps.push_back(sock);
   }
 
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0]) != 0)
