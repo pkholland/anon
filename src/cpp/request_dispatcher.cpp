@@ -171,25 +171,48 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
   return ret;
 }
 
+void respond_options(http_server::pipe_t &pipe, const http_request &request, int cors_enabled)
+{
+  http_response response;
+  response.add_header("access-control-allow-origin", "*");
+  std::ostringstream oss;
+  oss << "OPTIONS";
+  if (cors_enabled & request_dispatcher::k_enable_cors_get)
+    oss << ", GET";
+  if (cors_enabled & request_dispatcher::k_enable_cors_head)
+    oss << ", HEAD";
+  if (cors_enabled & request_dispatcher::k_enable_cors_post)
+    oss << ", POST";
+  if (cors_enabled & request_dispatcher::k_enable_cors_put)
+    oss << ", PUT";
+  if (cors_enabled & request_dispatcher::k_enable_cors_delete)
+    oss << ", DELETE";
+  response.add_header("access-control-allow-methods", oss.str());
+  response.add_header("access-control-allow-headers", "*");
+  response.set_status_code("204 No Content"); 
+  pipe.respond(response);
+}
+
+
 void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
     std::string method = request.method_str();
-    bool is_options = (_enable_cors != 0) && (_options == method);
+    bool is_options = (_cors_enabled != 0) && (_options == method);
     auto path = request.get_url_field(UF_PATH);
     if (is_options) {
       if (path == "*" || path == "") {
         std::ostringstream oss;
         oss << "OPTIONS";
-        if (_enable_cors & k_enable_cors_get)
+        if (_cors_enabled & k_enable_cors_get)
           oss << ", GET";
-        if (_enable_cors & k_enable_cors_head)
+        if (_cors_enabled & k_enable_cors_head)
           oss << ", HEAD";
-        if (_enable_cors & k_enable_cors_post)
+        if (_cors_enabled & k_enable_cors_post)
           oss << ", POST";
-        if (_enable_cors & k_enable_cors_put)
+        if (_cors_enabled & k_enable_cors_put)
           oss << ", PUT";
-        if (_enable_cors & k_enable_cors_delete)
+        if (_cors_enabled & k_enable_cors_delete)
           oss << ", DELETE";
         http_response response;
         response.add_header("allow", oss.str());
@@ -202,15 +225,15 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
       method = request.headers.get_header("access-control-request-method").str();
       bool chk = false;
       if (method == "GET")
-        chk = _enable_cors & k_enable_cors_get;
+        chk = _cors_enabled & k_enable_cors_get;
       else if (method == "HEAD")
-        chk = _enable_cors & k_enable_cors_head;
+        chk = _cors_enabled & k_enable_cors_head;
       else if (method == "POST")
-        chk = _enable_cors & k_enable_cors_post;
+        chk = _cors_enabled & k_enable_cors_post;
       else if (method == "PUT")
-        chk = _enable_cors & k_enable_cors_put;
+        chk = _cors_enabled & k_enable_cors_put;
       else if (method == "DELETE")
-        chk = _enable_cors & k_enable_cors_put;
+        chk = _cors_enabled & k_enable_cors_put;
       if (!chk)
         throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
     }
@@ -224,7 +247,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     --e;
     for (auto &f : e->second)
     {
-      if (f(pipe, request, is_tls, path, query, is_options))
+      if (f(pipe, request, is_tls, path, query, is_options, _cors_enabled))
         return;
     }
     throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (2)");
