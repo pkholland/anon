@@ -176,7 +176,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request)
   http_response response;
   response.add_header("access-control-allow-origin", "*");
   std::ostringstream oss;
-  oss << "OPTIONS, " << request.method_str();
+  oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
   response.add_header("access-control-allow-methods", oss.str());
   response.add_header("access-control-allow-headers", "*");
   response.set_status_code("204 No Content"); 
