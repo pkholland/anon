@@ -174,10 +174,32 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
 void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
+    std::string method = request.method_str();
+    bool is_options = _enable_cors && _options == method;
+    auto path = request.get_url_field(UF_PATH);
+    if (is_options) {
+      if (path == "*" || path == "") {
+        std::ostringstream oss;
+        oss << "OPTIONS";
+        if (_enable_cors_get)
+          oss << ", GET";
+        if (_enable_cors_head)
+          oss << ", HEAD";
+        if (_enable_cors_put)
+          oss << ", PUT";
+        http_response response;
+        response.add_header("Allow", oss.str());
+        response.set_status_code("204 No Content"); 
+        pipe.respond(response);
+        return;
+      }
+      if (!request.headers.contains_header("access-control-request-method"))
+        throw_request_error(HTTP_STATUS_BAD_REQUEST, "OPTIONS request missing required access-control-request-method header");
+      method = request.headers.get_header("access-control-request-method").str();
+    }
     auto m = _map.find(request.method_str());
     if (m == _map.end())
-      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << request.method_str());
-    auto path = request.get_url_field(UF_PATH);
+      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
     auto query = request.get_url_field(UF_QUERY);
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
@@ -185,7 +207,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     --e;
     for (auto &f : e->second)
     {
-      if (f(pipe, request, is_tls, path, query))
+      if (f(pipe, request, is_tls, path, query, is_options))
         return;
     }
     throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (2)");
