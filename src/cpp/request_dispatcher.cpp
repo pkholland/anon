@@ -197,7 +197,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
         throw_request_error(HTTP_STATUS_BAD_REQUEST, "OPTIONS request missing required access-control-request-method header");
       method = request.headers.get_header("access-control-request-method").str();
     }
-    auto m = _map.find(request.method_str());
+    auto m = _map.find(method);
     if (m == _map.end())
       throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
     auto query = request.get_url_field(UF_QUERY);
