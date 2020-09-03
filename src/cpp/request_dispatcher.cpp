@@ -179,6 +179,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request)
   oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
   response.add_header("access-control-allow-methods", oss.str());
   response.add_header("access-control-allow-headers", "*");
+  response.add_header("cache-control", "max-age=604800");
   response.set_status_code("204 No Content"); 
   pipe.respond(response);
 }
@@ -206,7 +207,8 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
           oss << ", DELETE";
         http_response response;
         response.add_header("allow", oss.str());
-        response.set_status_code("204 No Content"); 
+        response.add_header("cache-control", "max-age=604800");
+        response.set_status_code("204 No Content");
         pipe.respond(response);
         return;
       }
