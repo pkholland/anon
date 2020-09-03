@@ -81,7 +81,7 @@ request_helper request_mapping_helper(const std::string &path_spec)
   return h;
 }
 
-std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query)
+std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query, bool is_options)
 {
   auto ret = std::make_pair(false, std::vector<std::string>());
 
@@ -156,7 +156,7 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
     }
   }
 
-  if (h.header_items.size() > 0)
+  if (!is_options && h.header_items.size() > 0)
   {
     for (auto &it : h.header_items)
     {
@@ -171,13 +171,67 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
   return ret;
 }
 
+void respond_options(http_server::pipe_t &pipe, const http_request &request)
+{
+  http_response response;
+  response.add_header("access-control-allow-origin", "*");
+  std::ostringstream oss;
+  oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
+  response.add_header("access-control-allow-methods", oss.str());
+  response.add_header("access-control-allow-headers", "*");
+  response.add_header("cache-control", "max-age=604800");
+  response.set_status_code("204 No Content"); 
+  pipe.respond(response);
+}
+
+
 void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
-    auto m = _map.find(request.method_str());
-    if (m == _map.end())
-      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << request.method_str());
+    std::string method = request.method_str();
+    bool is_options = (_cors_enabled != 0) && (_options == method);
     auto path = request.get_url_field(UF_PATH);
+    if (is_options) {
+      if (path == "*" || path == "") {
+        std::ostringstream oss;
+        oss << "OPTIONS";
+        if (_cors_enabled & k_enable_cors_get)
+          oss << ", GET";
+        if (_cors_enabled & k_enable_cors_head)
+          oss << ", HEAD";
+        if (_cors_enabled & k_enable_cors_post)
+          oss << ", POST";
+        if (_cors_enabled & k_enable_cors_put)
+          oss << ", PUT";
+        if (_cors_enabled & k_enable_cors_delete)
+          oss << ", DELETE";
+        http_response response;
+        response.add_header("allow", oss.str());
+        response.add_header("cache-control", "max-age=604800");
+        response.set_status_code("204 No Content");
+        pipe.respond(response);
+        return;
+      }
+      if (!request.headers.contains_header("access-control-request-method"))
+        throw_request_error(HTTP_STATUS_BAD_REQUEST, "OPTIONS request missing required access-control-request-method header");
+      method = request.headers.get_header("access-control-request-method").str();
+      bool chk = false;
+      if (method == "GET")
+        chk = _cors_enabled & k_enable_cors_get;
+      else if (method == "HEAD")
+        chk = _cors_enabled & k_enable_cors_head;
+      else if (method == "POST")
+        chk = _cors_enabled & k_enable_cors_post;
+      else if (method == "PUT")
+        chk = _cors_enabled & k_enable_cors_put;
+      else if (method == "DELETE")
+        chk = _cors_enabled & k_enable_cors_put;
+      if (!chk)
+        throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
+    }
+    auto m = _map.find(method);
+    if (m == _map.end())
+      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
     auto query = request.get_url_field(UF_QUERY);
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
@@ -185,7 +239,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     --e;
     for (auto &f : e->second)
     {
-      if (f(pipe, request, is_tls, path, query))
+      if (f(pipe, request, is_tls, path, query, is_options))
         return;
     }
     throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (2)");

@@ -238,14 +238,27 @@
  */
 class request_dispatcher
 {
-  std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &)>>>> _map;
+  std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>>>> _map;
   pcrecpp::RE _split_at_var;
   std::string _root_path;
+  std::string _options;
+  int _cors_enabled;
 
 public:
-  request_dispatcher(const std::string &root_path)
+  enum {
+    k_enable_cors_get = 1,
+    k_enable_cors_head = 2,
+    k_enable_cors_post = 4,
+    k_enable_cors_put = 8,
+    k_enable_cors_delete = 16,
+    k_enable_cors_all = 31
+  };
+
+  request_dispatcher(const std::string &root_path, int cors_enabled = 0)
       : _split_at_var("([^?{]*)(.*)"),
-        _root_path(root_path)
+        _root_path(root_path),
+        _options("OPTIONS"),
+        _cors_enabled(cors_enabled)
   {
   }
 
