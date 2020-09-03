@@ -81,7 +81,7 @@ request_helper request_mapping_helper(const std::string &path_spec)
   return h;
 }
 
-std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query)
+std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query, bool is_options)
 {
   auto ret = std::make_pair(false, std::vector<std::string>());
 
@@ -156,7 +156,7 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
     }
   }
 
-  if (h.header_items.size() > 0)
+  if (!is_options && h.header_items.size() > 0)
   {
     for (auto &it : h.header_items)
     {

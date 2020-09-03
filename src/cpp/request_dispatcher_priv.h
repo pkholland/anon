@@ -73,13 +73,13 @@ inline void respond_options(http_server::pipe_t &pipe, const http_request &reque
 #define n_json *(nlohmann::json *)0
 
 
-std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query);
+std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query, bool is_options);
 
 template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &s, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -94,7 +94,7 @@ template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -109,7 +109,7 @@ template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query,bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -124,7 +124,7 @@ template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -139,7 +139,7 @@ template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -154,7 +154,7 @@ template <typename Fn>
 auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -169,7 +169,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -184,7 +184,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -199,7 +199,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -214,7 +214,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -229,7 +229,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
@@ -244,7 +244,7 @@ template <typename Fn>
 auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, std::string(), std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
   return [f, h](http_server::pipe_t &pipe, const http_request &request, bool, const std::string &path, const std::string &query, bool is_options) -> bool {
-    auto params = extract_params(h, request, path, query);
+    auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
