@@ -238,7 +238,7 @@
  */
 class request_dispatcher
 {
-  std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool, int)>>>> _map;
+  std::map<std::string, std::map<std::string, std::vector<std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>>>> _map;
   pcrecpp::RE _split_at_var;
   std::string _root_path;
   std::string _options;

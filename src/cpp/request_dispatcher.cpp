@@ -171,22 +171,12 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
   return ret;
 }
 
-void respond_options(http_server::pipe_t &pipe, const http_request &request, int cors_enabled)
+void respond_options(http_server::pipe_t &pipe, const http_request &request)
 {
   http_response response;
   response.add_header("access-control-allow-origin", "*");
   std::ostringstream oss;
-  oss << "OPTIONS";
-  if (cors_enabled & request_dispatcher::k_enable_cors_get)
-    oss << ", GET";
-  if (cors_enabled & request_dispatcher::k_enable_cors_head)
-    oss << ", HEAD";
-  if (cors_enabled & request_dispatcher::k_enable_cors_post)
-    oss << ", POST";
-  if (cors_enabled & request_dispatcher::k_enable_cors_put)
-    oss << ", PUT";
-  if (cors_enabled & request_dispatcher::k_enable_cors_delete)
-    oss << ", DELETE";
+  oss << "OPTIONS, " << request.method_str();
   response.add_header("access-control-allow-methods", oss.str());
   response.add_header("access-control-allow-headers", "*");
   response.set_status_code("204 No Content"); 
@@ -247,7 +237,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     --e;
     for (auto &f : e->second)
     {
-      if (f(pipe, request, is_tls, path, query, is_options, _cors_enabled))
+      if (f(pipe, request, is_tls, path, query, is_options))
         return;
     }
     throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (2)");
