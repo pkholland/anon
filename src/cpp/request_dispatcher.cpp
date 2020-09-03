@@ -175,20 +175,24 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
 {
   request_wrap(pipe, [this, &pipe, &request, is_tls] {
     std::string method = request.method_str();
-    bool is_options = _enable_cors && _options == method;
+    bool is_options = (_enable_cors != 0) && (_options == method);
     auto path = request.get_url_field(UF_PATH);
     if (is_options) {
       if (path == "*" || path == "") {
         std::ostringstream oss;
         oss << "OPTIONS";
-        if (_enable_cors_get)
+        if (_enable_cors & k_enable_cors_get)
           oss << ", GET";
-        if (_enable_cors_head)
+        if (_enable_cors & k_enable_cors_head)
           oss << ", HEAD";
-        if (_enable_cors_put)
+        if (_enable_cors & k_enable_cors_post)
+          oss << ", POST";
+        if (_enable_cors & k_enable_cors_put)
           oss << ", PUT";
+        if (_enable_cors & k_enable_cors_delete)
+          oss << ", DELETE";
         http_response response;
-        response.add_header("Allow", oss.str());
+        response.add_header("allow", oss.str());
         response.set_status_code("204 No Content"); 
         pipe.respond(response);
         return;
@@ -196,6 +200,19 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
       if (!request.headers.contains_header("access-control-request-method"))
         throw_request_error(HTTP_STATUS_BAD_REQUEST, "OPTIONS request missing required access-control-request-method header");
       method = request.headers.get_header("access-control-request-method").str();
+      bool chk = false;
+      if (method == "GET")
+        chk = _enable_cors & k_enable_cors_get;
+      else if (method == "HEAD")
+        chk = _enable_cors & k_enable_cors_head;
+      else if (method == "POST")
+        chk = _enable_cors & k_enable_cors_post;
+      else if (method == "PUT")
+        chk = _enable_cors & k_enable_cors_put;
+      else if (method == "DELETE")
+        chk = _enable_cors & k_enable_cors_put;
+      if (!chk)
+        throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
     }
     auto m = _map.find(method);
     if (m == _map.end())

@@ -242,20 +242,23 @@ class request_dispatcher
   pcrecpp::RE _split_at_var;
   std::string _root_path;
   std::string _options;
-  bool _enable_cors_get;
-  bool _enable_cors_head;
-  bool _enable_cors_put;
-  bool _enable_cors;
+  int _enable_cors;
 
 public:
-  request_dispatcher(const std::string &root_path, bool enable_cors_get = false, bool enable_cors_head = false, bool enable_cors_put = false)
+  enum {
+    k_enable_cors_get = 1,
+    k_enable_cors_head = 2,
+    k_enable_cors_post = 4,
+    k_enable_cors_put = 8,
+    k_enable_cors_delete = 16,
+    k_enable_cors_all = 31
+  };
+
+  request_dispatcher(const std::string &root_path, int enable_cors = 0)
       : _split_at_var("([^?{]*)(.*)"),
         _root_path(root_path),
         _options("OPTIONS"),
-        _enable_cors_get(enable_cors_get),
-        _enable_cors_head(enable_cors_head),
-        _enable_cors_put(enable_cors_put),
-        _enable_cors(enable_cors_get || enable_cors_head || _enable_cors_put)
+        _enable_cors(enable_cors)
   {
   }
 

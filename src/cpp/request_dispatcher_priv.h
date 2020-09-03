@@ -63,7 +63,7 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
 inline void respond_options(http_server::pipe_t &pipe, const http_request &request)
 {
   http_response response;
-  response.add_header("Allow", request.method_str());
+  response.add_header("allow", request.headers.get_header("access-control-request-method").ptr());
   response.set_status_code("204 No Content"); 
   pipe.respond(response);
 }
