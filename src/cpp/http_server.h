@@ -286,7 +286,7 @@ private:
 
 class http_server
 {
-public:
+  public:
   /*
     For all of the following functions that take a functor as an argument,
     this will be called whenever a new HTTP method has been parsed.  The
@@ -397,6 +397,20 @@ public:
     if (tcp_server_)
       tcp_server_->stop();
   }
+
+  /*
+    although not directly used by the http_server class, these
+    are used be multiple http-related pieces of code, so the
+    home for them is in this class
+  */
+  enum {
+    k_enable_cors_get = 1,
+    k_enable_cors_head = 2,
+    k_enable_cors_post = 4,
+    k_enable_cors_put = 8,
+    k_enable_cors_delete = 16,
+    k_enable_cors_all = 31
+  };
 
 private:
   struct body_handler

@@ -245,15 +245,6 @@ class request_dispatcher
   int _cors_enabled;
 
 public:
-  enum {
-    k_enable_cors_get = 1,
-    k_enable_cors_head = 2,
-    k_enable_cors_post = 4,
-    k_enable_cors_put = 8,
-    k_enable_cors_delete = 16,
-    k_enable_cors_all = 31
-  };
-
   request_dispatcher(const std::string &root_path, int cors_enabled = 0)
       : _split_at_var("([^?{]*)(.*)"),
         _root_path(root_path),
