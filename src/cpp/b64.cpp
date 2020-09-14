@@ -181,7 +181,7 @@ std::string b64url_decode(const char *data, size_t len, char pad)
     auto a = b64_index(ptr[0]);
     auto b = b64_index(ptr[1]);
     result[i * 3 + 0] = (a << 2) + (b >> 4);
-    if (&ptr[1] < end)
+    if (&ptr[2] < end)
     {
       auto c = b64_index(ptr[2]);
       result[i * 3 + 1] = (b << 4) + (c >> 2);
