@@ -657,9 +657,13 @@ const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string&
 const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (ec2_map.find(region) == ec2_map.end())
-    ec2_map.emplace(std::make_pair(region,
-      Aws::EC2::EC2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (ec2_map.find(region) == ec2_map.end()) {
+    l.unlock();
+    auto client =  Aws::EC2::EC2Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (ec2_map.find(region) == ec2_map.end())
+      ec2_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return ec2_map[region];
 }
 #endif
@@ -668,11 +672,13 @@ const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
 const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (ddb_map.find(region) == ddb_map.end())
-  {
+  if (ddb_map.find(region) == ddb_map.end()) {
+    l.unlock();
     std::unique_ptr<Aws::DynamoDB::DynamoDBClient>
     c(new Aws::DynamoDB::DynamoDBClient(aws_get_cred_provider(), aws_get_client_config_nl(region)));
-    ddb_map[region] = std::move(c);
+    l.lock();
+    if (ddb_map.find(region) == ddb_map.end())
+      ddb_map[region] = std::move(c);
   }
   return *ddb_map[region];
 }
@@ -683,9 +689,13 @@ const Aws::Route53::Route53Client& aws_get_r53_client()
 {
   fiber_lock l(config_mtx);
   std::string region = "us-east-1";
-  if (r53_map.find(region) == r53_map.end())
-    r53_map.emplace(std::make_pair(region,
-      Aws::Route53::Route53Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (r53_map.find(region) == r53_map.end()) {
+    l.unlock();
+    auto client = Aws::Route53::Route53Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (r53_map.find(region) == r53_map.end())
+      r53_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return r53_map[region];
 }
 #endif
@@ -694,9 +704,13 @@ const Aws::Route53::Route53Client& aws_get_r53_client()
 const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (s3_map.find(region) == s3_map.end())
-    s3_map.emplace(std::make_pair(region,
-      Aws::S3::S3Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (s3_map.find(region) == s3_map.end()) {
+    l.unlock();
+    auto client = Aws::S3::S3Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (s3_map.find(region) == s3_map.end())
+      s3_map.emplace(std::make_pair(region,std::move(client)));
+  }
   return s3_map[region];
 }
 #endif
@@ -705,9 +719,13 @@ const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
 const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (acm_map.find(region) == acm_map.end())
-    acm_map.emplace(std::make_pair(region,
-      Aws::ACM::ACMClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (acm_map.find(region) == acm_map.end()) {
+    l.unlock();
+    auto client = Aws::ACM::ACMClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (acm_map.find(region) == acm_map.end())
+      acm_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return acm_map[region];
 }
 #endif
@@ -716,9 +734,13 @@ const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
 const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (sqs_map.find(region) == sqs_map.end())
-    sqs_map.emplace(std::make_pair(region,
-      Aws::SQS::SQSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (sqs_map.find(region) == sqs_map.end()) {
+    l.unlock();
+    auto client = Aws::SQS::SQSClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (sqs_map.find(region) == sqs_map.end())
+      sqs_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return sqs_map[region];
 }
 #endif
@@ -728,9 +750,13 @@ const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client&
 aws_get_elbv2_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (elbv2_map.find(region) == elbv2_map.end())
-    elbv2_map.emplace(std::make_pair(region,
-      Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (elbv2_map.find(region) == elbv2_map.end()) {
+    l.unlock();
+    auto client = Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (elbv2_map.find(region) == elbv2_map.end())
+      elbv2_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return elbv2_map[region];
 }
 #endif
@@ -741,9 +767,13 @@ aws_get_accel_client()
 {
   fiber_lock l(config_mtx);
   std::string region = "us-west-2";
-  if (accel_map.find(region) == accel_map.end())
-    accel_map.emplace(std::make_pair(region,
-      Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (accel_map.find(region) == accel_map.end()) {
+    l.unlock();
+    auto client = Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    l.lock();
+    if (accel_map.find(region) == accel_map.end())
+      accel_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return accel_map[region];
 }
 #endif
