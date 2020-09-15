@@ -37,6 +37,8 @@ using namespace Aws::Http;
 namespace
 {
 
+bool _169_254_169_254_fails = false;
+
 class http_client : public HttpClient
 {
   static Aws::String normalize(const Aws::String &path)
@@ -124,36 +126,50 @@ public:
                 Aws::Utils::RateLimits::RateLimiterInterface* writeLimiter) const
   {
     auto resp = std::make_shared<Standard::StandardHttpResponse>(request);
-    try
-    {
-      MakeRequest(resp, request, request->GetUri(), readLimiter, writeLimiter, 0);
+    if (_169_254_169_254_fails && (request->GetUri().GetURIString().find("http://169.254.169.254") == 0)) {
+      resp->SetResponseCode(HttpResponseCode::BAD_GATEWAY);
     }
-    catch (const fiber_io_error &exc) {
-#if ANON_LOG_NET_TRAFFIC > 0
-      anon_log("filber_io_error: " << exc.what());
-#endif
-      resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
+    else {
+      try
+      {
+        MakeRequest(resp, request, request->GetUri(), readLimiter, writeLimiter, 0);
+      }
+      catch (const fiber_io_error &exc) {
+        #if ANON_LOG_NET_TRAFFIC > 0
+        anon_log("filber_io_error: " << exc.what());
+        #endif
+        if (request->GetUri().GetURIString().find("http://169.254.169.254") == 0) {
+          _169_254_169_254_fails = true;
+          resp->SetResponseCode(HttpResponseCode::BAD_GATEWAY);
+        } else
+          resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
+      }
+      catch (const fiber_io_timeout_error &exc) {
+        #if ANON_LOG_NET_TRAFFIC > 0
+        anon_log("fiber_io_timeout_error: " << exc.what());
+        #endif
+        if (request->GetUri().GetURIString().find("http://169.254.169.254") == 0) {
+          _169_254_169_254_fails = true;
+          resp->SetResponseCode(HttpResponseCode::BAD_GATEWAY);
+        } else
+          resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
+      }
+      #if ANON_LOG_NET_TRAFFIC > 0
+      catch (const std::exception &exc)
+      {
+        anon_log("failure to write request: " << exc.what());
+        resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
+      }
+      #endif
+      catch (...)
+      {
+        #if ANON_LOG_NET_TRAFFIC > 0
+        anon_log("unknown failure to write request");
+        #endif
+        resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
+      }
     }
-    catch (const fiber_io_timeout_error &exc) {
-#if ANON_LOG_NET_TRAFFIC > 0
-      anon_log("fiber_io_timeout_error: " << exc.what());
-#endif
-      resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT); // set to "timeout" so the sdk performs a retry, see HttpResponseCode::IsRetryableHttpResponseCode
-    }
-#if ANON_LOG_NET_TRAFFIC > 0
-    catch (const std::exception &exc)
-    {
-      anon_log("failure to write request: " << exc.what());
-      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
-    }
-#endif
-    catch (...)
-    {
-#if ANON_LOG_NET_TRAFFIC > 0
-      anon_log("unknown failure to write request");
-#endif
-      resp->SetResponseCode(HttpResponseCode::REQUEST_NOT_MADE);
-    }
+
     return std::static_pointer_cast<HttpResponse>(resp);
   }
 
