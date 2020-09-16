@@ -27,25 +27,25 @@
 #include "server_control.h"
 #include <signal.h>
 
+
 void run_server(const ec2_info &ec2i)
 {
-  if (ec2i.user_data_js.find("server_port") == ec2i.user_data_js.end()
-    || ec2i.user_data_js.find("control_port") == ec2i.user_data_js.end())
-  {
+  auto &ud = ec2i.user_data_js;
+  if (ud.find("server_port") == ud.end() || ud.find("control_port") == ud.end()) {
     anon_log_error("user data missing required \"server_port\" and/or \"control_port\"");
     return;
   }
-  int port = ec2i.user_data_js["server_port"];
-  int cnt_port = ec2i.user_data_js["control_port"];
+  int port = ud["server_port"];
+  int cnt_port = ud["control_port"];
 
   std::vector<int> udp_ports;
   bool udp_is_ipv6 = false;
-  if (ec2i.user_data_js.find("udp_ports") != ec2i.user_data_js.end())
+  if (ud.find("udp_ports") != ud.end())
   {
-    for (auto &p : ec2i.user_data_js["udp_ports"])
+    for (auto &p : ud["udp_ports"])
       udp_ports.push_back(p);
-    if (ec2i.user_data_js.find("udp_is_ipv6") != ec2i.user_data_js.end())
-      udp_is_ipv6 = ec2i.user_data_js["udp_is_ipv6"];
+    if (ud.find("udp_is_ipv6") != ud.end())
+      udp_is_ipv6 = ud["udp_is_ipv6"];
   }
 
   sigset_t sigs;
