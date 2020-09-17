@@ -71,7 +71,7 @@ ec2_info::ec2_info(const char *filename)
 
   if (filename != 0) {
     json js = json::parse(std::ifstream(filename));
-    user_data = user_data_js.dump();
+    user_data = js.dump();
   }
   else
     user_data = client.GetResource("/latest/user-data/").c_str();
