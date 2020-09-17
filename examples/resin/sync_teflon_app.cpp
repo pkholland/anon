@@ -132,16 +132,15 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     create_empty_directory(ec2i, "");
 
   std::string table_name = ud["artifacts_ddb_table_name"];
-  Aws::String table_name_ = table_name.c_str();
   std::string key_name = ud["artifacts_ddb_table_primary_key"];
-  Aws::String key_name_ = key_name.c_str();
+  std::string service = ud["teflon_service"];
 
   QueryRequest  q_req;
-  q_req.WithTableName(table_name_)
+  q_req.WithTableName(table_name)
     .WithKeyConditionExpression("#A = :a")
     .WithScanIndexForward(false)
-    .AddExpressionAttributeNames("#A", key_name_)
-    .AddExpressionAttributeValues(":a", AttributeValue(sevice_));
+    .AddExpressionAttributeNames("#A", key_name)
+    .AddExpressionAttributeValues(":a", AttributeValue(service));
 
   auto outcome = ddbc.Query(q_req);
   if (!outcome.IsSuccess())
@@ -149,7 +148,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto &result = outcome.GetResult();
   auto &items = result.GetItems();
   if (items.size() == 0)
-    anon_throw(std::runtime_error, "no item for " << "xxx" << " in ddb table " << table_name);
+    anon_throw(std::runtime_error, "no item for " << service << " in ddb table " << table_name);
   auto &cur_def = items[0];
   auto sha_it = cur_def.find("exe-sha");
   if (sha_it == cur_def.end())
