@@ -36,69 +36,48 @@ using namespace nlohmann;
 
 ec2_info::ec2_info(const char *filename)
 {
+  Aws::Client::ClientConfiguration config;
+  config.connectTimeoutMs = 100;
+  config.httpRequestTimeoutMs = 100;
+  config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
+  Aws::Internal::EC2MetadataClient client(config);
+
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
     region = rgn;
-
-  if (filename != 0)
-  {
-    if (region.size() == 0)
-    {
-      auto profile = (const char *)getenv("AWS_PROFILE");
-      if (!profile)
-        profile = "default";
-
-      auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
-      Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
-      if (loader.Load())
-      {
-        auto profiles = loader.GetProfiles();
-        auto prof = profiles.find(profile);
-        if (prof != profiles.end())
-          region = prof->second.GetRegion();
-      }
-    }
+  else {
+    region = client.GetCurrentRegion();
     if (region.size() == 0)
       region = "us-east-1";
+  }
 
-    default_region = region;
-    json js = json::parse(std::ifstream(filename));
-    instance_id = "instance_id";
+  default_region = region;
+
+  ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
+  if (ami_id.size() != 0) {
+    instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
+    host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
+    private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
+    public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
+  }
+  else {
     ami_id = "ami_id";
+    instance_id = "instance_id";
     host_name = "host_name";
     private_ipv4 = "private_ipv4";
     public_ipv4 = "public_ipv4";
-    user_data_js = js;
+  }
+
+  if (filename != 0) {
+    json js = json::parse(std::ifstream(filename));
     user_data = user_data_js.dump();
   }
   else
-  {
-    Aws::Client::ClientConfiguration config;
-    config.connectTimeoutMs = 100;
-    config.httpRequestTimeoutMs = 100;
-    config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
-    Aws::Internal::EC2MetadataClient client(config);
+    user_data = client.GetResource("/latest/user-data/").c_str();
 
-    if (region.size() == 0)
-      region = client.GetCurrentRegion();
-    if (region.size() == 0)
-      region = "us-east-1";
-
-    default_region = region;
-
-    ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
-    if (ami_id.size() != 0)
-    {
-      instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
-      host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
-      private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
-      public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
-      user_data = client.GetResource("/latest/user-data/").c_str();
-      if (user_data.size() != 0)
-        user_data_js = json::parse(user_data);
-    }
-  }
+  if (user_data.size() != 0)
+    user_data_js = json::parse(user_data);
 
   auto cwd = getcwd(0, 0);
   root_dir = cwd;
