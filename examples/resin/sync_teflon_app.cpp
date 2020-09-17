@@ -106,9 +106,12 @@ bool validate_user_data_string(const json& ud, const char* key)
 
 bool validate_all_user_data_strings(const json& ud)
 {
-  return validate_user_data_string(ud, "artifacts_ddb_table_name")
-    && validate_user_data_string(ud, "artifacts_ddb_table_region")
-    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key")
+  return validate_user_data_string(ud, "artifacts_ddb_table_region")
+    && validate_user_data_string(ud, "artifacts_ddb_table_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key_value")
+    && validate_user_data_string(ud, "artifacts_ddb_table_secondary_key_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_secondary_key_value")
     && validate_user_data_string(ud, "artifacts_s3_bucket")
     && validate_user_data_string(ud, "artifacts_s3_key");
 }
@@ -132,15 +135,19 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     create_empty_directory(ec2i, "");
 
   std::string table_name = ud["artifacts_ddb_table_name"];
-  std::string key_name = ud["artifacts_ddb_table_primary_key"];
-  std::string service = ud["teflon_service"];
+  std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
+  std::string p_key_value = ud["artifacts_ddb_table_primary_key_value"];
+  std::string s_key_name = ud["artifacts_ddb_table_secondary_key_name"];
+  std::string s_key_value = ud["artifacts_ddb_table_secondary_key_value"];
 
   QueryRequest  q_req;
   q_req.WithTableName(table_name)
-    .WithKeyConditionExpression("#A = :a")
+    .WithKeyConditionExpression("#P = :p AND #S = :s")
     .WithScanIndexForward(false)
-    .AddExpressionAttributeNames("#A", key_name)
-    .AddExpressionAttributeValues(":a", AttributeValue(service));
+    .AddExpressionAttributeNames("#P", p_key_name)
+    .AddExpressionAttributeValues(":p", AttributeValue(p_key_value))
+    .AddExpressionAttributeNames("#S", s_key_name)
+    .AddExpressionAttributeValues(":s", AttributeValue(s_key_value));
 
   auto outcome = ddbc.Query(q_req);
   if (!outcome.IsSuccess())
@@ -148,20 +155,21 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto &result = outcome.GetResult();
   auto &items = result.GetItems();
   if (items.size() == 0)
-    anon_throw(std::runtime_error, "no item for " << service << " in ddb table " << table_name);
+    anon_throw(std::runtime_error, "no item for " << p_key_value << "/" << s_key_value << " in ddb table " << table_name);
   auto &cur_def = items[0];
-  auto sha_it = cur_def.find("exe-sha");
-  if (sha_it == cur_def.end())
-    anon_throw(std::runtime_error, "item missing \"exe-sha\" entry");
+  auto end = cur_def.end();
 
-  auto current_server_id = sha_it->second.GetS();
-  if (curr_app && current_server_id == curr_app->id)
+  auto uid_it = cur_def.find("uid");
+  if (uid_it == end)
+    anon_throw(std::runtime_error, "item missing \"uid\" entry");
+
+  auto uid = uid_it->second.GetS();
+  if (curr_app && uid == curr_app->id)
   {
     anon_log("current server definition matches running server, no-op");
     return teflon_server_still_running;
   }
 
-  auto end = cur_def.end();
   auto files_it = cur_def.find("files");
   auto exe_it = cur_def.find("entry");
   auto ids_it = cur_def.find("fids");
@@ -186,28 +194,28 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // to the new directory
       auto existing_file = curr_app->files[f];
       files_cmd << "ln " << ec2i.root_dir << "/" << curr_app->id << "/" << curr_app->files[f]
-                << " " << ec2i.root_dir << "/" << current_server_id << "/" << f << " || exit 1 &\n";
+                << " " << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
     else
     {
       // does not match an existing file, so download it from s3
       files_cmd << "aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
-                << ec2i.root_dir << "/" << current_server_id << "/" << f << " --quiet || exit 1 &\n";
+                << ec2i.root_dir << "/" << uid << "/" << f << " --quiet || exit 1 &\n";
     }
   }
-  create_empty_directory(ec2i, current_server_id);
+  create_empty_directory(ec2i, uid);
   files_cmd << "wait < <(jobs -p)\n";
   exe_cmd(files_cmd.str());
 
   std::ostringstream ef;
-  ef << ec2i.root_dir << "/" << current_server_id << "/" << file_to_execute;
+  ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
   auto efs = ef.str();
   chmod(efs.c_str(), ACCESSPERMS);
 
   try
   {
-    auto new_app = std::make_shared<tef_app>(current_server_id, files_needed, ids);
+    auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
     start_server(efs.c_str(), false /*do_tls*/, std::vector<std::string>());
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
@@ -216,13 +224,13 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   catch (const std::exception &exc)
   {
     anon_log_error("start_server failed: " << exc.what());
-    remove_directory(ec2i, current_server_id);
+    remove_directory(ec2i, uid);
     return teflon_server_failed;
   }
   catch (...)
   {
     anon_log_error("start_server");
-    remove_directory(ec2i, current_server_id);
+    remove_directory(ec2i, uid);
     return teflon_server_failed;
   }
 
