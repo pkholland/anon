@@ -106,9 +106,12 @@ bool validate_user_data_string(const json& ud, const char* key)
 
 bool validate_all_user_data_strings(const json& ud)
 {
-  return validate_user_data_string(ud, "artifacts_ddb_table_name")
-    && validate_user_data_string(ud, "artifacts_ddb_table_region")
-    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key")
+  return validate_user_data_string(ud, "artifacts_ddb_table_region")
+    && validate_user_data_string(ud, "artifacts_ddb_table_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_primary_key_value")
+    && validate_user_data_string(ud, "artifacts_ddb_table_secondary_key_name")
+    && validate_user_data_string(ud, "artifacts_ddb_table_secondary_key_value")
     && validate_user_data_string(ud, "artifacts_s3_bucket")
     && validate_user_data_string(ud, "artifacts_s3_key");
 }
