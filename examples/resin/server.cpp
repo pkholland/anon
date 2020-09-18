@@ -62,6 +62,10 @@ void run_server(const ec2_info &ec2i)
     sqs_client = std::make_shared<SQSClient>(config);
     json msg = {
       {"operation", "start"},
+      {"region", ec2i.default_region},
+      {"instance_id", ec2i.instance_id},
+      {"private_ipv4", ec2i.private_ipv4},
+      {"public_ipv4", ec2i.public_ipv4},
       {"tag", ud["sqs_tag"]}};
 
     SendMessageRequest req;
@@ -110,6 +114,10 @@ void run_server(const ec2_info &ec2i)
   if (sqs_client) {
     json msg = {
       {"operation", "stop"},
+      {"region", ec2i.default_region},
+      {"instance_id", ec2i.instance_id},
+      {"private_ipv4", ec2i.private_ipv4},
+      {"public_ipv4", ec2i.public_ipv4},
       {"tag", ud["sqs_tag"]}};
 
     SendMessageRequest req;
