@@ -26,7 +26,12 @@
 #include "sync_teflon_app.h"
 #include "server_control.h"
 #include <signal.h>
+#include <aws/sqs/SQSClient.h>
+#include <aws/sqs/model/SendMessageRequest.h>
 
+using namespace Aws::SQS;
+using namespace Aws::SQS::Model;
+using namespace nlohmann;
 
 void run_server(const ec2_info &ec2i)
 {
@@ -40,12 +45,31 @@ void run_server(const ec2_info &ec2i)
 
   std::vector<int> udp_ports;
   bool udp_is_ipv6 = false;
-  if (ud.find("udp_ports") != ud.end())
-  {
+  if (ud.find("udp_ports") != ud.end()) {
     for (auto &p : ud["udp_ports"])
       udp_ports.push_back(p);
     if (ud.find("udp_is_ipv6") != ud.end())
       udp_is_ipv6 = ud["udp_is_ipv6"];
+  }
+
+  Aws::Client::ClientConfiguration config;
+  std::shared_ptr<SQSClient> sqs_client;
+  std::string sqs_url;
+  if (ud.find("sqs_region") != ud.end() && ud.find("sqs_url") != ud.end() && ud.find("sqs_tag") != ud.end()) {
+    std::string sqs_region = ud["sqs_region"];
+    sqs_url = ud["sqs_url"];
+    config.region = sqs_region;
+    sqs_client = std::make_shared<SQSClient>(config);
+    json msg = {
+      {"operation", "start"},
+      {"tag", ud["sqs_tag"]}};
+
+    SendMessageRequest req;
+    req.WithQueueUrl(sqs_url)
+      .WithMessageBody(msg.dump());
+    auto outcome = sqs_client->SendMessage(req);
+    if (!outcome.IsSuccess())
+      anon_throw(std::runtime_error, "SQSClient.SendMessage failed: " << outcome.GetError().GetMessage());
   }
 
   sigset_t sigs;
@@ -82,4 +106,17 @@ void run_server(const ec2_info &ec2i)
   stop_server();
 
   sproc_mgr_term();
+
+  if (sqs_client) {
+    json msg = {
+      {"operation", "stop"},
+      {"tag", ud["sqs_tag"]}};
+
+    SendMessageRequest req;
+    req.WithQueueUrl(sqs_url)
+      .WithMessageBody(msg.dump());
+    auto outcome = sqs_client->SendMessage(req);
+    if (!outcome.IsSuccess())
+      anon_log_error("SQSClient.SendMessage failed: " << outcome.GetError().GetMessage());
+  }
 }
