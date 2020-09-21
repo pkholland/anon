@@ -377,7 +377,15 @@ size_t fiber_pipe::read(void *buf, size_t count) const
     }
     else if (num_bytes_read == 0 && count != 0)
     {
-      anon_throw(fiber_io_error, "read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed");
+      // don't use the anon_throw macro here.  It is sometimes useful to define
+      // ANON_LOG_ALL_THROWS to better understand where certain errors are being thrown
+      // (as opposed to where they are being caught).  But in a normal server deployment
+      // this one throw statement will flood the logs, making it harder to find whatever
+      // you are looking for.  So for this case, directly use the (non-logging) expansion
+      // of the macro.  The message body that is being generated will still end up
+      // in the error object itself, but it will not normally be written to the log
+      // file.
+      throw fiber_io_error(Log::fmt([&](std::ostream &msg) { msg << "read(" << fd_ << ", <ptr>, " << count << ") returned 0, other end probably closed"; }));
     }
     else
       break;
