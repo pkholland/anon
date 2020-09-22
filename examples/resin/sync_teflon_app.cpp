@@ -251,7 +251,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     args.push_back(certs_file);
     args.push_back("-server_key");
     args.push_back(key_file);
-
+    do_tls = true;
   }
 
 
