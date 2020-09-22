@@ -220,7 +220,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   if (ud.find("certs_ddb_table_name") != ud.end()
       && ud.find("serving_domain") != ud.end()) {
 
-    std::string domain = ud["serviing_domain"];
+    std::string domain = ud["serving_domain"];
     std::string table = ud["certs_ddb_table_name"];
     GetItemRequest  req;
     req.WithTableName(table)
@@ -242,8 +242,8 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
 
     auto key_file = ec2i.root_dir + "/privkey.pem";
     std::ostringstream key_cmd;
-    certs_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
-    exe_cmd(certs_cmd.str());
+    key_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
+    exe_cmd(key_cmd.str());
 
     args.push_back("-cert_verify_dir");
     args.push_back("/etc/ssl/certs");
