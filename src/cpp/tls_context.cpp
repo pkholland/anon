@@ -262,7 +262,10 @@ static const char *ssl_io_errors(unsigned long err)
 
 void throw_ssl_io_error(unsigned long err)
 {
-  anon_throw(fiber_io_error, ssl_io_errors(err));
+  // don't use the anon_throw macro here.  It is sometimes useful to define
+  // ANON_LOG_ALL_THROWS to better understand where certain errors are being thrown
+  // (as opposed to where they are being caught).
+  throw fiber_io_error(Log::fmt([&](std::ostream &msg) { msg << ssl_io_errors(err); }));
 }
 
 ///////////////////////////////////////////////////////////////
