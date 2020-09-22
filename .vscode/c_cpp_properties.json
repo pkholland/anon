@@ -5,6 +5,7 @@
       "includePath": [
         "${workspaceFolder}",
         "${workspaceFolder}/src/cpp",
+        "${workspaceFolder}/secrets",
         "${workspaceFolder}/../json/include",
         "${workspaceFolder}/../http-parser"
       ],

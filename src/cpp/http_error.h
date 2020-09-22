@@ -65,11 +65,11 @@ void throw_request_error_(int code, T err)
 {
   std::ostringstream format;
   err(format);
+  #if defined(ANON_LOG_ALL_THROWS)
+  anon_log(format.str());
+  #endif
   format << "\n";
   auto msg = format.str();
-  #if defined(ANON_LOG_ALL_THROWS)
-  anon_log(msg);
-  #endif
   throw request_error(code, msg);
 }
 
