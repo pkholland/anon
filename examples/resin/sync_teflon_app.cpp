@@ -29,6 +29,7 @@
 #include <aws/core/utils/Outcome.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/QueryRequest.h>
+#include <aws/dynamodb/model/GetItemRequest.h>
 
 using namespace nlohmann;
 using namespace Aws::DynamoDB::Model;
@@ -213,10 +214,51 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto efs = ef.str();
   chmod(efs.c_str(), ACCESSPERMS);
 
+  auto do_tls = false;
+  std::vector<std::string> args;
+
+  if (ud.find("certs_ddb_table_name") != ud.end()
+      && ud.find("serving_domain") != ud.end()) {
+
+    std::string domain = ud["serviing_domain"];
+    std::string table = ud["certs_ddb_table_name"];
+    GetItemRequest  req;
+    req.WithTableName(table)
+      .AddKey("domain", AttributeValue(domain));
+    auto outcome = ddbc.GetItem(req);
+    if (!outcome.IsSuccess())
+      anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
+
+    auto &item = outcome.GetResult().GetItem();
+    auto fc_it = item.find("fullchain");
+    auto key_it = item.find("privkey");
+    if (fc_it == item.end() || key_it == item.end())
+      anon_throw(std::runtime_error, "dynamodb entry missing required fullchain and/or privkey entries");
+
+    auto certs_file = ec2i.root_dir + "/fullchain.pem";
+    std::ostringstream certs_cmd;
+    certs_cmd << "echo \"" << fc_it->second.GetS() << "\" >> " << certs_file;
+    exe_cmd(certs_cmd.str());
+
+    auto key_file = ec2i.root_dir + "/privkey.pem";
+    std::ostringstream key_cmd;
+    certs_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
+    exe_cmd(certs_cmd.str());
+
+    args.push_back("-cert_verify_dir");
+    args.push_back("/etc/ssl/certs");
+    args.push_back("-server_cert");
+    args.push_back(certs_file);
+    args.push_back("-server_key");
+    args.push_back(key_file);
+
+  }
+
+
   try
   {
     auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
-    start_server(efs.c_str(), false /*do_tls*/, std::vector<std::string>());
+    start_server(efs.c_str(), do_tls, args);
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
     curr_app = new_app;
