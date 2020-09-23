@@ -621,7 +621,7 @@ void io_params::sleep_until_data_available(fiber_pipe *pipe)
   if (tls_io_params.timeout_expired_)
   {
     tls_io_params.timeout_expired_ = false;
-    anon_throw(fiber_io_timeout_error, "throwing read io timeout for fd: " << pipe->get_fd());
+    throw fiber_io_timeout_error(Log::fmt([&](std::ostream &msg) { msg << "throwing read io timeout for fd: " << pipe->get_fd(); }));
   }
 }
 
