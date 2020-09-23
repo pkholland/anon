@@ -331,9 +331,9 @@ static void throw_ssl_error_(BIO *fpb, unsigned long err)
 {
   auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
   if (p->hit_fiber_io_error_)
-    anon_throw(fiber_io_error, "fiber io error during tls 2");
+    throw fiber_io_error(Log::fmt([&](std::ostream &msg) { msg << "fiber io error during tls 2"; }));
   else if (p->hit_fiber_io_timeout_error_)
-    anon_throw(fiber_io_timeout_error, "fiber io timeout error during tls 2");
+    throw fiber_io_timeout_error(Log::fmt([&](std::ostream &msg) { msg << "fiber io timeout error during tls 2"; }));
   else
     throw_ssl_error(err);
 }
@@ -342,9 +342,9 @@ void throw_ssl_io_error_(BIO *fpb, unsigned long err)
 {
   auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
   if (p->hit_fiber_io_error_)
-    anon_throw(fiber_io_error, "fiber io error during tls 3");
+    throw fiber_io_error(Log::fmt([&](std::ostream &msg) { msg << "fiber io error during tls 3"; }));
   else if (p->hit_fiber_io_timeout_error_)
-    anon_throw(fiber_io_timeout_error, "fiber io timeout error during tls 3");
+    throw fiber_io_timeout_error(Log::fmt([&](std::ostream &msg) { msg << "fiber io timeout error during tls 3"; }));
   else
     throw_ssl_io_error(err);
 }
