@@ -100,6 +100,14 @@ class AutoScalingClient;
 }
 #endif
 
+#ifdef ANON_AWS_COGNITO
+namespace Aws {
+namespace CognitoIdentity {
+class CognitoIdentityClient;
+}
+}
+#endif
+
 void aws_client_init();
 void aws_client_term();
 
@@ -173,6 +181,10 @@ const Aws::GlobalAccelerator::GlobalAcceleratorClient& aws_get_accel_client();
 
 #ifdef ANON_AWS_AUTOSCALING
 const Aws::AutoScaling::AutoScalingClient& aws_get_autoscaling_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_COGNITO
+const Aws::CognitoIdentity::CognitoIdentityClient& aws_get_cognito_client(const std::string& region);
 #endif
 
 #endif

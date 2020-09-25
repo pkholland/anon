@@ -74,6 +74,10 @@
 #include <aws/autoscaling/AutoScalingClient.h>
 #endif
 
+//#ifdef ANON_AWS_COGNITO
+#include <aws/cognito-identity/CognitoIdentityClient.h>
+//#endif
+
 
 namespace Aws
 {
@@ -638,6 +642,10 @@ std::map<std::string, Aws::GlobalAccelerator::GlobalAcceleratorClient> accel_map
 std::map<std::string, Aws::AutoScaling::AutoScalingClient> auto_map;
 #endif
 
+#ifdef ANON_AWS_COGNITO
+std::map<std::string, Aws::CognitoIdentity::CognitoIdentityClient> cognito_map;
+#endif
+
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
   if (config_map.find(region) == config_map.end())
@@ -787,6 +795,18 @@ aws_get_autoscaling_client(const std::string& region)
     auto_map.emplace(std::make_pair(region,
       Aws::AutoScaling::AutoScalingClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return auto_map[region];
+}
+#endif
+
+#ifdef ANON_AWS_COGNITO
+const Aws::CognitoIdentity::CognitoIdentityClient&
+aws_get_cognito_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (cognito_map.find(region) == cognito_map.end())
+    cognito_map.emplace(std::make_pair(region,
+      Aws::CognitoIdentity::CognitoIdentityClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return cognito_map[region];
 }
 #endif
 

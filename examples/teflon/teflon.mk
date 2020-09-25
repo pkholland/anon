@@ -84,6 +84,12 @@ LIBS:=-laws-cpp-sdk-autoscaling $(LIBS)
 cflags+=-DANON_AWS_AUTOSCALING
 endif
 
+ifneq ($(filter COGNITO,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-cognito-identity $(LIBS)
+cflags+=-DANON_AWS_COGNITO
+endif
+
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\
