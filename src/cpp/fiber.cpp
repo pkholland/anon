@@ -321,29 +321,26 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
 
 fiber_pipe::~fiber_pipe()
 {
-  if (fd_ != -1)
   {
-    if (socket_type_ == network)
-    {
-      shutdown(fd_, 2 /*both*/);
-      {
-        fiber_lock lock(zero_net_pipes_mutex_);
-        if (--num_net_pipes_ == 0)
-          zero_net_pipes_cond_.notify_all();
-      }
+    std::lock_guard<std::mutex> lock(list_mutex_);
+    if (fd_ != -1) {
+      if (socket_type_ == network)
+        shutdown(fd_, 2 /*both*/);
+      if (close(fd_) != 0)
+        anon_log("close(" << fd_ << ") failed with errno: " << errno);
     }
-    if (close(fd_) != 0)
-    {
-      anon_log("close(" << fd_ << ") failed with errno: " << errno);
-    }
+    if (next_)
+      next_->prev_ = prev_;
+    if (prev_)
+      prev_->next_ = next_;
+    else
+      first_ = next_;
   }
-  std::lock_guard<std::mutex> lock(list_mutex_);
-  if (next_)
-    next_->prev_ = prev_;
-  if (prev_)
-    prev_->next_ = next_;
-  else
-    first_ = next_;
+  if (socket_type_ == network) {
+    fiber_lock lock(zero_net_pipes_mutex_);
+    if (--num_net_pipes_ == 0)
+      zero_net_pipes_cond_.notify_all();
+  }
 }
 
 void fiber_pipe::io_avail(const struct epoll_event &event)
