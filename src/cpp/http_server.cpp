@@ -182,14 +182,14 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
         http_parser_init(&parser, HTTP_REQUEST);
 
         bool keep_alive = true;
-        char buf[4096];
+        std::vector<char>buf(8192);
         size_t bsp = 0, bep = 0;
         while (keep_alive)
         {
           // if there is no un-parsed data in buf then read more
           if (bsp == bep)
           {
-            auto bytes_read = http_pipe->read(&buf[bep], sizeof(buf) - bep);
+            auto bytes_read = http_pipe->read(&buf[bep], buf.size() - bep);
             //anon_log("client sent: " << std::string(&buf[bep], bytes_read));
             bep += bytes_read;
           }
@@ -256,10 +256,10 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
 #endif
               return;
             }
-            if (bsp == sizeof(buf))
+            if (bsp == buf.size())
             {
 #if ANON_LOG_NET_TRAFFIC > 1
-              anon_log("http GET from: " << *src_addr << " invalid headers - bigger than " << sizeof(buf) << " bytes");
+              anon_log("http GET from: " << *src_addr << " invalid headers - bigger than " << buf.size() << " bytes");
 #endif
               return;
             }

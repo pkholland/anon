@@ -361,7 +361,7 @@ class http_server
 
   struct pipe_t
   {
-    pipe_t(::pipe_t *pipe, char (&buf)[4096], size_t &bsp, size_t bep)
+    pipe_t(::pipe_t *pipe, const std::vector<char>& buf, size_t &bsp, size_t bep)
         : pipe(pipe),
           buf(buf),
           bep(bep),
@@ -387,7 +387,7 @@ class http_server
   private:
     fiber_mutex mutex;
     ::pipe_t *pipe;
-    char (&buf)[4096];
+    const std::vector<char>& buf;
     size_t &bsp;
     size_t bep;
   };
