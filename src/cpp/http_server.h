@@ -205,7 +205,7 @@ struct browser_cookie
 {
   browser_cookie(const std::string &name, const std::string &value, int max_age,
                  const std::string &path = "", const std::string &domain = "",
-                 bool secure = false, bool http_only = false)
+                 bool secure = false, bool http_only = false, const std::string& same_site = "")
       : name_(name),
         value_(value),
         max_age_(max_age),
@@ -213,6 +213,7 @@ struct browser_cookie
         domain_(domain),
         secure_(secure),
         http_only_(http_only),
+        same_site_(same_site),
         delete_it_(false)
   {
   }
@@ -241,6 +242,7 @@ struct browser_cookie
   std::string domain_;
   bool secure_;
   bool http_only_;
+  std::string same_site_;
   bool delete_it_;
 };
 

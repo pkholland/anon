@@ -307,7 +307,9 @@ void http_server::pipe_t::respond(const http_response &response)
         rp << "; Domain=" << it->domain_;
       if (it->max_age_ > 0)
         rp << "; Max-Age=" << it->max_age_;
-      if (it->secure_)
+      if (it->same_site_.size())
+        rp << "; SameSite=" << it->same_site_;
+      if (it->secure_ || it->same_site_ == "None")
         rp << "; Secure";
       if (it->http_only_)
         rp << "; HttpOnly";
