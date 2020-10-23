@@ -180,7 +180,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request)
   std::ostringstream oss;
   oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
   response.add_header("access-control-allow-methods", oss.str());
-  response.add_header("access-control-allow-headers", "*");
+  response.add_header("access-control-allow-headers", "content-type, authorization");
   response.add_header("access-control-allow-credentials", "true");
   response.add_header("cache-control", "max-age=604800");
   response.set_status_code("204 No Content"); 
