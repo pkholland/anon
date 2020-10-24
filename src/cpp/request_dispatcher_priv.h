@@ -60,7 +60,7 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
   f(pipe, request, std::forward<Args>(args)..., body);
 }
 
-void respond_options(http_server::pipe_t &pipe, const http_request &request);
+void respond_options(http_server::pipe_t &pipe, const http_request &request, const std::vector<std::string>& allowed_headers);
 
 #define n_pipe *(http_server::pipe_t *)0
 #define n_request *(http_request *)0
@@ -70,14 +70,14 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request);
 std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h, const http_request &request, const std::string &path, const std::string &query, bool is_options);
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &s, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &s, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls);
     return true;
@@ -85,14 +85,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls, params.second[0]);
     return true;
@@ -100,14 +100,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query,bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query,bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls, params.second[0], params.second[1]);
     return true;
@@ -115,14 +115,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls, params.second[0], params.second[1], params.second[2]);
     return true;
@@ -130,14 +130,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls, params.second[0], params.second[1], params.second[2], params.second[3]);
     return true;
@@ -145,14 +145,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), std::string())), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       f(pipe, request, is_tls, params.second[0], params.second[1], params.second[2], params.second[3], params.second[4]);
     return true;
@@ -160,14 +160,14 @@ auto get_map_responder(Fn f, const request_helper &h) -> decltype((void)(f(n_pip
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f);
     return true;
@@ -175,14 +175,14 @@ auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f, params.second[0]);
     return true;
@@ -190,14 +190,14 @@ auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f, params.second[0], params.second[1]);
     return true;
@@ -205,14 +205,14 @@ auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f, params.second[0], params.second[1], params.second[2]);
     return true;
@@ -220,14 +220,14 @@ auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f, params.second[0], params.second[1], params.second[2], params.second[3]);
     return true;
@@ -235,14 +235,14 @@ auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(
 }
 
 template <typename Fn>
-auto get_map_responder_body(Fn f, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
+auto get_map_responder_body(Fn f, const std::vector<std::string>& allowed_headers, const request_helper &h) -> decltype((void)(f(n_pipe, n_request, false, std::string(), std::string(), std::string(), std::string(), std::string(), n_json)), std::function<bool(http_server::pipe_t &, const http_request &, bool, const std::string &, const std::string &, bool)>())
 {
-  return [f, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
+  return [f, allowed_headers, h](http_server::pipe_t &pipe, const http_request &request, bool is_tls, const std::string &path, const std::string &query, bool is_options) -> bool {
     auto params = extract_params(h, request, path, query, is_options);
     if (!params.first)
       return false;
     if (is_options)
-      respond_options(pipe, request);
+      respond_options(pipe, request, allowed_headers);
     else
       body_as_json(pipe, request, is_tls, f, params.second[0], params.second[1], params.second[2], params.second[3], params.second[4]);
     return true;
