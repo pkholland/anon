@@ -177,9 +177,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request, con
   auto orig = request.headers.get_header("origin");
   auto orig2 = orig.len() > 0 ? orig.str() : std::string("*");
   response.add_header("access-control-allow-origin", orig2);
-  std::ostringstream oss;
-  oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
-  response.add_header("access-control-allow-methods", oss.str());
+  response.add_header("access-control-allow-methods", request.headers.get_header("access-control-request-method").str());
   if (allowed_headers.size() > 0) {
     std::ostringstream oss;
     auto is_first = true;
