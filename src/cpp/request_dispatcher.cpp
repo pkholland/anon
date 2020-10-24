@@ -171,16 +171,25 @@ std::pair<bool, std::vector<std::string>> extract_params(const request_helper &h
   return ret;
 }
 
-void respond_options(http_server::pipe_t &pipe, const http_request &request)
+void respond_options(http_server::pipe_t &pipe, const http_request &request, const std::vector<std::string>& allowed_headers)
 {
   http_response response;
   auto orig = request.headers.get_header("origin");
   auto orig2 = orig.len() > 0 ? orig.str() : std::string("*");
   response.add_header("access-control-allow-origin", orig2);
-  std::ostringstream oss;
-  oss << "OPTIONS, " << request.headers.get_header("access-control-request-method").str();
-  response.add_header("access-control-allow-methods", oss.str());
-  response.add_header("access-control-allow-headers", "*");
+  response.add_header("access-control-allow-methods", request.headers.get_header("access-control-request-method").str());
+  if (allowed_headers.size() > 0) {
+    std::ostringstream oss;
+    auto is_first = true;
+    for (auto &h : allowed_headers) {
+      if (is_first)
+        is_first = false;
+      else
+        oss << ", ";
+      oss << h;
+    }
+    response.add_header("access-control-allow-headers", oss.str());
+  }
   response.add_header("access-control-allow-credentials", "true");
   response.add_header("cache-control", "max-age=604800");
   response.set_status_code("204 No Content"); 
