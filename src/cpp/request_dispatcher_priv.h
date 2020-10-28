@@ -38,7 +38,7 @@ struct request_helper
 request_helper request_mapping_helper(const std::string &path_spec);
 
 template <typename Fn, typename... Args>
-void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, Args &&... args)
+void body_as_json(http_server::pipe_t &pipe, const http_request &request, bool is_tls, Fn f, Args &&... args)
 {
   // auto &h = request.headers;
   if (!request.has_content_length)
@@ -57,7 +57,7 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, Fn f, 
   while (bytes_read < clen)
     bytes_read += pipe.read(&buff[bytes_read], clen - bytes_read);
   nlohmann::json body = nlohmann::json::parse(buff.begin(), buff.end());
-  f(pipe, request, std::forward<Args>(args)..., body);
+  f(pipe, request, is_tls, std::forward<Args>(args)..., body);
 }
 
 void respond_options(http_server::pipe_t &pipe, const http_request &request, const std::vector<std::string>& allowed_headers);

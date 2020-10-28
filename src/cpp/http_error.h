@@ -73,8 +73,8 @@ void throw_request_error_(int code, T err)
   throw request_error(code, msg);
 }
 
-inline void reply_back_error(const char* method_, int cors_enabled, const char* error_type, const char* msg, const char* response_code,
-                    http_server::pipe_t &pipe)
+inline void reply_back_error(const char* method_, int cors_enabled, const http_request &request,
+      const char* error_type, const char* msg, const char* response_code, http_server::pipe_t &pipe)
 {
   //anon_log("request_wrap caught " << error_type << ": " << msg);
   http_response response;
@@ -95,9 +95,9 @@ inline void reply_back_error(const char* method_, int cors_enabled, const char* 
     else if (method == "DELETE")
       chk = cors_enabled & http_server::k_enable_cors_put;
     if (chk) {
-      response.add_header("access-control-allow-origin", "*");
+      if (request.headers.contains_header("origin"))
+        response.add_header("access-control-allow-origin", request.headers.get_header("origin").str());
       response.add_header("access-control-allow-methods", method);
-      response.add_header("access-control-allow-headers", "*");
     }
   }
   response.set_status_code(response_code);
@@ -124,7 +124,7 @@ inline void reply_back_error(const char* method_, int cors_enabled, const char* 
 #define throw_request_error(_code, _body) throw_request_error_((int)_code, [&](std::ostream &formatter) { formatter << _body; })
 
 template <typename Fn>
-void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pipe, Fn f)
+void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pipe, const http_request &request, Fn f)
 {
   try
   {
@@ -132,18 +132,18 @@ void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pip
   }
   catch (const request_error &e)
   {
-    reply_back_error(method, cors_enabled, "request_error", e.reason.c_str(), e.code.c_str(), pipe);
+    reply_back_error(method, cors_enabled, request, "request_error", e.reason.c_str(), e.code.c_str(), pipe);
   }
   catch (const nlohmann::json::exception& e)
   {
-    reply_back_error(method, cors_enabled, "json exception", e.what(), "400", pipe);
+    reply_back_error(method, cors_enabled, request, "json exception", e.what(), "400", pipe);
   }
   catch (const std::exception &e)
   {
-    reply_back_error(method, cors_enabled, "std::exception", e.what(), "500", pipe);
+    reply_back_error(method, cors_enabled, request, "std::exception", e.what(), "500", pipe);
   }
   catch (...)
   {
-    reply_back_error(method, cors_enabled, "unknown exception", "", "500", pipe);
+    reply_back_error(method, cors_enabled, request, "unknown exception", "", "500", pipe);
   }
 }
