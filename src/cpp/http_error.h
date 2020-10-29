@@ -98,6 +98,7 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
       if (request.headers.contains_header("origin"))
         response.add_header("access-control-allow-origin", request.headers.get_header("origin").str());
       response.add_header("access-control-allow-methods", method);
+      response.add_header("access-control-allow-credentials", "true");
     }
   }
   response.set_status_code(response_code);
