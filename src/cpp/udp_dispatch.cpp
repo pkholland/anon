@@ -24,6 +24,29 @@
 #include <arpa/inet.h>
 #include "fiber.h"
 
+namespace {
+
+sockaddr_storage clean_sockaddr(const sockaddr_storage& addr)
+{
+  sockaddr_storage clean;
+  memset(&clean, 0, sizeof(clean));
+  if (addr.ss_family == AF_INET)
+  {
+    ((sockaddr_in *)&clean)->sin_family = AF_INET;
+    ((sockaddr_in *)&clean)->sin_addr = ((sockaddr_in *)&addr)->sin_addr;
+    ((sockaddr_in *)&clean)->sin_port = ((sockaddr_in *)&addr)->sin_port;
+  }
+  else if (addr.ss_family == AF_INET6)
+  {
+    ((sockaddr_in6 *)&clean)->sin6_family = AF_INET6;
+    ((sockaddr_in6 *)&clean)->sin6_addr = ((sockaddr_in6 *)&addr)->sin6_addr;
+    ((sockaddr_in6 *)&clean)->sin6_port = ((sockaddr_in6 *)&addr)->sin6_port;
+  }
+  return clean;
+}
+
+}
+
 udp_dispatch::udp_dispatch(int port_or_socket, bool is_socket, bool ipv6)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
@@ -104,7 +127,8 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
           auto ths = wp.lock();
           if (ths)
           {
-            ths->recv_msg(&(*buff)[0], dlen, &host, host_addr_size);
+            auto clean = clean_sockaddr(host);
+            ths->recv_msg(&(*buff)[0], dlen, &clean, host_addr_size);
             ths->release_buff(buff);
           }
         });
