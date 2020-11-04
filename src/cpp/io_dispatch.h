@@ -200,7 +200,7 @@ public:
     }
     catch (...)
     {
-      anon_log_error("io_d.add_at_rest_fn(f())io_d.add_at_rest_fn(f()) threw exception");
+      anon_log_error("io_d.add_at_rest_fn(f()) threw exception");
     }
 
     io_d.thread_countdown_ += io_d.num_threads_;
