@@ -28,6 +28,7 @@
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/client/RetryStrategy.h>
 
+
 #ifdef ANON_AWS_EC2
 namespace Aws {
 namespace EC2 {
@@ -40,6 +41,14 @@ class EC2Client;
 namespace Aws {
 namespace DynamoDB {
 class DynamoDBClient;
+}
+}
+#endif
+
+#ifdef ANON_AWS_DDB_STREAMS
+namespace Aws {
+namespace DynamoDBStreams {
+class DynamoDBStreamsClient;
 }
 }
 #endif
@@ -153,6 +162,10 @@ const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region);
 
 #ifdef ANON_AWS_DDB
 const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_DDB_STREAMS
+const Aws::DynamoDBStreams::DynamoDBStreamsClient& aws_get_ddb_streams_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_ROUTE53

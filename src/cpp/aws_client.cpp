@@ -46,6 +46,10 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #endif
 
+#ifdef ANON_AWS_DDB_STREAMS
+#include <aws/dynamodbstreams/DynamoDBStreamsClient.h>
+#endif
+
 #ifdef ANON_AWS_ROUTE53
 #include <aws/route53/Route53Client.h>
 #endif
@@ -614,6 +618,10 @@ std::map<std::string, Aws::EC2::EC2Client> ec2_map;
 std::map<std::string, std::unique_ptr<Aws::DynamoDB::DynamoDBClient>> ddb_map;
 #endif
 
+#ifdef ANON_AWS_DDB_STREAMS
+std::map<std::string, std::unique_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient>> ddb_streams_map;
+#endif
+
 #ifdef ANON_AWS_ROUTE53
 std::map<std::string, Aws::Route53::Route53Client> r53_map;
 #endif
@@ -689,6 +697,22 @@ const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& regio
       ddb_map[region] = std::move(c);
   }
   return *ddb_map[region];
+}
+#endif
+
+#ifdef ANON_AWS_DDB_STREAMS
+const Aws::DynamoDBStreams::DynamoDBStreamsClient& aws_get_ddb_streams_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (ddb_streams_map.find(region) == ddb_streams_map.end()) {
+    l.unlock();
+    std::unique_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient>
+    c(new Aws::DynamoDBStreams::DynamoDBStreamsClient(aws_get_cred_provider(), aws_get_client_config_nl(region)));
+    l.lock();
+    if (ddb_streams_map.find(region) == ddb_streams_map.end())
+      ddb_streams_map[region] = std::move(c);
+  }
+  return *ddb_streams_map[region];
 }
 #endif
 

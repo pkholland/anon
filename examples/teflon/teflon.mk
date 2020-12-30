@@ -54,6 +54,11 @@ LIBS:=-laws-cpp-sdk-dynamodb $(LIBS)
 cflags+=-DANON_AWS_DDB
 endif
 
+ifneq ($(filter DDB_STREAMS,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-dynamodbstreams $(LIBS)
+cflags+=-DANON_AWS_DDB_STREAMS
+endif
+
 ifneq ($(filter ROUTE53,$(ANON_AWS)),)
 LIBS:=-laws-cpp-sdk-route53 $(LIBS)
 cflags+=-DANON_AWS_ROUTE53
