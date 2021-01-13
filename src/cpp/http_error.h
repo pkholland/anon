@@ -61,12 +61,12 @@ struct request_error
 };
 
 template <typename T>
-void throw_request_error_(int code, T err)
+void throw_request_error_(int code, T err, const char* filename, int linenum)
 {
   std::ostringstream format;
   err(format);
   #if defined(ANON_LOG_ALL_THROWS)
-  anon_log(format.str());
+  Log::output(filename, linenum, [&](std::ostream &formatter) { formatter << format.str(); }, false);
   #endif
   format << "\n";
   auto msg = format.str();
@@ -122,7 +122,7 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
  * code, plus whatever you add with the second, streaming
  * description written into the body of the response.
  */
-#define throw_request_error(_code, _body) throw_request_error_((int)_code, [&](std::ostream &formatter) { formatter << _body; })
+#define throw_request_error(_code, _body) throw_request_error_((int)_code, [&](std::ostream &formatter) { formatter << _body; }, __FILE__, __LINE__)
 
 template <typename Fn>
 void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pipe, const http_request &request, Fn f)
