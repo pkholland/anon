@@ -246,13 +246,13 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
     auto query = request.get_url_field(UF_QUERY);
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
-      throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (1)");
+      throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found");
     --e;
     for (auto &f : e->second)
     {
       if (f(pipe, request, is_tls, path, query, is_options))
         return;
     }
-    throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found (2)");
+    throw_request_error(HTTP_STATUS_NOT_FOUND, "resource: \"" << path << "\" not found");
   });
 }
