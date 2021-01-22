@@ -238,11 +238,11 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
       else if (method == "DELETE")
         chk = _cors_enabled & http_server::k_enable_cors_put;
       if (!chk)
-        throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
+        throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method not allowed: " << method);
     }
     auto m = _map.find(method);
     if (m == _map.end())
-      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method: " << method);
+      throw_request_error(HTTP_STATUS_METHOD_NOT_ALLOWED, "method not allowed: " << method);
     auto query = request.get_url_field(UF_QUERY);
     auto e = m->second.upper_bound(path);
     if (e == m->second.begin())
