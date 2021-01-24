@@ -165,7 +165,7 @@ private:
 
   enum
   {
-    k_default_io_block_time = 30,
+    k_default_io_block_time = 15,
     k_max_idle_time = 25
   };
 };

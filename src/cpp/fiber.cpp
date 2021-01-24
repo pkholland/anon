@@ -598,9 +598,11 @@ void io_params::sweep_timed_out_pipes(bool orhibernating)
 
   // occasionally timing hits such that a pause is not possible.
   // in that case, go ahead and reschedule the next sweep
-  if (!paused)
+  if (!paused) {
+    anon_log("reschedule sweep due to failed io_dispatch::while_paused2");
     next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
-      cur_time() + fiber_pipe::k_net_io_sweep_time / 4);
+      cur_time() + fiber_pipe::k_net_io_sweep_time);
+  }
 }
 
 void io_params::sleep_until_data_available(fiber_pipe *pipe)

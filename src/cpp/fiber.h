@@ -467,7 +467,7 @@ public:
 
 private:
   enum {
-    k_net_io_sweep_time = 15
+    k_net_io_sweep_time = 2
   };
 
   // fiber_pipe's are neither movable, nor copyable.
