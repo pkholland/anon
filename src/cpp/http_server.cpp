@@ -160,7 +160,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
         // initial tls handshake and http headers.
         // No stalling a single read for longer
         // than 4 seconds.
-        pipe->limit_io_block_time(1);
+        pipe->limit_io_block_time(2);
 
         std::unique_ptr<tls_pipe> tlspipe;
         ::pipe_t *http_pipe;

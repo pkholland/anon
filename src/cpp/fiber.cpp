@@ -300,11 +300,11 @@ fiber_pipe::fiber_pipe(int socket_fd, pipe_sock_t socket_type)
   if (socket_type == network)
   {
     fiber_lock lock(zero_net_pipes_mutex_);
-    if (++num_net_pipes_ == 1)
+    if (++num_net_pipes_ == 1 && io_params::next_pipe_sweep_.id_ == io_dispatch::scheduled_task().id_)
     {
-#if defined(ANON_DEBUG_TIMERS)
+      #if defined(ANON_DEBUG_TIMERS)
       anon_log("fiber_pipe::fiber_pipe, first net pipe");
-#endif
+      #endif
       io_params::next_pipe_sweep_ = io_dispatch::schedule_task(
         []{io_params::sweep_timed_out_pipes(false);},
         cur_time() + k_net_io_sweep_time);
@@ -512,9 +512,9 @@ void io_params::wake_all(fiber *first)
 
 void io_params::sweep_timed_out_pipes(bool orhibernating)
 {
-#if defined(ANON_RUNTIME_CHECKS)
+  #if defined(ANON_RUNTIME_CHECKS)
   anon_log("io_params::sweep_timed_out_pipes");
-#endif
+  #endif
   auto paused = io_dispatch::while_paused2(
       [orhibernating]() -> std::function<void(void)> {
         // turn off all future io processing of any
@@ -584,9 +584,9 @@ void io_params::sweep_timed_out_pipes(bool orhibernating)
             fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
             if (fiber_pipe::num_net_pipes_ > 0)
             {
-  #if defined(ANON_DEBUG_TIMERS)
-              anon_log("io_params::sweep_timed_out_pipes, net pipes still exist");
-  #endif
+              #if defined(ANON_DEBUG_TIMERS)
+              anon_log("io_params::sweep_timed_out_pipes, net pipes still exist (" << fiber_pipe::num_net_pipes_ << ")");
+              #endif
               next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
                 cur_time() + fiber_pipe::k_net_io_sweep_time);
             }
@@ -600,8 +600,17 @@ void io_params::sweep_timed_out_pipes(bool orhibernating)
   // in that case, go ahead and reschedule the next sweep
   if (!paused) {
     anon_log("reschedule sweep due to failed io_dispatch::while_paused2");
-    next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
-      cur_time() + fiber_pipe::k_net_io_sweep_time);
+    if (orhibernating) {
+      io_dispatch::schedule_task([]{sweep_timed_out_pipes(true);},
+        cur_time() + fiber_pipe::k_net_io_sweep_time);
+    } else {
+      fiber_lock lock(fiber_pipe::zero_net_pipes_mutex_);
+      if (fiber_pipe::num_net_pipes_ > 0)
+      {
+        next_pipe_sweep_ = io_dispatch::schedule_task([]{sweep_timed_out_pipes(false);},
+          cur_time() + fiber_pipe::k_net_io_sweep_time);
+      }
+    }
   }
 }
 

@@ -270,7 +270,6 @@ extern "C" int main(int argc, char **argv)
                                                                  server_respond(pipe, request, false);
                                                                },
                                                                tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
-
     };
 
     // if we have been run by a tool capable of giving
