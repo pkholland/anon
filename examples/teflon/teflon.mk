@@ -90,7 +90,7 @@ cflags+=-DANON_AWS_AUTOSCALING
 endif
 
 ifneq ($(filter COGNITO,$(ANON_AWS)),)
-LIBS:=-laws-cpp-sdk-cognito-identity $(LIBS)
+LIBS:=-laws-cpp-sdk-cognito-identity -laws-cpp-sdk-cognito-idp $(LIBS)
 cflags+=-DANON_AWS_COGNITO
 endif
 
