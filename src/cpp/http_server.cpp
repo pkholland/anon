@@ -294,26 +294,24 @@ void http_server::pipe_t::respond(const http_response &response)
   for (auto it = response.get_cookies().begin(); it != response.get_cookies().end(); it++)
   {
     rp << "Set-Cookie: " << it->name_ << "=";
-    if (it->delete_it_)
-    {
-      rp << "deleted; Expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    }
-    else
-    {
+    if (!it->delete_it_)
       rp << it->value_;
-      if (it->path_.size())
-        rp << "; Path=" << it->path_;
-      if (it->domain_.size())
-        rp << "; Domain=" << it->domain_;
-      if (it->max_age_ > 0)
-        rp << "; Max-Age=" << it->max_age_;
-      if (it->same_site_.size())
-        rp << "; SameSite=" << it->same_site_;
-      if (it->secure_ || it->same_site_ == "None")
-        rp << "; Secure";
-      if (it->http_only_)
-        rp << "; HttpOnly";
-    }
+    if (it->path_.size())
+      rp << "; Path=" << it->path_;
+    if (it->domain_.size())
+      rp << "; Domain=" << it->domain_;
+    if (it->delete_it_)
+      rp << "; Max-Age=0";
+    else if (it->max_age_ > 0)
+      rp << "; Max-Age=" << it->max_age_;
+    else if (it->max_age_ < 0)
+      rp << "; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    if (it->same_site_.size())
+      rp << "; SameSite=" << it->same_site_;
+    if (it->secure_ || it->same_site_ == "None")
+      rp << "; Secure";
+    if (it->http_only_)
+      rp << "; HttpOnly";
     rp << "\r\n";
   }
   if (response.get_body().length() > 0)
