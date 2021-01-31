@@ -47,7 +47,9 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
   }
   else if (errno != EINPROGRESS)
   {
+#if ANON_LOG_NET_TRAFFIC > 0
     anon_log("connect(fd, " << *addr << ", addrlen) failed, err: " << error_string(errno));
+#endif
     return std::make_pair(errno, std::unique_ptr<fiber_pipe>());
   }
   else
