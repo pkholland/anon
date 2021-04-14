@@ -72,6 +72,12 @@ bool generic_retry(E e)
     || ce == Aws::Client::CoreErrors::SLOW_DOWN;
 }
 
+template<typename E>
+bool generic_retry_2(const E& e)
+{
+  return false;
+}
+
 #ifdef ANON_AWS_EC2
 inline bool generic_retry(Aws::EC2::EC2Errors e)
 {
@@ -82,6 +88,10 @@ inline bool generic_retry(Aws::EC2::EC2Errors e)
     || e == Aws::EC2::EC2Errors::INVALID_PLACEMENT_GROUP__IN_USE
     || e == Aws::EC2::EC2Errors::INVALID_SNAPSHOT__IN_USE
     || e == Aws::EC2::EC2Errors::VOLUME_IN_USE;
+}
+
+inline bool generic_retry_2(const Aws::EC2::EC2Error& e) {
+  return e.GetExceptionName() == "RequestLimitExceeded";
 }
 #endif
 
@@ -203,8 +213,9 @@ bool aws_check_(
 {
   if (!outcome.IsSuccess())
   {
-    auto et = outcome.GetError().GetErrorType();
-    if (generic_retry(et))
+    auto &e = outcome.GetError();
+    auto et = e.GetErrorType();
+    if (generic_retry(et) || generic_retry_2(e))
       throw aws_throttle_error(Log::fmt(fn));
     if (is_ignorable_duplicate<decltype(et)>::value(et))
       return false;
