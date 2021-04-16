@@ -219,6 +219,7 @@ void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request 
         http_response response;
         response.add_header("allow", oss.str());
         response.add_header("cache-control", "max-age=604800");
+        response.add_header("access-control-max-age", "600");
         response.set_status_code("204 No Content");
         pipe.respond(response);
         return;
