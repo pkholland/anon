@@ -178,6 +178,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request, con
   auto orig2 = orig.len() > 0 ? orig.str() : std::string("*");
   response.add_header("access-control-allow-origin", orig2);
   response.add_header("access-control-allow-methods", request.headers.get_header("access-control-request-method").str());
+  response.add_header("access-control-max-age", "600");
   if (allowed_headers.size() > 0) {
     std::ostringstream oss;
     auto is_first = true;
