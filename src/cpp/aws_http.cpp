@@ -85,49 +85,51 @@ public:
       return;
     }
     
-    get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
+    try {
+      get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
 
-      try {
-        const auto& body = request->GetContentBody();
-        auto method = request->GetMethod();
-        *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
-              << uri.GetQueryString() << " HTTP/1.1\r\n";
-        auto headers = request->GetHeaders();
-        for (const auto &h : headers)
-          *pipe << h.first << ": " << h.second << "\r\n";
-        if (body && !request->HasHeader(CONTENT_LENGTH_HEADER))
-        {
-          *pipe << "transfer-encoding: identity\r\n";
-          *pipe << "content-length: " << request->GetContentLength() << "\r\n";
-        }
-        *pipe << "\r\n";
-        if (body)
-          *pipe << body->rdbuf();
+        try {
+          const auto& body = request->GetContentBody();
+          auto method = request->GetMethod();
+          *pipe << HttpMethodMapper::GetNameForHttpMethod(method) << " " << normalize(uri.GetPath())
+                << uri.GetQueryString() << " HTTP/1.1\r\n";
+          auto headers = request->GetHeaders();
+          for (const auto &h : headers)
+            *pipe << h.first << ": " << h.second << "\r\n";
+          if (body && !request->HasHeader(CONTENT_LENGTH_HEADER))
+          {
+            *pipe << "transfer-encoding: identity\r\n";
+            *pipe << "content-length: " << request->GetContentLength() << "\r\n";
+          }
+          *pipe << "\r\n";
+          if (body)
+            *pipe << body->rdbuf();
 
-        auto read_body = method != HttpMethod::HTTP_HEAD;
-        http_client_response re;
-        re.parse(*pipe, read_body, false/*throw_on_server_error*/);
-        if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
-          MakeRequest(resp, request, URI(re.headers.get_header("location").astr()), readLimiter, writeLimiter, recursion+1);
+          auto read_body = method != HttpMethod::HTTP_HEAD;
+          http_client_response re;
+          re.parse(*pipe, read_body, false/*throw_on_server_error*/);
+          if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
+            MakeRequest(resp, request, URI(re.headers.get_header("location").astr()), readLimiter, writeLimiter, recursion+1);
+          }
+          else {
+            resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
+            for (const auto &h : re.headers.headers)
+              resp->AddHeader(h.first.astr(), h.second.astr());
+            for (const auto &data : re.body)
+              resp->GetResponseBody().write(&data[0], data.size());
+          }
+          return re.should_keep_alive;
+        } catch(const fiber_io_error&) {
+          resp->SetResponseCode(HttpResponseCode::NETWORK_READ_TIMEOUT);
+        } catch(...) {
+          resp->SetResponseCode(HttpResponseCode::NETWORK_READ_TIMEOUT);
         }
-        else {
-          resp->SetResponseCode(static_cast<HttpResponseCode>(re.status_code));
-          for (const auto &h : re.headers.headers)
-            resp->AddHeader(h.first.astr(), h.second.astr());
-          for (const auto &data : re.body)
-            resp->GetResponseBody().write(&data[0], data.size());
-        }
-        return re.should_keep_alive;
-      } catch(const fiber_io_error&) {
-        anon_log("anon_log, caught fiber io error");
-        resp->SetResponseCode(HttpResponseCode::NETWORK_READ_TIMEOUT);
-      } catch(...) {
-        anon_log("anon_log, caught fiber io error");
-        resp->SetResponseCode(HttpResponseCode::NETWORK_READ_TIMEOUT);
-      }
-      return false;
+        return false;
 
-    });
+      });
+    } catch(...) {
+      resp->SetResponseCode(HttpResponseCode::NETWORK_CONNECT_TIMEOUT);
+    }
 
   }
 

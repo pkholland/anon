@@ -153,7 +153,7 @@ public:
   }
 
 #if EXTENSIVE_AWS_LOGS > 0
-  bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+  bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const override
   {
     auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
     if (ret)
@@ -165,7 +165,7 @@ public:
   }
 #endif
 
-  long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const
+  long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const override
   {
     auto ret = Aws::Client::DefaultRetryStrategy::CalculateDelayBeforeNextRetry(error, attemptedRetries);
     auto should_sleep = ShouldRetry(error, attemptedRetries) && ret > 0;
@@ -203,7 +203,6 @@ public:
         m_endpoint(endpoint),
         m_tokenRequired(true)
   {
-    anon_log("fiberEC2MetadataClient::fiberEC2MetadataClient");
   }
 
   fiberEC2MetadataClient(const Aws::Client::ClientConfiguration &clientConfiguration, const char *endpoint = "http://169.254.169.254")
@@ -226,13 +225,11 @@ public:
 
   virtual Aws::String GetResource(const char *resourcePath) const override
   {
-    anon_log("fiberEC2MetadataClient::GetResource(" << resourcePath << ")");
     return GetResource(m_endpoint.c_str(), resourcePath, nullptr /*authToken*/);
   }
 
   virtual Aws::String GetDefaultCredentials() const override
   {
-    anon_log("fiberEC2MetadataClient::GetDefaultCredentials()");
     auto ths = const_cast<fiberEC2MetadataClient *>(this);
     fiber_lock locker(ths->m_tokenMutex);
     if (m_tokenRequired)
@@ -257,8 +254,9 @@ public:
     locker.unlock();
 
     Aws::String trimmedCredentialsString = Aws::Utils::StringUtils::Trim(credentialsString.c_str());
-    if (trimmedCredentialsString.empty())
+    if (trimmedCredentialsString.empty()) {
       return {};
+    }
 
     Aws::Vector<Aws::String> securityCredentials = Aws::Utils::StringUtils::Split(trimmedCredentialsString, '\n');
 
@@ -279,11 +277,11 @@ public:
 
   virtual Aws::String GetDefaultCredentialsSecurely() const override
   {
-    anon_log("fiberEC2MetadataClient::GetDefaultCredentialsSecurely()");
     auto ths = const_cast<fiberEC2MetadataClient *>(this);
     fiber_lock locker(ths->m_tokenMutex);
-    if (!m_tokenRequired)
+    if (true || !m_tokenRequired)
     {
+      m_tokenRequired = false;
       locker.unlock();
       return GetDefaultCredentials();
     }
@@ -308,6 +306,7 @@ public:
     {
       m_tokenRequired = false;
       AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Calling EC2MetadataService to get token failed, falling back to less secure way.");
+      locker.unlock();
       return GetDefaultCredentials();
     }
     m_token = trimmedTokenString;
@@ -343,7 +342,6 @@ public:
 
   virtual Aws::String GetCurrentRegion() const override
   {
-    anon_log("fiberEC2MetadataClient::GetCurrentRegion");
     AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Getting current region for ec2 instance");
 
     Aws::StringStream ss;
@@ -360,10 +358,7 @@ public:
     }
     regionRequest->SetUserAgent(Aws::Client::ComputeUserAgentString());
 
-    anon_log("fiberEC2MetadataClient::GetCurrentRegion 2");
     Aws::String azString = GetResourceWithAWSWebServiceResult(regionRequest).GetPayload();
-    anon_log("fiberEC2MetadataClient::GetCurrentRegion 3: " << azString);
-
 
     if (azString.empty())
     {
@@ -418,11 +413,10 @@ public:
       : //m_ec2MetadataConfigLoader(Aws::MakeShared<Aws::Config::EC2InstanceProfileConfigLoader>(std::static_pointer_cast<Aws::Internal::EC2MetadataClient>(std::make_shared<fiberEC2MetadataClient>()))),
         m_loadFrequencyMs(refreshRateMs)
   {
-    anon_log("fiberInstanceProfileCredentialsProvider 1");
-    auto metaClient = std::static_pointer_cast<Aws::Internal::EC2MetadataClient>(std::make_shared<fiberEC2MetadataClient>());
-    anon_log("fiberInstanceProfileCredentialsProvider 2");
+    Aws::Client::ClientConfiguration cfg;
+    aws_init_client_config(cfg, aws_get_default_region());
+    auto metaClient = std::static_pointer_cast<Aws::Internal::EC2MetadataClient>(std::make_shared<fiberEC2MetadataClient>(cfg));
     auto loader = std::make_shared<Aws::Config::EC2InstanceProfileConfigLoader>(metaClient);
-    anon_log("fiberInstanceProfileCredentialsProvider 3");
     m_ec2MetadataConfigLoader = loader;
   }
 
@@ -469,46 +463,31 @@ class defaultFiberAWSCredentialsProviderChain : public Aws::Auth::AWSCredentials
 public:
   defaultFiberAWSCredentialsProviderChain()
   {
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 1");
     AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 2");
     AddProvider(Aws::MakeShared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 3");
     AddProvider(Aws::MakeShared<Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 4");
 
     //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
     const auto relativeUri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 5");
 
     const auto absoluteUri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI);
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 6");
 
     const auto ec2MetadataDisabled = Aws::Environment::GetEnv(AWS_EC2_METADATA_DISABLED);
-    anon_log("defaultFiberAWSCredentialsProviderChain ctor 7");
 
     if (!relativeUri.empty())
     {
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 8");
       AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(defaultFiberCredentialsProviderChainTag, relativeUri.c_str()));
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 9");
     }
     else if (!absoluteUri.empty())
     {
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 10");
       const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 11");
       AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(defaultFiberCredentialsProviderChainTag,
                                                                           absoluteUri.c_str(), token.c_str()));
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 12");
     }
     else if (Aws::Utils::StringUtils::ToLower(ec2MetadataDisabled.c_str()) != "true")
     {
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 13");
       AddProvider(Aws::MakeShared<fiberInstanceProfileCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
-      anon_log("defaultFiberAWSCredentialsProviderChain ctor 14");
     }
-    anon_log("done defaultFiberAWSCredentialsProviderChain ctor");
   }
 };
 
@@ -521,14 +500,12 @@ std::string aws_default_region;
 
 void aws_client_init()
 {
-  anon_log("aws_client_init");
   aws_options.httpOptions.httpClientFactory_create_fn = [] { return std::static_pointer_cast<Aws::Http::HttpClientFactory>(std::make_shared<aws_http_client_factory>()); };
 #if EXTENSIVE_AWS_LOGS > 1
   aws_options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
   aws_options.loggingOptions.logger_create_fn = [] { return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<logger>()); };
 #endif
   Aws::InitAPI(aws_options);
-  anon_log("aws_client_init, did Aws::InitAPI");
 
   bool specific_profile = true;
   aws_profile = getenv("AWS_PROFILE");
@@ -541,7 +518,6 @@ void aws_client_init()
   // basically, if you specified a specific profile to use and we can't find
   // the credentials file, or that file doesn't have the profile you are asking for,
   // we will revert to using the default credential chain mechanism.
-  anon_log("aws_client_init, checked env AWS_PROFILE, specific_profile: " << (specific_profile ? "true" : "false"));
   if (specific_profile)
   {
     auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
@@ -558,13 +534,10 @@ void aws_client_init()
   if (specific_profile)
     aws_cred_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(aws_profile);
   else {
-    anon_log("creating defaultFiberAWSCredentialsProviderChain");
     aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
-    anon_log("done making defaultFiberAWSCredentialsProviderChain");
   }
 
   const char *region_ = getenv("AWS_DEFAULT_REGION");
-  anon_log("aws_client_init, checked env AWS_DEFAULT_REGION, region_: " << (region_ ? region_ : "(null)"));
   if (region_)
     aws_default_region = region_;
   else
@@ -616,7 +589,6 @@ void aws_client_init()
           if (!connected)
             attempts = 100;
           else {
-            anon_log("http://169.254.169.25/latest/meta-data/placement/availability-zone read failed, sleeping a bit and trying again");
             fiber::msleep(200);
             ++attempts;
           }
@@ -624,7 +596,6 @@ void aws_client_init()
       }
       if (success && reply.size() > 1) {
         aws_default_region = reply.substr(0, reply.size() - 1).c_str();
-        anon_log("got default region reply of " << aws_default_region << " in " << attempts + 1 << " read attempts");
       } else
         aws_default_region = "us-east-1";
     }
@@ -713,13 +684,8 @@ std::map<std::string, Aws::SNS::SNSClient> sns_map;
 
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
-  anon_log("aws_get_client_config_nl");
   if (config_map.find(region) == config_map.end()) {
-    anon_log("aws_get_client_config_nl - not present for region: " << region);
     aws_init_client_config(config_map[region], region);
-    anon_log("done aws_init_client_config");
-  } else {
-    anon_log("client config already exists for region: " << region);
   }
   return config_map[region];
 }
@@ -728,9 +694,7 @@ const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::stri
 
 const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region)
 {
-  anon_log("aws_get_client_config locking mutex");
   fiber_lock l(config_mtx);
-  anon_log("aws_get_client_config mutex locked");
   return aws_get_client_config_nl(region);
 }
 
