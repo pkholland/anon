@@ -94,6 +94,10 @@ LIBS:=-laws-cpp-sdk-cognito-identity -laws-cpp-sdk-cognito-idp $(LIBS)
 cflags+=-DANON_AWS_COGNITO
 endif
 
+ifneq ($(filter SNS,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-sns $(LIBS)
+cflags+=-DANON_AWS_COGNITO
+endif
 
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)

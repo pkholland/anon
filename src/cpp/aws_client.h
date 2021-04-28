@@ -117,6 +117,14 @@ class CognitoIdentityClient;
 }
 #endif
 
+#ifdef ANON_AWS_SNS
+namespace Aws {
+namespace SNS {
+class SNSClient;
+}
+}
+#endif
+
 void aws_client_init();
 void aws_client_term();
 
@@ -198,6 +206,10 @@ const Aws::AutoScaling::AutoScalingClient& aws_get_autoscaling_client(const std:
 
 #ifdef ANON_AWS_COGNITO
 const Aws::CognitoIdentity::CognitoIdentityClient& aws_get_cognito_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_SNS
+const Aws::SNS::SNSClient& aws_get_sns_client(const std::string& region);
 #endif
 
 #endif

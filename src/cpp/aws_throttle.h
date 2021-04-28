@@ -46,7 +46,9 @@
 #ifdef ANON_AWS_ELBV2
 #include <aws/elasticloadbalancingv2/ElasticLoadBalancingv2Errors.h>
 #endif
-
+#ifdef ANON_AWS_SNS
+#include <aws/sns/SNSErrors.h>
+#endif
 
 class aws_throttle_error : public std::runtime_error
 {
@@ -103,6 +105,13 @@ inline bool generic_retry(Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Err
 }
 #endif
 
+#ifdef ANON_AWS_SNS
+inline bool generic_retry(Aws::SNS::SNSErrors e)
+{
+  return generic_retry((Aws::Client::CoreErrors)e)
+    || e == Aws::SNS::SNSErrors::K_M_S_THROTTLING;
+}
+#endif
 
 /*
   the "ignorable duplicate" problem...
