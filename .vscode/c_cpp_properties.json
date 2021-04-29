@@ -25,7 +25,8 @@
         "ANON_AWS_ELBV2",
         "ANON_AWS_ACCEL",
         "ANON_AWS_AUTOSCALING",
-        "ANON_AWS_COGNITO"
+        "ANON_AWS_COGNITO",
+        "ANON_AWS_SNS"
       ]
     }
   ],

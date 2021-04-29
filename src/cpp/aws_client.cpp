@@ -279,9 +279,8 @@ public:
   {
     auto ths = const_cast<fiberEC2MetadataClient *>(this);
     fiber_lock locker(ths->m_tokenMutex);
-    if (true || !m_tokenRequired)
+    if (!m_tokenRequired)
     {
-      m_tokenRequired = false;
       locker.unlock();
       return GetDefaultCredentials();
     }

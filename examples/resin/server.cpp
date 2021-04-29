@@ -26,12 +26,56 @@
 #include "sync_teflon_app.h"
 #include "server_control.h"
 #include <signal.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/SendMessageRequest.h>
 
 using namespace Aws::SQS;
 using namespace Aws::SQS::Model;
 using namespace nlohmann;
+
+namespace {
+
+static void validate_command_file(const char* cmd_path)
+{
+  struct stat st;
+  if (stat(cmd_path, &st) != 0)
+  {
+    if (errno == ENOENT)
+    {
+      if (mkfifo(cmd_path, 0666) != 0)
+        do_error("mkfifo(\"" << &cmd_path[0] << "\", 0666");
+      else
+        return;
+    }
+    else
+      do_error("stat(\"" << &cmd_path[0] << "\", &st)");
+  }
+
+  if (S_ISFIFO(st.st_mode))
+    return;
+
+  if (S_ISREG(st.st_mode))
+  {
+    if (unlink(cmd_path) != 0)
+      do_error("unlink(\"" << cmd_path << "\")");
+    validate_command_file(cmd_path);
+    return;
+  }
+  else if (S_ISDIR(st.st_mode))
+  {
+    anon_log_error("\"" << &cmd_path[0] << "\" is a directory and must be manually deleted for this program to run");
+    exit(1);
+  }
+
+  anon_log_error("\"" << &cmd_path[0] << "\" is an unknown file type and must be manually deleted for this program to run");
+  exit(1);
+}
+
+}
 
 void run_server(const ec2_info &ec2i)
 {

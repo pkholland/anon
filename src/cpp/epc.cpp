@@ -368,6 +368,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
       if (conn.first != 0)
       {
         erase(ep);
+        anon_log("tcp connect failed for " << ep->addr_ << " (" << host_ << "), error: " << error_string(conn.first) << ", lookup age: " << to_seconds(cur_time() - last_lookup_time_) << " seconds");
         anon_throw(fiber_io_error, "tcp connect failed for " << ep->addr_ << "(" << host_ << "), error: " << error_string(conn.first));
       }
       conn.second->limit_io_block_time(max_io_block_time_);
