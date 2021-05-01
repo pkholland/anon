@@ -361,7 +361,14 @@ size_t fiber_pipe::read(void *buf, size_t count) const
     {
       if (remote_hangup_)
       {
+        // we get too many of these in some cases, and if ANON_LOG_ALL_THROWS is turned on
+        // the logs are mostly full of this one line.  So we don't log this - even if ANON_LOG_ALL_THROWS
+        // is enabled.
+        #if defined(ANON_LOG_ALL_THROWS)
+        throw fiber_io_error(Log::fmt([&](std::ostream &msg) { msg << "read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup"; }));
+        #else
         anon_throw(fiber_io_error, "read(" << fd_ << ", <ptr>, " << count << ") detected remote hangup");
+        #endif
       }
       else if (errno == EAGAIN)
       {
