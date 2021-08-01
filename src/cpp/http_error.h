@@ -47,9 +47,11 @@ struct request_error
 {
   std::string code;
   std::string reason;
+  std::string content_type;
 
-  request_error(int c, const std::string &reason)
-      : reason(reason)
+  request_error(int c, const std::string &reason, const std::string& content_type = "application/text")
+      : reason(reason),
+        content_type(content_type)
   {
     std::ostringstream code_str;
     code_str << std::to_string(c);
@@ -73,10 +75,21 @@ void throw_request_error_(int code, T err, const char* filename, int linenum)
   throw request_error(code, msg);
 }
 
-inline void reply_back_error(const char* method_, int cors_enabled, const http_request &request,
-      const char* error_type, const char* msg, const char* response_code, http_server::pipe_t &pipe)
+template <typename T>
+void throw_request_js_error_(int code, const T&  js, const char* filename, int linenum)
 {
-  //anon_log("request_wrap caught " << error_type << ": " << msg);
+  std::ostringstream format;
+  format << js;
+  #if defined(ANON_LOG_ALL_THROWS)
+  Log::output(filename, linenum, [&](std::ostream &formatter) { formatter << format.str(); }, false);
+  #endif
+  auto msg = format.str();
+  throw request_error(code, msg, "application/json");
+}
+
+inline void reply_back_error(const char* method_, int cors_enabled, const http_request &request,
+      const char* msg, const char* response_code, const char* content_type, http_server::pipe_t &pipe)
+{
   http_response response;
   response.add_header("content-type", "text/plain");
   if (cors_enabled != 0) {
@@ -103,6 +116,8 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
     }
   }
   response.set_status_code(response_code);
+  if (content_type != 0)
+    response.add_header("content-type", content_type);
   response << msg << "\n";
   try {
     pipe.respond(response);
@@ -125,6 +140,8 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
  */
 #define throw_request_error(_code, _body) throw_request_error_((int)_code, [&](std::ostream &formatter) { formatter << _body; }, __FILE__, __LINE__)
 
+#define throw_request_js_error(_code, _js) throw_request_js_error_((int)_code, _js, __FILE__, __LINE__)
+
 template <typename Fn>
 void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pipe, const http_request &request, Fn f)
 {
@@ -134,18 +151,18 @@ void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pip
   }
   catch (const request_error &e)
   {
-    reply_back_error(method, cors_enabled, request, "request_error", e.reason.c_str(), e.code.c_str(), pipe);
+    reply_back_error(method, cors_enabled, request, e.reason.c_str(), e.code.c_str(), e.content_type.c_str(), pipe);
   }
   catch (const nlohmann::json::exception& e)
   {
-    reply_back_error(method, cors_enabled, request, "json exception", e.what(), "400", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "400", "application/text", pipe);
   }
   catch (const std::exception &e)
   {
-    reply_back_error(method, cors_enabled, request, "std::exception", e.what(), "500", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "500", "application/text", pipe);
   }
   catch (...)
   {
-    reply_back_error(method, cors_enabled, request, "unknown exception", "", "500", pipe);
+    reply_back_error(method, cors_enabled, request, "", "500", "application/text", pipe);
   }
 }
