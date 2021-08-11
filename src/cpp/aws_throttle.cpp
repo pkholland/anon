@@ -59,7 +59,7 @@ void aws_throttle(const std::string& region, const std::function<void()>& fn)
         throw e;
       fiber_lock l(mtx);
       wait_until[region] = cur_time() + backoff_seconds;
-      anon_log("throttling errors caught, for " << region << ", setting backoff to " << backoff_seconds << " more seconds");
+      anon_log("throttling error caught, for " << region << ", setting backoff to " << backoff_seconds << " more seconds");
     }
   }
 }
