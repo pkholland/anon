@@ -52,14 +52,22 @@ From: https://tools.ietf.org/html/rfc4648
 
 #endif
 
-static const char alphabet[64] = {
+static const char url_alphabet[64] = {
     'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
     'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
     'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
     '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_'};
 
-std::string b64url_encode(const char *data, size_t len, char pad)
+static const char raw_alphabet[64] = {
+    'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M',
+    'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z',
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm',
+    'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
+    '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'};
+
+
+std::string encode(const char *data, size_t len, char pad, const char* alphabet)
 {
   // each complete block of 3 bytes of data will encode to 4 bytes of result
   // if the last block of 3 bytes is incomplete (that is, len % 3 != 0)
@@ -108,7 +116,17 @@ std::string b64url_encode(const char *data, size_t len, char pad)
   return std::string(&result[0], encoded_size);
 }
 
-static unsigned char b64_index(unsigned char code)
+std::string b64url_encode(const char *data, size_t len, char pad)
+{
+  return encode(data, len, pad, &url_alphabet[0]);
+}
+
+std::string b64_encode(const char *data, size_t len, char pad)
+{
+  return encode(data, len, pad, &raw_alphabet[0]);
+}
+
+static unsigned char b64url_index(unsigned char code)
 {
   if (code >= 'A' && code <= 'Z')
     return code - 'A';
@@ -126,7 +144,26 @@ static unsigned char b64_index(unsigned char code)
   anon_throw(std::runtime_error, "invalid character in b64 string: (" << (int)code << ") \"" << &str[0] << "\"");
 }
 
-std::string b64url_decode(const char *data, size_t len, char pad)
+static unsigned char b64_index(unsigned char code)
+{
+  if (code >= 'A' && code <= 'Z')
+    return code - 'A';
+  if (code >= 'a' && code <= 'z')
+    return code - 'a' + 26;
+  if (code >= '0' && code <= '9')
+    return code - '0' + 52;
+  if (code == '+')
+    return 62;
+  if (code == '/')
+    return 63;
+  char str[2];
+  str[0] = code;
+  str[1] = 0;
+  anon_throw(std::runtime_error, "invalid character in b64 string: (" << (int)code << ") \"" << &str[0] << "\"");
+}
+
+
+std::string decode(const char *data, size_t len, char pad, unsigned char (*index)(unsigned char))
 {
   if (pad)
   {
@@ -166,10 +203,10 @@ std::string b64url_decode(const char *data, size_t len, char pad)
 
   for (; i < num_full_blocks; i++, ptr += 4)
   {
-    auto a = b64_index(ptr[0]);
-    auto b = b64_index(ptr[1]);
-    auto c = b64_index(ptr[2]);
-    auto d = b64_index(ptr[3]);
+    auto a = index(ptr[0]);
+    auto b = index(ptr[1]);
+    auto c = index(ptr[2]);
+    auto d = index(ptr[3]);
 
     result[i * 3 + 0] = (a << 2) + (b >> 4);
     result[i * 3 + 1] = (b << 4) + (c >> 2);
@@ -178,15 +215,25 @@ std::string b64url_decode(const char *data, size_t len, char pad)
 
   if (ptr < end)
   {
-    auto a = b64_index(ptr[0]);
-    auto b = b64_index(ptr[1]);
+    auto a = index(ptr[0]);
+    auto b = index(ptr[1]);
     result[i * 3 + 0] = (a << 2) + (b >> 4);
     if (&ptr[2] < end)
     {
-      auto c = b64_index(ptr[2]);
+      auto c = index(ptr[2]);
       result[i * 3 + 1] = (b << 4) + (c >> 2);
     }
   }
 
   return result;
+}
+
+std::string b64url_decode(const char *data, size_t len, char pad)
+{
+  return decode(data, len, pad, &b64url_index);
+}
+
+std::string b64_decode(const char *data, size_t len, char pad)
+{
+  return decode(data, len, pad, &b64_index);
 }

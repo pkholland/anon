@@ -24,6 +24,15 @@
 
 #include <string>
 
+std::string b64_encode(const char *data, size_t len, char pad = 0);
+inline std::string b64_encode(const std::string &data, char pad = 0)
+{
+  return b64_encode(data.c_str(), data.size(), pad);
+}
+
+std::string b64_decode(const char *data, size_t len, char pad = 0);
+
+
 std::string b64url_encode(const char *data, size_t len, char pad = 0);
 inline std::string b64url_encode(const std::string &data, char pad = 0)
 {
