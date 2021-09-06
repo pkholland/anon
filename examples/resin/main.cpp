@@ -55,7 +55,7 @@ ec2_info::ec2_info(const char *filename)
   default_region = region;
   if (!rgn) {
     setenv("AWS_DEFAULT_REGION", default_region.c_str(), 1);
-    anon_log("setenv(\"AWS_DEFAULT_REGION\", \"" << default_region << "\", 1");
+    anon_log("setenv(\"AWS_DEFAULT_REGION\", \"" << default_region << "\", 1)");
   }
 
   ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
