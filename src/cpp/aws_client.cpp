@@ -316,15 +316,7 @@ public:
                                                                                         Aws::Utils::Stream::DefaultResponseStreamFactoryMethod));
     profileRequest->SetHeaderValue(EC2_IMDS_TOKEN_HEADER, trimmedTokenString);
     profileRequest->SetUserAgent(userAgentString);
-    Aws::String profileString;
-    auto num_attempts = 0;
-    while (true) {
-      auto response = GetResourceWithAWSWebServiceResult(profileRequest);
-      profileString = response.GetPayload();
-      if (profileString.size() > 0 || ++num_attempts > 40)
-        break;
-      fiber::msleep(500);
-    }
+    Aws::String profileString = GetResourceWithAWSWebServiceResult(profileRequest).GetPayload();
 
     Aws::String trimmedProfileString = Aws::Utils::StringUtils::Trim(profileString.c_str());
     Aws::Vector<Aws::String> securityCredentials = Aws::Utils::StringUtils::Split(trimmedProfileString, '\n');
@@ -344,16 +336,7 @@ public:
     credentialsRequest->SetHeaderValue(EC2_IMDS_TOKEN_HEADER, trimmedTokenString);
     credentialsRequest->SetUserAgent(userAgentString);
     AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource " << ss.str() << " with token.");
-    Aws::String srvPayload;
-    num_attempts = 0;
-    while (true) {
-      auto srvResult = GetResourceWithAWSWebServiceResult(credentialsRequest);
-      srvPayload = srvResult.GetPayload();
-      if (srvPayload.size() != 0 || ++num_attempts > 40)
-        break;
-      fiber::msleep(500);
-    }
-    return srvPayload;
+    return GetResourceWithAWSWebServiceResult(credentialsRequest).GetPayload();
   }
 
   virtual Aws::String GetCurrentRegion() const override
