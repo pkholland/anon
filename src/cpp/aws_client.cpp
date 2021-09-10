@@ -866,7 +866,7 @@ const Aws::SNS::SNSClient&
 aws_get_sns_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (sns_map.find(region) == cognito_map.end())
+  if (sns_map.find(region) == sns_map.end())
     sns_map.emplace(std::make_pair(region,
       Aws::SNS::SNSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return sns_map[region];
