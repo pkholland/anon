@@ -26,7 +26,8 @@
         "ANON_AWS_ACCEL",
         "ANON_AWS_AUTOSCALING",
         "ANON_AWS_COGNITO",
-        "ANON_AWS_SNS"
+        "ANON_AWS_SNS",
+        "ANON_AWS_SES"
       ]
     }
   ],

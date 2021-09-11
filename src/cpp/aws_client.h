@@ -125,6 +125,14 @@ class SNSClient;
 }
 #endif
 
+#ifdef ANON_AWS_SES
+namespace Aws {
+namespace SES {
+class SESClient;
+}
+}
+#endif
+
 void aws_client_init();
 void aws_client_term();
 
@@ -210,6 +218,10 @@ const Aws::CognitoIdentity::CognitoIdentityClient& aws_get_cognito_client(const 
 
 #ifdef ANON_AWS_SNS
 const Aws::SNS::SNSClient& aws_get_sns_client(const std::string& region);
+#endif
+
+#ifdef ANON_AWS_SES
+const Aws::SES::SESClient& aws_get_ses_client(const std::string& region);
 #endif
 
 #endif

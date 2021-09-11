@@ -78,13 +78,16 @@
 #include <aws/autoscaling/AutoScalingClient.h>
 #endif
 
-//#ifdef ANON_AWS_COGNITO
+#ifdef ANON_AWS_COGNITO
 #include <aws/cognito-identity/CognitoIdentityClient.h>
-//#endif
-
+#endif
 
 #ifdef ANON_AWS_SNS
 #include <aws/sns/SNSClient.h>
+#endif
+
+#ifdef ANON_AWS_SES
+#include <aws/email/SESClient.h>
 #endif
 
 namespace Aws
@@ -680,6 +683,10 @@ std::map<std::string, Aws::CognitoIdentity::CognitoIdentityClient> cognito_map;
 std::map<std::string, Aws::SNS::SNSClient> sns_map;
 #endif
 
+#ifdef ANON_AWS_SES
+std::map<std::string, Aws::SES::SESClient> ses_map;
+#endif
+
 const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
 {
   if (config_map.find(region) == config_map.end()) {
@@ -870,6 +877,18 @@ aws_get_sns_client(const std::string& region)
     sns_map.emplace(std::make_pair(region,
       Aws::SNS::SNSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
   return sns_map[region];
+}
+#endif
+
+#ifdef ANON_AWS_SES
+const Aws::SES::SESClient&
+aws_get_ses_client(const std::string& region)
+{
+  fiber_lock l(config_mtx);
+  if (ses_map.find(region) == ses_map.end())
+    ses_map.emplace(std::make_pair(region,
+      Aws::SES::SESClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  return ses_map[region];
 }
 #endif
 

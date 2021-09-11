@@ -99,6 +99,11 @@ LIBS:=-laws-cpp-sdk-sns $(LIBS)
 cflags+=-DANON_AWS_COGNITO
 endif
 
+ifneq ($(filter SNS,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-email $(LIBS)
+cflags+=-DANON_AWS_SES
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\
