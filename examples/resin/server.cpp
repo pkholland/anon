@@ -129,16 +129,26 @@ void run_server(const ec2_info &ec2i)
   anon_log("resin bound to network port " << port);
 
   teflon_state st = teflon_server_failed;
-  try {
-    st = sync_teflon_app(ec2i);
-  }
-  catch(const std::exception& exc)
-  {
-    anon_log_error("server failed to start: " << exc.what());
-  }
-  catch(...)
-  {
-    anon_log_error("server failed to start");
+  auto num_attempts = 0;
+  while (true) {
+    try {
+      st = sync_teflon_app(ec2i);
+      break;
+    }
+    catch(const std::exception& exc)
+    {
+      anon_log_error("server failed to start: " << exc.what());
+      if (++num_attempts > 4)
+        break;
+      sleep(5);
+    }
+    catch(...)
+    {
+      anon_log_error("server failed to start");
+      if (++num_attempts > 4)
+        break;
+      sleep(5);
+    }
   }
 
   if (st != teflon_server_running) {
