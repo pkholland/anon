@@ -223,12 +223,17 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   if (ud.find("certs_ddb_table_name") != ud.end()
       && ud.find("serving_domain") != ud.end()) {
 
+    Aws::Client::ClientConfiguration home_ddb_config;
+    std::string home_region = ud["home_region"];
+    home_ddb_config.region = home_region.c_str();
+    Aws::DynamoDB::DynamoDBClient home_ddbc(ddb_config);
+
     std::string domain = ud["serving_domain"];
     std::string table = ud["certs_ddb_table_name"];
     GetItemRequest  req;
     req.WithTableName(table)
       .AddKey("domain", AttributeValue(domain));
-    auto outcome = ddbc.GetItem(req);
+    auto outcome = home_ddbc.GetItem(req);
     if (!outcome.IsSuccess())
       anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
 
