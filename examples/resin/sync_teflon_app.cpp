@@ -226,7 +226,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     Aws::Client::ClientConfiguration home_ddb_config;
     std::string home_region = ud["home_region"];
     home_ddb_config.region = home_region.c_str();
-    Aws::DynamoDB::DynamoDBClient home_ddbc(ddb_config);
+    Aws::DynamoDB::DynamoDBClient home_ddbc(home_ddb_config);
 
     std::string domain = ud["serving_domain"];
     std::string table = ud["certs_ddb_table_name"];
