@@ -203,15 +203,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     else
     {
       // does not match an existing file, so download it from s3
-      // the "env -i" part is due to some funny rules about s3 buckets
-      // and what can happen in the aws command line tool when we
-      // try to copy from buckets that are not in the default us-east-1
-      // region - when executed from certain other regions (such as af-south-1)
-      // _and_ how the aws command line tool deals with the case where
-      // the AWS_DEFAULT_REGION environment variable is set.  "env -i"
-      // basically runs the command without copying any of our environment
-      // variables - so clears AWS_DEFAULT_REGION if it has been set.
-      files_cmd << "env -u AWS_DEFAULT_REGION aws s3 cp s3://" << bucket << "/" << key
+      files_cmd << "aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
                 << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
@@ -292,11 +284,14 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     do_tls = true;
   }
 
+  std::vector<std::string> envs;
+  if (getenv("AWS_DEFAULT_REGION") == 0)
+    envs.push_back(std::string("AWS_DEFAULT_REGION") + "=" + ec2i.default_region);
 
   try
   {
     auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
-    start_server(efs.c_str(), do_tls, args);
+    start_server(efs.c_str(), do_tls, args, envs);
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
     curr_app = new_app;

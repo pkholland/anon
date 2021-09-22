@@ -54,10 +54,11 @@ std::thread death_thread;
 
 struct proc_info
 {
-  proc_info(const char *exe_name, bool do_tls, const std::vector<std::string> &args)
+  proc_info(const char *exe_name, bool do_tls, const std::vector<std::string> &args, const std::vector<std::string>& envs)
       : exe_name_(exe_name),
         do_tls_(do_tls),
         args_(args),
+        envs_(envs),
         exe_fd_(::open(exe_name, O_RDONLY))
   {
     if (exe_fd_ == -1)
@@ -78,6 +79,7 @@ struct proc_info
 
   std::string exe_name_;
   std::vector<std::string> args_;
+  std::vector<std::string> envs_;
   int exe_fd_;
   int cmd_pipe[2];
   bool do_tls_;
@@ -202,6 +204,7 @@ int start_child(proc_info &pi)
     close(pi.cmd_pipe[0]);
 
     std::vector<char *> args2;
+    std::vector<char* > envs2;
     std::ostringstream oss;
     std::string oss_s;
 
@@ -249,7 +252,14 @@ int start_child(proc_info &pi)
       args2.push_back(const_cast<char *>(pi.args_[i].c_str()));
     args2.push_back(0);
 
-    fexecve(pi.exe_fd_, &args2[0], environ);
+    auto e = &environ[0];
+    while (*e != 0)
+      envs2.push_back(*e++);
+    for (auto &e : pi.envs_)
+      envs2.push_back((char*)e.c_str());
+    envs2.push_back(0);
+
+    fexecve(pi.exe_fd_, &args2[0], &envs2[0]);
 
     // if fexecve succeeded then we never get here.  So getting here is a failure,
     // but we are already in the child process at this point, so we do what we can
@@ -462,9 +472,9 @@ void sproc_mgr_term()
   anon_log("sproc_mgr_term finished");
 }
 
-void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args)
+void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args, const std::vector<std::string>& envs)
 {
-  std::unique_ptr<proc_info> pi(new proc_info(exe_name, do_tls, args));
+  std::unique_ptr<proc_info> pi(new proc_info(exe_name, do_tls, args, envs));
   auto chld = start_child(*pi);
 
   std::unique_lock<std::mutex> lock(proc_map_mutex);
