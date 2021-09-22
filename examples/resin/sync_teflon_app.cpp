@@ -60,12 +60,12 @@ void exe_cmd(const std::string &str)
   auto f = popen(cmd.c_str(), "r");
   if (f)
   {
-    // char buff[1024];
-    // while (true) {
-    //   auto bytes = fread(&buff[0], 1, sizeof(buff), f);
-    //   if (bytes <= 0)
-    //     break;
-    // }
+    char buff[1024];
+    while (true) {
+      auto bytes = fread(&buff[0], 1, sizeof(buff), f);
+      if (bytes <= 0)
+        break;
+    }
     auto exit_code = pclose(f);
     if (exit_code != 0)
       anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
@@ -85,7 +85,7 @@ void create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
     dir += id.c_str();
   }
   std::ostringstream oss;
-  oss << "rm -rf " << dir;
+  oss << "rm -rf " << dir << "/*";
   exe_cmd(oss.str());
   oss.str("");
   oss << "mkdir " << dir;
@@ -141,8 +141,11 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   ddb_config.region = region.c_str();
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
-  if (!curr_app)
+  if (!curr_app) {
+    anon_log("creating empty root directory");
     create_empty_directory(ec2i, "");
+    anon_log("done creating empty root directory");
+  }
 
   std::string table_name = ud["artifacts_ddb_table_name"];
   std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
@@ -214,7 +217,9 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
                 << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
   }
+  anon_log("creating empty id directory: " << uid);
   create_empty_directory(ec2i, uid);
+  anon_log("done creating empty id directory");
 
   files_cmd << "wait < <(jobs -p)\n";
   anon_log("copying files with: " << files_cmd.str());
@@ -222,11 +227,15 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   auto num_tries = 0;
   while (true) {
     try {
+      anon_log("executing aws s3 copy command");
       exe_cmd(files_cmd.str());
+      anon_log("done executing aws s3 copy command");
       if (files_needed.size() > 0) {
         std::ostringstream oss;
-        oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0] << " > /dev/null 2> /dev/null";
+        oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
+        anon_log("checking to see if app was downloaded");
         exe_cmd(oss.str());
+        anon_log("done checking if app downloaded");
       }
       break;
     }
