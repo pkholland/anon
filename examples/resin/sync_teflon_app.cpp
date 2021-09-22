@@ -209,9 +209,36 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     }
   }
   create_empty_directory(ec2i, uid);
+
   files_cmd << "wait < <(jobs -p)\n";
   anon_log("copying files with: " << files_cmd.str());
-  exe_cmd(files_cmd.str());
+
+  // we have to be careful of ec2 permissions behavior during early
+  // instance startup.  I suspect there is additional strange behavior
+  // of the aws command line tools during that period.  If the file
+  // copy fails to copy any files, then we sleep a really long time
+  // and try again.  We repeat this for the first 5 minute of bootup.
+  // If it is still failing after 8 min we give up.
+  auto num_tries = 0;
+  while (true) {
+    try {
+      exe_cmd(files_cmd.str());
+      if (files_needed.size() > 0) {
+        std::ostringstream oss;
+        oss << "stat " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
+        exe_cmd(oss.str());
+      }
+      break;
+    }
+    catch(...) {
+      anon_log_error("file copy failed");
+      if (++num_tries > 10) {
+        remove_directory(ec2i, uid);
+        return teflon_server_failed;
+      }
+      sleep(45);
+    }
+  }
 
   std::ostringstream ef;
   ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
@@ -264,33 +291,26 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   }
 
 
-  auto num_tries = 0;
-  while (true) {
-    try
-    {
-      auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
-      start_server(efs.c_str(), do_tls, args);
-      if (curr_app)
-        remove_directory(ec2i, curr_app->id);
-      curr_app = new_app;
-      break;
-    }
-    catch (const std::exception &exc)
-    {
-      anon_log_error("start_server failed: " << exc.what());
-      //remove_directory(ec2i, uid);
-      if (++num_tries > 5)
-        return teflon_server_failed;
-      sleep(5);
-    }
-    catch (...)
-    {
-      anon_log_error("start_server");
-      //remove_directory(ec2i, uid);
-      if (++num_tries > 5)
-        return teflon_server_failed;
-      sleep(5);
-    }
+  try
+  {
+    auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
+    start_server(efs.c_str(), do_tls, args);
+    if (curr_app)
+      remove_directory(ec2i, curr_app->id);
+    curr_app = new_app;
+  }
+  catch (const std::exception &exc)
+  {
+    anon_log_error("start_server failed: " << exc.what());
+    remove_directory(ec2i, uid);
+    return teflon_server_failed;
+  }
+  catch (...)
+  {
+    anon_log_error("start_server");
+    remove_directory(ec2i, uid);
+    return teflon_server_failed;
+
   }
 
   return teflon_server_running;
