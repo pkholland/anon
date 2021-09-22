@@ -60,6 +60,12 @@ void exe_cmd(const std::string &str)
   auto f = popen(cmd.c_str(), "r");
   if (f)
   {
+    char buff[1024];
+    while (true) {
+      auto bytes = fread(&buff[0], 1, sizeof(buff), f);
+      if (bytes <= 0)
+        break;
+    }
     auto exit_code = pclose(f);
     if (exit_code != 0)
       anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
