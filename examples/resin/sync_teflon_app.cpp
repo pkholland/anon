@@ -60,12 +60,12 @@ void exe_cmd(const std::string &str)
   auto f = popen(cmd.c_str(), "r");
   if (f)
   {
-    char buff[1024];
-    while (true) {
-      auto bytes = fread(&buff[0], 1, sizeof(buff), f);
-      if (bytes <= 0)
-        break;
-    }
+    // char buff[1024];
+    // while (true) {
+    //   auto bytes = fread(&buff[0], 1, sizeof(buff), f);
+    //   if (bytes <= 0)
+    //     break;
+    // }
     auto exit_code = pclose(f);
     if (exit_code != 0)
       anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
@@ -225,7 +225,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       exe_cmd(files_cmd.str());
       if (files_needed.size() > 0) {
         std::ostringstream oss;
-        oss << "stat " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
+        oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0] << " > /dev/null 2> /dev/null";
         exe_cmd(oss.str());
       }
       break;
