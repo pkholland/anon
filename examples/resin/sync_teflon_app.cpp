@@ -211,7 +211,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // the AWS_DEFAULT_REGION environment variable is set.  "env -i"
       // basically runs the command without copying any of our environment
       // variables - so clears AWS_DEFAULT_REGION if it has been set.
-      files_cmd << "env -i aws s3 cp s3://" << bucket << "/" << key
+      files_cmd << "env -u AWS_DEFAULT_REGION aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
                 << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
