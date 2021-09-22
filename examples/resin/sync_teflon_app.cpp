@@ -210,6 +210,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   }
   create_empty_directory(ec2i, uid);
   files_cmd << "wait < <(jobs -p)\n";
+  anon_log("copying files with command: " << files_cmd.str());
   exe_cmd(files_cmd.str());
 
   std::ostringstream ef;
