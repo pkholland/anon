@@ -205,7 +205,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // does not match an existing file, so download it from s3
       files_cmd << "aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
-                << ec2i.root_dir << "/" << uid << "/" << f << " --quiet || exit 1 &\n";
+                << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
   }
   create_empty_directory(ec2i, uid);
