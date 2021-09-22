@@ -203,7 +203,15 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     else
     {
       // does not match an existing file, so download it from s3
-      files_cmd << "aws s3 cp s3://" << bucket << "/" << key
+      // the "env -i" part is due to some funny rules about s3 buckets
+      // and what can happen in the aws command line tool when we
+      // try to copy from buckets that are not in the default us-east-1
+      // region - when executed from certain other regions (such as af-south-1)
+      // _and_ how the aws command line tool deals with the case where
+      // the AWS_DEFAULT_REGION environment variable is set.  "env -i"
+      // basically runs the command without copying any of our environment
+      // variables - so clears AWS_DEFAULT_REGION if it has been set.
+      files_cmd << "env -i aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
                 << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
@@ -213,12 +221,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   files_cmd << "wait < <(jobs -p)\n";
   anon_log("copying files with: " << files_cmd.str());
 
-  // we have to be careful of ec2 permissions behavior during early
-  // instance startup.  I suspect there is additional strange behavior
-  // of the aws command line tools during that period.  If the file
-  // copy fails to copy any files, then we sleep a really long time
-  // and try again.  We repeat this for the first 5 minute of bootup.
-  // If it is still failing after 8 min we give up.
   auto num_tries = 0;
   while (true) {
     try {
@@ -236,7 +238,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
         remove_directory(ec2i, uid);
         return teflon_server_failed;
       }
-      sleep(45);
+      sleep(15);
     }
   }
 
