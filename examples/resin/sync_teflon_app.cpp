@@ -205,68 +205,69 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       // does not match an existing file, so download it from s3
       files_cmd << "aws s3 cp s3://" << bucket << "/" << key
                 << "/" << ids[f]->GetS() << "/" << f << " "
-                << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
+                << ec2i.root_dir << "/" << uid << "/" << f << " --quiet || exit 1 &\n";
     }
   }
+  create_empty_directory(ec2i, uid);
+  files_cmd << "wait < <(jobs -p)\n";
+  anon_log("copying files with: " << files_cmd.str());
+  exe_cmd(files_cmd.str());
+
+  std::ostringstream ef;
+  ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
+  auto efs = ef.str();
+  chmod(efs.c_str(), ACCESSPERMS);
+
+  auto do_tls = false;
+  std::vector<std::string> args;
+
+  if (ud.find("certs_ddb_table_name") != ud.end()
+      && ud.find("serving_domain") != ud.end()) {
+
+    Aws::Client::ClientConfiguration home_ddb_config;
+    std::string home_region = ud["home_region"];
+    home_ddb_config.region = home_region.c_str();
+    Aws::DynamoDB::DynamoDBClient home_ddbc(home_ddb_config);
+
+    std::string domain = ud["serving_domain"];
+    std::string table = ud["certs_ddb_table_name"];
+    GetItemRequest  req;
+    req.WithTableName(table)
+      .AddKey("domain", AttributeValue(domain));
+    auto outcome = home_ddbc.GetItem(req);
+    if (!outcome.IsSuccess())
+      anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
+
+    auto &item = outcome.GetResult().GetItem();
+    auto fc_it = item.find("fullchain");
+    auto key_it = item.find("privkey");
+    if (fc_it == item.end() || key_it == item.end())
+      anon_throw(std::runtime_error, "dynamodb entry missing required fullchain and/or privkey entries");
+
+    auto certs_file = ec2i.root_dir + "/fullchain.pem";
+    std::ostringstream certs_cmd;
+    certs_cmd << "echo \"" << fc_it->second.GetS() << "\" >> " << certs_file;
+    exe_cmd(certs_cmd.str());
+
+    auto key_file = ec2i.root_dir + "/privkey.pem";
+    std::ostringstream key_cmd;
+    key_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
+    exe_cmd(key_cmd.str());
+
+    args.push_back("-cert_verify_dir");
+    args.push_back("/etc/ssl/certs");
+    args.push_back("-server_cert");
+    args.push_back(certs_file);
+    args.push_back("-server_key");
+    args.push_back(key_file);
+    do_tls = true;
+  }
+
 
   auto num_tries = 0;
-  files_cmd << "wait < <(jobs -p)\n";
-  anon_log("copying files with command: " << files_cmd.str());
   while (true) {
-    try {
-      create_empty_directory(ec2i, uid);
-      exe_cmd(files_cmd.str());
-
-      std::ostringstream ef;
-      ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
-      auto efs = ef.str();
-      chmod(efs.c_str(), ACCESSPERMS);
-
-      auto do_tls = false;
-      std::vector<std::string> args;
-
-      if (ud.find("certs_ddb_table_name") != ud.end()
-          && ud.find("serving_domain") != ud.end()) {
-
-        Aws::Client::ClientConfiguration home_ddb_config;
-        std::string home_region = ud["home_region"];
-        home_ddb_config.region = home_region.c_str();
-        Aws::DynamoDB::DynamoDBClient home_ddbc(home_ddb_config);
-
-        std::string domain = ud["serving_domain"];
-        std::string table = ud["certs_ddb_table_name"];
-        GetItemRequest  req;
-        req.WithTableName(table)
-          .AddKey("domain", AttributeValue(domain));
-        auto outcome = home_ddbc.GetItem(req);
-        if (!outcome.IsSuccess())
-          anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
-
-        auto &item = outcome.GetResult().GetItem();
-        auto fc_it = item.find("fullchain");
-        auto key_it = item.find("privkey");
-        if (fc_it == item.end() || key_it == item.end())
-          anon_throw(std::runtime_error, "dynamodb entry missing required fullchain and/or privkey entries");
-
-        auto certs_file = ec2i.root_dir + "/fullchain.pem";
-        std::ostringstream certs_cmd;
-        certs_cmd << "echo \"" << fc_it->second.GetS() << "\" >> " << certs_file;
-        exe_cmd(certs_cmd.str());
-
-        auto key_file = ec2i.root_dir + "/privkey.pem";
-        std::ostringstream key_cmd;
-        key_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
-        exe_cmd(key_cmd.str());
-
-        args.push_back("-cert_verify_dir");
-        args.push_back("/etc/ssl/certs");
-        args.push_back("-server_cert");
-        args.push_back(certs_file);
-        args.push_back("-server_key");
-        args.push_back(key_file);
-        do_tls = true;
-      }
-
+    try
+    {
       auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
       start_server(efs.c_str(), do_tls, args);
       if (curr_app)
@@ -277,7 +278,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     catch (const std::exception &exc)
     {
       anon_log_error("start_server failed: " << exc.what());
-      remove_directory(ec2i, uid);
+      //remove_directory(ec2i, uid);
       if (++num_tries > 5)
         return teflon_server_failed;
       sleep(5);
@@ -285,7 +286,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     catch (...)
     {
       anon_log_error("start_server");
-      remove_directory(ec2i, uid);
+      //remove_directory(ec2i, uid);
       if (++num_tries > 5)
         return teflon_server_failed;
       sleep(5);
