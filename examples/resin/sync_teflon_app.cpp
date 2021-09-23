@@ -67,8 +67,12 @@ void exe_cmd(const std::string &str)
         break;
     }
     auto exit_code = pclose(f);
-    if (exit_code != 0)
-      anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
+    // for now, because the resin watchdog may be watching this process
+    // it can mess with exit codes of subprocesses.  Ignore whatever
+    // exit code we get.  We should implement all of this stuff without
+    // needing execute bash commands anyway...
+    // if (exit_code != 0)
+    //   anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
   }
   else
   {
@@ -142,9 +146,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
   if (!curr_app) {
-    anon_log("creating empty root directory");
     create_empty_directory(ec2i, "");
-    anon_log("done creating empty root directory");
   }
 
   std::string table_name = ud["artifacts_ddb_table_name"];
@@ -217,26 +219,21 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
                 << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
     }
   }
-  anon_log("creating empty id directory: " << uid);
   create_empty_directory(ec2i, uid);
-  anon_log("done creating empty id directory");
 
   files_cmd << "wait < <(jobs -p)\n";
-  anon_log("copying files with: " << files_cmd.str());
 
   auto num_tries = 0;
   while (true) {
     try {
-      anon_log("executing aws s3 copy command");
       exe_cmd(files_cmd.str());
-      anon_log("done executing aws s3 copy command");
-      if (files_needed.size() > 0) {
-        std::ostringstream oss;
-        oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
-        anon_log("checking to see if app was downloaded");
-        exe_cmd(oss.str());
-        anon_log("done checking if app downloaded");
-      }
+      // also needs to wait until we can do this without launching a
+      // sub bash process
+      // if (files_needed.size() > 0) {
+      //   std::ostringstream oss;
+      //   oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
+      //   exe_cmd(oss.str());
+      // }
       break;
     }
     catch(...) {
