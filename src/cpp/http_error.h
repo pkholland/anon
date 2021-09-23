@@ -49,7 +49,7 @@ struct request_error
   std::string reason;
   std::string content_type;
 
-  request_error(int c, const std::string &reason, const std::string& content_type = "application/text")
+  request_error(int c, const std::string &reason, const std::string& content_type = "text/plain")
       : reason(reason),
         content_type(content_type)
   {
@@ -155,14 +155,14 @@ void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pip
   }
   catch (const nlohmann::json::exception& e)
   {
-    reply_back_error(method, cors_enabled, request, e.what(), "400", "application/text", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "400", "text/plain", pipe);
   }
   catch (const std::exception &e)
   {
-    reply_back_error(method, cors_enabled, request, e.what(), "500", "application/text", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "500", "text/plain", pipe);
   }
   catch (...)
   {
-    reply_back_error(method, cors_enabled, request, "", "500", "application/text", pipe);
+    reply_back_error(method, cors_enabled, request, "", "500", "text/plain", pipe);
   }
 }
