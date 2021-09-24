@@ -157,6 +157,8 @@ const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& aws_get_cred_provider(
 
 const std::string &aws_get_default_region();
 
+std::string aws_get_region_display_name(const std::string& region);
+
 // set client_cfg's:
 //  1) region - set to the value passed
 //  2) executor
