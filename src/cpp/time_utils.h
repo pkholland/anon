@@ -43,6 +43,66 @@ inline struct timespec cur_epoc_time()
   return now;
 }
 
+// these next two are "finance inspired".  Given a time
+// represented as a number of seconds since epoc, the first one
+// returns the number of seconds since epoc for the time that
+// is 'num_months' after the given time.  The idea is that if
+// the given time is on the day of the 5th of some month, then
+// the returned time is the 5th day of the next month.  These
+// functions correctly account for different months having
+// different numbers of days.  Also if the given time is on
+// something like the 31st day of one month and the following
+// month has less than 31 days, then the returned time is for
+// the last day of that next month.  This includes correct
+// handling of leap years.
+inline time_t epoc_time_plus_n_months(time_t epoc_seconds, int num_months)
+{
+  struct tm t = {0};
+  gmtime_r(&epoc_seconds, &t);
+
+  auto months = t.tm_year * 12 + t.tm_mon + num_months;
+  auto year = months / 12;
+  auto month = months % 12;
+  auto ndays_in_month = 30;
+  switch(month) {
+    case 1: {
+      // careful with february
+      auto full_year = year + 1900;
+      auto is_leap_year = (full_year % 4) == 0 && ((full_year % 100) != 0 || (full_year % 400) == 0);
+      ndays_in_month = is_leap_year ? 29 : 28;
+    }  break;
+    case 0:
+    case 2:
+    case 4:
+    case 6:
+    case 7:
+    case 9:
+    case 11:
+      ndays_in_month = 31;
+      break;
+  }
+  t.tm_mon = month;
+  t.tm_year = year;
+  if (t.tm_mday > ndays_in_month)
+    t.tm_mday = ndays_in_month;
+  return mktime(&t);
+}
+
+inline time_t epoc_time_plus_n_years(time_t epoc_seconds, int num_years)
+{
+  struct tm t = {0};
+  gmtime_r(&epoc_seconds, &t);
+  t.tm_year += num_years;
+
+  if (t.tm_mon == 0 || t.tm_mday == 29) {
+    auto full_year = t.tm_year + 1900;
+    auto is_leap_year = (full_year % 4) == 0 && ((full_year % 100) != 0 || (full_year % 400) == 0);
+    if (!is_leap_year)
+      t.tm_mday = 28;
+  }
+  return mktime(&t);
+}
+
 inline bool operator<(const struct timespec &spec1, const struct timespec &spec2)
 {
   if (spec1.tv_sec != spec2.tv_sec)
