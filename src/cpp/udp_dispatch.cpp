@@ -117,7 +117,7 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
       else if (dlen == sizeof(buff->size()))
       {
 #if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("message too big! all " << sizeof(msgBuff) << " bytes consumed in recvfrom call");
+        anon_log("message too big! all " << sizeof(buff->size()) << " bytes consumed in recvfrom call");
 #endif
       }
       else
