@@ -88,7 +88,8 @@ void throw_request_js_error_(int code, const T&  js, const char* filename, int l
 }
 
 inline void reply_back_error(const char* method_, int cors_enabled, const http_request &request,
-      const char* msg, const char* response_code, const char* content_type, http_server::pipe_t &pipe)
+      const char* msg, const char* response_code, const char* content_type, 
+      const std::string& allowed_headers, http_server::pipe_t &pipe)
 {
   http_response response;
   response.add_header("content-type", "text/plain");
@@ -113,6 +114,9 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
       response.add_header("access-control-allow-methods", method);
       response.add_header("access-control-allow-credentials", "true");
       response.add_header("access-control-max-age", "600");
+      if (allowed_headers.size() > 0)
+        response.add_header("access-control-allow-headers", allowed_headers);
+
     }
   }
   response.set_status_code(response_code);
@@ -143,7 +147,7 @@ inline void reply_back_error(const char* method_, int cors_enabled, const http_r
 #define throw_request_js_error(_code, _js) throw_request_js_error_((int)_code, _js, __FILE__, __LINE__)
 
 template <typename Fn>
-void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pipe, const http_request &request, Fn f)
+void request_wrap(const char* method, int cors_enabled, const std::string& allow_headers_error, http_server::pipe_t &pipe, const http_request &request, Fn f)
 {
   try
   {
@@ -151,18 +155,18 @@ void request_wrap(const char* method, int cors_enabled, http_server::pipe_t &pip
   }
   catch (const request_error &e)
   {
-    reply_back_error(method, cors_enabled, request, e.reason.c_str(), e.code.c_str(), e.content_type.c_str(), pipe);
+    reply_back_error(method, cors_enabled, request, e.reason.c_str(), e.code.c_str(), e.content_type.c_str(), allow_headers_error, pipe);
   }
   catch (const nlohmann::json::exception& e)
   {
-    reply_back_error(method, cors_enabled, request, e.what(), "400", "text/plain", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "400", "text/plain", allow_headers_error, pipe);
   }
   catch (const std::exception &e)
   {
-    reply_back_error(method, cors_enabled, request, e.what(), "500", "text/plain", pipe);
+    reply_back_error(method, cors_enabled, request, e.what(), "500", "text/plain", allow_headers_error, pipe);
   }
   catch (...)
   {
-    reply_back_error(method, cors_enabled, request, "", "500", "text/plain", pipe);
+    reply_back_error(method, cors_enabled, request, "", "500", "text/plain", allow_headers_error, pipe);
   }
 }

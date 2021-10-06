@@ -199,7 +199,7 @@ void respond_options(http_server::pipe_t &pipe, const http_request &request, con
 
 void request_dispatcher::dispatch(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
 {
-  request_wrap(request.method_str(), _cors_enabled, pipe, request, [this, &pipe, &request, is_tls] {
+  request_wrap(request.method_str(), _cors_enabled, _allow_error_headers, pipe, request, [this, &pipe, &request, is_tls] {
     std::string method = request.method_str();
     bool is_options = (_cors_enabled != 0) && (_options == method);
     auto path = request.get_url_field(UF_PATH);

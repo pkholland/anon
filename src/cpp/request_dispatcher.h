@@ -242,14 +242,16 @@ class request_dispatcher
   pcrecpp::RE _split_at_var;
   std::string _root_path;
   std::string _options;
+  std::string _allow_error_headers;
   int _cors_enabled;
 
 public:
-  request_dispatcher(const std::string &root_path, int cors_enabled = 0)
+  request_dispatcher(const std::string &root_path, int cors_enabled = 0, const std::string& allow_error_headers = "")
       : _split_at_var("([^?{]*)(.*)"),
         _root_path(root_path),
         _options("OPTIONS"),
-        _cors_enabled(cors_enabled)
+        _cors_enabled(cors_enabled),
+        _allow_error_headers(allow_error_headers)
   {
   }
 
