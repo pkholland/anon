@@ -398,7 +398,7 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
               try
               {
                 current_srv_pid = 0;
-                anon_log_error("child process " << p->first << " unexpectedly exited, restarting");
+                anon_log_error("child process " << chld << " unexpectedly exited, restarting");
                 auto new_chld = start_child(*pi);
                 if (write_cmd(pi->cmd_pipe[0], k_start))
                 {
