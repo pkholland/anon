@@ -58,6 +58,11 @@ public:
     retries_enabled_ = false;
   }
 
+  void set_blocking()
+  {
+    non_blocking_ = false;
+  }
+
   void with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f)
   {
     if (retries_enabled_)
@@ -162,6 +167,7 @@ private:
   int round_robin_index_;
   std::unique_ptr<fiber_io_error> lookup_err_;
   int max_io_block_time_;
+  bool non_blocking_;
 
   enum
   {

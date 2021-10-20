@@ -62,7 +62,7 @@ struct tcp_call : public tcp_caller
   Fn f_;
 };
 
-void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t stack_size);
+void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t stack_size, bool non_blocking);
 
 // attempt to tcp-connect to 'host' / 'port'
 // and when this succeeds or fails call the given
@@ -85,9 +85,9 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
 // which can be displayed in human-readable form by
 // calling the system call gai_strerror.
 template <typename Fn>
-void connect_and_run(const char *host, int port, Fn f, size_t stack_size = fiber::k_default_stack_size)
+void connect_and_run(const char *host, int port, Fn f, size_t stack_size = fiber::k_default_stack_size, bool non_blocking = true)
 {
-  do_connect_and_run(host, port, new tcp_call<Fn>(f), stack_size);
+  do_connect_and_run(host, port, new tcp_call<Fn>(f), stack_size, non_blocking);
 }
 
 // can only be called from a fiber.  The calling fiber will
@@ -101,5 +101,5 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port);
 
 // similar to the version of connect above, except that no dns
 // logic is involved
-std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen);
+std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen, bool non_blocking = true);
 } // namespace tcp_client

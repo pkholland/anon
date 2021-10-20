@@ -68,6 +68,8 @@ public:
                                              uri.GetScheme() == Scheme::HTTPS, _tls.get());
     if (uri.GetAuthority() != "169.254.169.254")
       newepc->disable_retries();
+    else
+      newepc->set_blocking();
     //newepc->set_max_io_block_time(120);
     return m[key] = newepc;
   }

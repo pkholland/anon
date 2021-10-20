@@ -563,6 +563,7 @@ void aws_client_init()
         try
         {
           auto epc = endpoint_cluster::create("169.254.169.254", 80);
+          epc->set_blocking();
           auto path = "/latest/meta-data/placement/availability-zone";
           std::ostringstream str;
           str << "GET " << path << " HTTP/1.1\r\n\r\n";

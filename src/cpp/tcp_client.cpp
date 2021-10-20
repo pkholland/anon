@@ -29,9 +29,15 @@
 namespace tcp_client
 {
 
-std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen)
+std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr, socklen_t addrlen, bool non_blocking)
 {
-  int fd = socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+  int type = SOCK_STREAM | SOCK_CLOEXEC;
+  if (non_blocking)
+    type |= SOCK_NONBLOCK;
+  else
+    anon_log("using blocking socket");
+
+  int fd = socket(addr->sa_family, type, 0);
   if (fd == -1) {
     anon_log("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0) faied, err: " << error_string(errno));
     return std::make_pair(errno, std::unique_ptr<fiber_pipe>());
@@ -43,7 +49,8 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
 
   if (cr == 0)
   {
-    anon_log("a little weird, but ok.  non-blocking connect succeeded immediately");
+    if (non_blocking)
+      anon_log("a little weird, but ok.  non-blocking connect succeeded immediately: " << *addr);
   }
   else if (errno != EINPROGRESS)
   {
@@ -89,9 +96,9 @@ static void inform(tcp_caller *tcpc, int err_code)
   tcpc->exec(err_code, std::unique_ptr<fiber_pipe>());
 }
 
-void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t stack_size)
+void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t stack_size, bool non_blocking)
 {
-  dns_cache::lookup_and_run(host, port, [tcpc](int err_code, const struct sockaddr *addr, socklen_t addrlen) {
+  dns_cache::lookup_and_run(host, port, [tcpc, non_blocking](int err_code, const struct sockaddr *addr, socklen_t addrlen) {
     std::unique_ptr<tcp_caller> td(tcpc);
 
     if (err_code != 0) {
@@ -101,7 +108,10 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
     else
     {
 
-      int fd = socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+      int type = SOCK_STREAM | SOCK_CLOEXEC;
+      if (non_blocking)
+        type |= SOCK_NONBLOCK;
+      int fd = socket(addr->sa_family, type, 0);
       if (fd == -1)
       {
         anon_log_error("socket(addr->sa_family, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0)");
@@ -157,7 +167,7 @@ void do_connect_and_run(const char *host, int port, tcp_caller *tcpc, size_t sta
   stack_size);
 }
 
-std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port)
+std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port, bool non_blocking)
 {
   int err = 0;
   fiber_cond cond;
@@ -173,7 +183,7 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port)
   };
 
   tcp_caller *tcpc = new tcp_call<decltype(f)>(f);
-  do_connect_and_run(host, port, tcpc, fiber::k_default_stack_size);
+  do_connect_and_run(host, port, tcpc, fiber::k_default_stack_size, non_blocking);
 
   {
     fiber_lock lock(mtx);

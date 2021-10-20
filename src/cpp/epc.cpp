@@ -39,7 +39,8 @@ endpoint_cluster::endpoint_cluster(const char *host, int port,
       round_robin_index_(0),
       looking_up_endpoints_(false),
       max_io_block_time_(k_default_io_block_time),
-      retries_enabled_(true)
+      retries_enabled_(true),
+      non_blocking_(true)
 {
 }
 
@@ -325,7 +326,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
     while (ep->outstanding_requests_ >= max_conn_per_ep_)
     {
 #ifdef ANON_LOG_DNS_LOOKUP
-      anon_log("waiting to use endpoint because it has " << ep->outstanding_requests_ << " current connections, maximum allowed: " << max_conn_per_ep_);
+      anon_log("waiting to use endpoint " << ep->addr_ << " because it has " << ep->outstanding_requests_ << " outstanding requests");
 #endif
       ep->cond_.wait(l);
     }
@@ -363,7 +364,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
     {
       l.unlock();
       eraser era(this, ep);
-      auto conn = tcp_client::connect((struct sockaddr *)&ep->addr_, ep->addr_.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in));
+      auto conn = tcp_client::connect((struct sockaddr *)&ep->addr_, ep->addr_.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in), non_blocking_);
       era.success = true;
       if (conn.first != 0)
       {
@@ -388,7 +389,7 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
       sockaddr_in6 local_addr;
       auto local_addr_len = (socklen_t)sizeof(local_addr);
       getsockname(sock->pipe_->get_fd(), (struct sockaddr*)&local_addr, &local_addr_len);
-      anon_log("epc established new connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_ << " from " << local_addr);
+      anon_log("epc established new connection (fd=" << sock->pipe_->get_fd() << ") to " << ep->addr_ << " from " << local_addr << ", non_blocking_: " << (non_blocking_ ? "true" : "false"));
 #endif
     }
   }
