@@ -197,6 +197,7 @@ int start_child(proc_info &pi)
       kill(pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
+    fprintf(stdout, "from parent, child signaled it is running\n");
   }
   else
   {
@@ -258,6 +259,8 @@ int start_child(proc_info &pi)
     for (auto &e : pi.envs_)
       envs2.push_back((char*)e.c_str());
     envs2.push_back(0);
+
+    fprintf(stdout, "from child, last log prior to fexecve to child code\n");
 
     fexecve(pi.exe_fd_, &args2[0], &envs2[0]);
 
