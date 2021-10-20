@@ -197,7 +197,8 @@ int start_child(proc_info &pi)
       kill(pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
-    fprintf(stdout, "from parent, child signaled it is running\n");
+    auto msg = "from parent, child signaled it is running\n";
+    if (write(1, msg, strlen(msg)));
   }
   else
   {
@@ -260,7 +261,8 @@ int start_child(proc_info &pi)
       envs2.push_back((char*)e.c_str());
     envs2.push_back(0);
 
-    fprintf(stdout, "from child, last log prior to fexecve to child code\n");
+    auto msg = "from child, last log prior to fexecve to child code\n";
+    if (write(1, msg, strlen(msg)));
 
     fexecve(pi.exe_fd_, &args2[0], &envs2[0]);
 
@@ -390,8 +392,18 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
 
           std::unique_lock<std::mutex> lock(proc_map_mutex);
           auto p = proc_map.find(chld);
-          if (p == proc_map.end())
+          if (p == proc_map.end()) {
             anon_log("ignoring unregistered child process id: " << chld);
+            std::ostringstream path;
+            path << "/proc/" << chld << "/cmdline";
+            auto fd = ::open(path.str().c_str(), O_RDONLY);
+            if (fd != -1) {
+              std::vector<char> cmd_buff(4096);
+              auto len = ::read(fd, &cmd_buff[0], cmd_buff.size());
+              anon_log("-> " << std::string(&cmd_buff[0], len));
+              ::close(fd);
+            }
+          }
           else
           {
             auto pi = std::move(p->second);
