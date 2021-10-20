@@ -34,8 +34,6 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
   int type = SOCK_STREAM | SOCK_CLOEXEC;
   if (non_blocking)
     type |= SOCK_NONBLOCK;
-  else
-    anon_log("using blocking socket");
 
   int fd = socket(addr->sa_family, type, 0);
   if (fd == -1) {
