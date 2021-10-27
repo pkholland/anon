@@ -329,6 +329,9 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
     {
       if (!looking_up_endpoints_)
       {
+        #if defined(ANON_LOG_FIBER_CREATION)
+        anon_log("updating epc endpoints for: " << host_);
+        #endif
         looking_up_endpoints_ = true;
         lookup_err_.reset();
         std::weak_ptr<endpoint_cluster> wp = shared_from_this();
