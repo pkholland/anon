@@ -75,14 +75,19 @@ void tcp_server::io_avail(const struct epoll_event &event)
       // we can get EAGAIN because multiple io_d threads
       // can wake up from a single EPOLLIN event.
       // don't bother reporting those.
-      if (errno != EAGAIN)
+      if (errno != EAGAIN) {
         anon_log_error("accept4(listen_sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC): " << error_string(errno));
+        if (errno == EMFILE && !forced_close_) {
+          forced_close_ = true;
+          fiber::run_in_fiber([]{io_params::sweep_hibernating_pipes();});
+        }
+      }
 
       io_dispatch::epoll_ctl(EPOLL_CTL_MOD, listen_sock_, EPOLLIN | EPOLLONESHOT, this);
     }
     else
     {
-
+      forced_close_ = false;
       if (stop_ && (addr == stop_addr_))
       {
         io_dispatch::epoll_ctl(EPOLL_CTL_DEL, listen_sock_, 0, this);

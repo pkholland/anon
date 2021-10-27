@@ -55,6 +55,7 @@ public:
   tcp_server(int tcp_port, Fn f, int listen_backlog = k_default_backlog, bool port_is_fd = false, size_t stack_size = fiber::k_default_stack_size)
       : new_conn_(new new_con<Fn>(f)),
         stop_(false),
+        forced_close_(false),
         stack_size_(stack_size)
   {
     init_socket(tcp_port, listen_backlog, port_is_fd);
@@ -111,6 +112,7 @@ private:
   int listen_sock_;
   size_t stack_size_;
   bool stop_;
+  bool forced_close_;
   struct sockaddr_in6 stop_addr_;
   fiber_mutex stop_mutex_;
   fiber_cond stop_cond_;

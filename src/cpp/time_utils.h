@@ -135,6 +135,24 @@ inline struct timespec operator+(const struct timespec &spec1, int seconds)
   return spec;
 }
 
+inline struct timespec operator+(const struct timespec &spec1, double seconds)
+{
+  struct timespec spec = spec1;
+  double int_seconds;
+  auto frac = std::modf(seconds, &int_seconds);
+  spec.tv_sec += (int)int_seconds;
+  spec.tv_nsec += (int)(1000000000 * frac);
+  if (spec.tv_nsec < 0) {
+    --spec.tv_sec;
+    spec.tv_nsec += 1000000000;
+  } else if (spec.tv_nsec >= 1000000000) {
+    ++spec.tv_sec;
+    spec.tv_nsec -= 1000000000;
+  }
+  return spec;
+}
+
+
 inline struct timespec operator-(const struct timespec &spec1, const struct timespec &spec2)
 {
   struct timespec spec;

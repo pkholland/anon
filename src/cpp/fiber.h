@@ -180,7 +180,9 @@ public:
 #endif
   {
     #if defined(ANON_LOG_FIBER_CREATION)
-    anon_log("creating fiber: 0x" << this << ", " << fiber_name << ", num_fibers: " << ++num_fibers_);
+    auto nf = ++num_fibers_;
+    if (nf > ANON_LOG_FIBER_CREATION)
+      anon_log("creating fiber: 0x" << this << ", " << fiber_name << ", num_fibers: " << nf);
     #endif
 
     if (!auto_free_)
@@ -219,7 +221,9 @@ public:
 #endif
     ::operator delete(stack_);
     #if defined(ANON_LOG_FIBER_CREATION)
-    anon_log("deleting fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << --num_fibers_);
+    auto nf = --num_fibers_;
+    if (nf >= ANON_LOG_FIBER_CREATION)
+      anon_log("deleting fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << nf);
     #endif
   }
 
@@ -324,7 +328,9 @@ private:
         fiber_name_("ioparams parent")
   {
     #if defined(ANON_LOG_FIBER_CREATION)
-    anon_log("creating fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << ++num_fibers_);
+    auto nf = ++num_fibers_;
+    if (nf > ANON_LOG_FIBER_CREATION)
+      anon_log("creating fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << nf);
     #endif
     getcontext(&ucontext_);
   }
