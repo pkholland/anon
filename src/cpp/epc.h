@@ -47,6 +47,7 @@ public:
                    const tls_context *tls_ctx,
                    int max_conn_per_ep,
                    int lookup_frequency_in_seconds);
+  ~endpoint_cluster();
 
   void set_max_io_block_time(int max_io_block_time)
   {
@@ -144,9 +145,11 @@ private:
   void do_with_connected_pipe(const std::function<bool(const pipe_t *pipe)> &f);
   void update_endpoints();
   void delete_cached_endpoints();
+  void erase_all_endpoints();
 
 public:
   void erase(const std::shared_ptr<endpoint> &ep);
+  static void erase_all();
 
 private:
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
@@ -168,6 +171,10 @@ private:
   std::unique_ptr<fiber_io_error> lookup_err_;
   int max_io_block_time_;
   bool non_blocking_;
+
+  endpoint_cluster* next_epc_;
+  endpoint_cluster* prev_epc_;
+  static endpoint_cluster* first_epc_;
 
   enum
   {

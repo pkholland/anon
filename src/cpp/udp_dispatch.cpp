@@ -131,7 +131,7 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
             ths->recv_msg(&(*buff)[0], dlen, &clean, host_addr_size);
             ths->release_buff(buff);
           }
-        });
+        }, fiber::k_default_stack_size, "udp_dispatch::io_avail");
       }
     }
   }

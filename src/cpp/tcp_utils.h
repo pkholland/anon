@@ -73,3 +73,11 @@ inline bool operator<(const struct sockaddr_in6 &addr1, const struct sockaddr_in
   size_t sz = addr1.sin6_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
   return memcmp(&addr1, &addr2, sz) < 0;
 }
+
+inline bool operator<(const struct sockaddr_storage &addr1, const struct sockaddr_storage &addr2)
+{
+  if (addr1.ss_family != addr2.ss_family)
+    return addr1.ss_family < addr2.ss_family;
+  size_t sz = addr1.ss_family == AF_INET6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+  return memcmp(&addr1, &addr2, sz) < 0;
+}

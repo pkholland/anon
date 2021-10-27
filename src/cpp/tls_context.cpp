@@ -476,7 +476,7 @@ struct auto_bio_file
       throw_ssl_error();
     if (BIO_read_filename(bio_, file_name) <= 0)
     {
-      BIO_free(bio_);
+      BIO_free_all(bio_);
       throw_ssl_error();
     }
   }
@@ -484,7 +484,7 @@ struct auto_bio_file
   ~auto_bio_file()
   {
     if (bio_)
-      BIO_free(bio_);
+      BIO_free_all(bio_);
   }
 
   operator BIO *() { return bio_; }

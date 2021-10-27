@@ -28,6 +28,7 @@
 #include "http_server.h"
 #include "fiber.h"
 #include "exe_cmd.h"
+#include "epc.h"
 
 #ifdef ANON_AWS
 #include "aws_client.h"
@@ -88,6 +89,7 @@ extern "C" int main(int argc, char **argv)
 {
   bool port_is_fd = false;
   bool sport_is_fd = false;
+  bool auto_shutdown = false;
   int http_port = -1;
   int https_port = -1;
   int cmd_pipe = -1;
@@ -148,6 +150,10 @@ extern "C" int main(int argc, char **argv)
     else if (!strcmp("-cmd_fd", argv[i]))
     {
       cmd_pipe = atoi(argv[++i]);
+    }
+    else if (!strcmp("-auto-shutdown", argv[i]))
+    {
+      auto_shutdown = !strcmp("true", argv[++i]);
     }
     else
     {
@@ -355,12 +361,16 @@ extern "C" int main(int argc, char **argv)
                   // wait for all connections be to closed
                   io_params::sweep_hibernating_pipes();
                   server_close_outgoing();
+                  endpoint_cluster::erase_all();
 
                   // there may have been active network sessions because
                   // of previous calls to accept.  So wait here until
                   // they have all closed.  Note that in certain cases
                   // this may wait until the network io timeout has expired
                   fiber_pipe::wait_for_zero_net_pipes();
+
+                  dns_lookup::end_service();
+                  exe_cmd_term();
 
                   // instruct the io dispatch threads to all wake up and
                   // terminate.
@@ -373,8 +383,24 @@ extern "C" int main(int argc, char **argv)
     else
     {
       fiber::run_in_fiber(
-          [&create_srvs_proc] {
+          [&create_srvs_proc, auto_shutdown, &my_http, &my_https] {
             create_srvs_proc();
+
+            if (auto_shutdown) {
+              fiber::msleep(5000);
+              if (my_http)
+                my_http->stop();
+              if (my_https)
+                my_https->stop();
+              io_params::sweep_hibernating_pipes();
+              server_close_outgoing();
+              endpoint_cluster::erase_all();
+              fiber_pipe::wait_for_zero_net_pipes();
+              dns_lookup::end_service();
+              exe_cmd_term();
+              io_dispatch::stop();
+            }
+
           },
           fiber::k_default_stack_size, "teflon direct");
     }
@@ -392,14 +418,9 @@ extern "C" int main(int argc, char **argv)
     // 'connect' to this server, have been closed
     server_term();
 
-    exe_cmd_term();
-
     #ifdef ANON_AWS
     aws_client_term();
     #endif
-
-    // shut down the dns_lookup thread
-    dns_lookup::end_service();
 
     // wait for all io threads to terminate (other than this one)
     io_dispatch::join();

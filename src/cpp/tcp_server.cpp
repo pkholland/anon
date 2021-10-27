@@ -180,7 +180,7 @@ void tcp_server::stop()
         running = false;
         cond.notify_one();
       }
-    });
+    }, fiber::k_default_stack_size, "tcp_server::stop, wait for stop");
     std::unique_lock<std::mutex> lock(mtx);
     while (running)
       cond.wait(lock);

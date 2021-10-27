@@ -179,6 +179,10 @@ public:
         stack_size_(stack_size)
 #endif
   {
+    #if defined(ANON_LOG_FIBER_CREATION)
+    anon_log("creating fiber: 0x" << this << ", " << fiber_name << ", num_fibers: " << ++num_fibers_);
+    #endif
+
     if (!auto_free_)
     {
       anon::unique_lock<std::mutex> lock(zero_fiber_mutex_);
@@ -214,6 +218,9 @@ public:
     }
 #endif
     ::operator delete(stack_);
+    #if defined(ANON_LOG_FIBER_CREATION)
+    anon_log("deleting fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << --num_fibers_);
+    #endif
   }
 
   // note! calling join can switch threads -- that is, you can
@@ -303,14 +310,22 @@ public:
     }, when);
   }
 
+  #if defined(ANON_LOG_FIBER_CREATION)
+  static std::atomic_int num_fibers_;
+  #endif
+
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
   // this is the kind that live in io_params.iod_fiber_
   fiber()
       : auto_free_(false),
         running_(false),
-        stack_(0)
+        stack_(0),
+        fiber_name_("ioparams parent")
   {
+    #if defined(ANON_LOG_FIBER_CREATION)
+    anon_log("creating fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << ++num_fibers_);
+    #endif
     getcontext(&ucontext_);
   }
 

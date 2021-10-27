@@ -137,7 +137,7 @@ void exe_cmd_init()
       }
     }
 
-  });
+  }, fiber::k_default_stack_size, false, "exe_cmd");
 
   struct sigaction sa;
   sa.sa_handler = &handle_sigchld;

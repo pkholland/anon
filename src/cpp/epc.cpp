@@ -24,6 +24,11 @@
 #include <netdb.h>
 #include "dns_lookup.h"
 
+endpoint_cluster* endpoint_cluster::first_epc_;
+namespace {
+  fiber_mutex mtx;
+}
+
 endpoint_cluster::endpoint_cluster(const char *host, int port,
                                    bool do_tls,
                                    const tls_context *tls_ctx,
@@ -42,6 +47,33 @@ endpoint_cluster::endpoint_cluster(const char *host, int port,
       retries_enabled_(true),
       non_blocking_(true)
 {
+  fiber_lock l(mtx);
+  if (first_epc_)
+    first_epc_->prev_epc_ = this;
+  next_epc_ = first_epc_;
+  prev_epc_ = 0;
+  first_epc_ = this;
+}
+
+endpoint_cluster::~endpoint_cluster()
+{
+  fiber_lock l(mtx);
+  if (next_epc_)
+    next_epc_->prev_epc_ = prev_epc_;
+  if (prev_epc_)
+    prev_epc_->next_epc_ = next_epc_;
+  else
+    first_epc_ = next_epc_;
+}
+
+void endpoint_cluster::erase_all()
+{
+  fiber_lock l(mtx);
+  auto ep = first_epc_;
+  while (ep) {
+    ep->erase_all_endpoints();
+    ep = ep->next_epc_;
+  }
 }
 
 void endpoint_cluster::update_endpoints()
@@ -120,6 +152,13 @@ void endpoint_cluster::update_endpoints()
   last_lookup_time_ = cur_time();
   looking_up_endpoints_ = false;
   cond_.notify_all();
+}
+
+void endpoint_cluster::erase_all_endpoints()
+{
+  fiber_lock l(mtx_);
+  endpoints_.resize(0);
+  lookup_err_ = std::unique_ptr<fiber_io_error>(new fiber_io_error("erase_all_endpoints"));
 }
 
 // This is called either by erase_if_empty ep has only one open
