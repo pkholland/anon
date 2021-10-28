@@ -40,27 +40,26 @@ ec2_info::ec2_info(const char *filename)
   config.connectTimeoutMs = 100;
   config.httpRequestTimeoutMs = 100;
   config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
-  Aws::Internal::EC2MetadataClient client(config);
-  anon_log("creds: " << client.GetDefaultCredentialsSecurely());
+  auto client = Aws::Internal::GetEC2MetadataClient();
 
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
     region = rgn;
   else {
-    region = client.GetCurrentRegion();
+    region = client->GetCurrentRegion();
     if (region.size() == 0)
       region = "us-east-1";
   }
 
   default_region = region;
 
-  ami_id = client.GetResource("/latest/meta-data/ami-id").c_str();
+  ami_id = client->GetResource("/latest/meta-data/ami-id").c_str();
   if (ami_id.size() != 0) {
-    instance_id = client.GetResource("/latest/meta-data/instance-id").c_str();
-    host_name = client.GetResource("/latest/meta-data/local-hostname").c_str();
-    private_ipv4 = client.GetResource("/latest/meta-data/local-ipv4").c_str();
-    public_ipv4 = client.GetResource("/latest/meta-data/public-ipv4").c_str();
+    instance_id = client->GetResource("/latest/meta-data/instance-id").c_str();
+    host_name = client->GetResource("/latest/meta-data/local-hostname").c_str();
+    private_ipv4 = client->GetResource("/latest/meta-data/local-ipv4").c_str();
+    public_ipv4 = client->GetResource("/latest/meta-data/public-ipv4").c_str();
   }
   else {
     ami_id = "ami_id";
@@ -75,7 +74,7 @@ ec2_info::ec2_info(const char *filename)
     user_data = js.dump();
   }
   else
-    user_data = client.GetResource("/latest/user-data/").c_str();
+    user_data = client->GetResource("/latest/user-data/").c_str();
 
   if (user_data.size() != 0)
     user_data_js = json::parse(user_data);

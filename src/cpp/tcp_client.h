@@ -97,7 +97,7 @@ void connect_and_run(const char *host, int port, Fn f, size_t stack_size = fiber
 // element is valid) or is an error code (function failed and
 // second element is invalid).  These are the same parameters
 // that are passed to 'f' in connect_and_run, described above.
-std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port);
+std::pair<int, std::unique_ptr<fiber_pipe>> connect(const char *host, int port, bool non_blocking = true);
 
 // similar to the version of connect above, except that no dns
 // logic is involved
