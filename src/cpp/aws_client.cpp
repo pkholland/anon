@@ -411,13 +411,17 @@ static const char *INSTANCE_LOG_TAG = "fiberInstanceProfileCredentialsProvider";
 class fiberInstanceProfileCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-  fiberInstanceProfileCredentialsProvider(long refreshRateMs = Aws::Auth::REFRESH_THRESHOLD)
+  fiberInstanceProfileCredentialsProvider(const std::shared_ptr<fiberEC2MetadataClient>& mdc, long refreshRateMs = Aws::Auth::REFRESH_THRESHOLD)
       : //m_ec2MetadataConfigLoader(Aws::MakeShared<Aws::Config::EC2InstanceProfileConfigLoader>(std::static_pointer_cast<Aws::Internal::EC2MetadataClient>(std::make_shared<fiberEC2MetadataClient>()))),
         m_loadFrequencyMs(refreshRateMs)
   {
-    Aws::Client::ClientConfiguration cfg;
-    aws_init_client_config(cfg, aws_get_default_region());
-    auto metaClient = std::static_pointer_cast<Aws::Internal::EC2MetadataClient>(std::make_shared<fiberEC2MetadataClient>(cfg));
+    auto metaClient = mdc;
+    if (!metaClient) {
+      Aws::Client::ClientConfiguration cfg;
+      aws_init_client_config(cfg, aws_get_default_region());
+      metaClient = std::make_shared<fiberEC2MetadataClient>(cfg);
+      metaClient->GetDefaultCredentialsSecurely();
+    }
     auto loader = std::make_shared<Aws::Config::EC2InstanceProfileConfigLoader>(metaClient);
     m_ec2MetadataConfigLoader = loader;
   }
@@ -463,7 +467,7 @@ static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHO
 class defaultFiberAWSCredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:
-  defaultFiberAWSCredentialsProviderChain()
+  defaultFiberAWSCredentialsProviderChain(const std::shared_ptr<fiberEC2MetadataClient>& mdc = std::shared_ptr<fiberEC2MetadataClient>())
   {
     AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
     AddProvider(Aws::MakeShared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
@@ -488,14 +492,13 @@ public:
     }
     else if (Aws::Utils::StringUtils::ToLower(ec2MetadataDisabled.c_str()) != "true")
     {
-      AddProvider(Aws::MakeShared<fiberInstanceProfileCredentialsProvider>(defaultFiberCredentialsProviderChainTag));
+      AddProvider(Aws::MakeShared<fiberInstanceProfileCredentialsProvider>(defaultFiberCredentialsProviderChainTag, mdc));
     }
   }
 };
 
 Aws::SDKOptions aws_options;
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
-const char *aws_profile;
 std::string aws_default_region;
 
 } // namespace
@@ -509,8 +512,8 @@ void aws_client_init()
 #endif
   Aws::InitAPI(aws_options);
 
-  bool specific_profile = true;
-  aws_profile = getenv("AWS_PROFILE");
+  auto specific_profile = true;
+  const char* aws_profile = getenv("AWS_PROFILE");
   if (!aws_profile)
   {
     aws_profile = "default";
@@ -520,24 +523,48 @@ void aws_client_init()
   // basically, if you specified a specific profile to use and we can't find
   // the credentials file, or that file doesn't have the profile you are asking for,
   // we will revert to using the default credential chain mechanism.
-  if (specific_profile)
-  {
+  if (specific_profile) {
     auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
     Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
     if (!loader.Load())
       specific_profile = false;
-    else
-    {
+    else {
       auto profiles = loader.GetProfiles();
-      if (profiles.find(aws_profile) == profiles.end())
+      auto profile_it = profiles.find(aws_profile);
+      if (profile_it != profiles.end()) {
+        aws_default_region = profile_it->second.GetRegion();
+        anon_log("setting provider from profile: " << aws_profile << ", region: " << aws_default_region);
+      }
+      else
         specific_profile = false;
     }
   }
   if (specific_profile)
     aws_cred_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(aws_profile);
-  else
-    aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
+  else {
+    const char* region_ = getenv("AWS_DEFAULT_REGION");
+    if (!region_) {
+      anon_log("no AWS_DEFAULT_REGION environment variable, trying ec2 metadata");
+      auto mdc = std::make_shared<fiberEC2MetadataClient>();
+      if (mdc->GetDefaultCredentialsSecurely().size() != 0) {
+        aws_default_region = mdc->GetCurrentRegion();
+        anon_log("ec2 metadata client found credentials, region: " << aws_default_region);
+        aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(mdc);
+      }
+    }
+    if (aws_default_region.size() == 0) {
+      if (!region_) {
+        anon_log("no AWS_DEFAULT_REGION environment variable, and ec2 metadata client failed, defaulting to region us-east-1");
+        region_ = "us-east-1";
+      } else {
+        anon_log("AWS_DEFAULT_REGION set to: " << region_);
+      }
+      aws_default_region = region_;
+      aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
+    }
+  }
 
+#if 0
   const char *region_ = getenv("AWS_DEFAULT_REGION");
   if (region_)
     aws_default_region = region_;
@@ -602,6 +629,7 @@ void aws_client_init()
         aws_default_region = "us-east-1";
     }
   }
+#endif
 }
 
 void aws_client_term()

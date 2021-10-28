@@ -41,6 +41,7 @@ ec2_info::ec2_info(const char *filename)
   config.httpRequestTimeoutMs = 100;
   config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
   Aws::Internal::EC2MetadataClient client(config);
+  anon_log("creds: " << client.GetDefaultCredentialsSecurely());
 
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
