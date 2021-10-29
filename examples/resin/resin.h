@@ -33,7 +33,7 @@ struct ec2_info
   Aws::String default_region;
   std::string ami_id;
   std::string instance_id;
-  std::string host_name;
+  //std::string host_name;
   std::string private_ipv4;
   std::string public_ipv4;
   std::string user_data;

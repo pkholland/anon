@@ -27,6 +27,9 @@
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/config/AWSProfileConfigLoader.h>
 #include <aws/core/client/DefaultRetryStrategy.h>
+#include <aws/core/utils/logging/ConsoleLogSystem.h>
+#include <aws/crt/ImdsClient.h>
+#include <aws/core/Globals.h>
 #include "nlohmann/json.hpp"
 #include <fstream>
 #include "log.h"
@@ -34,47 +37,84 @@
 
 using namespace nlohmann;
 
+struct helper {
+  ec2_info* ec2_inf;
+  std::mutex  mtx;
+  std::condition_variable cond;
+  int items;
+};
+
+void dec(void* userData)
+{
+  auto h = (helper*)userData;
+  if (--h->items == 0)
+    h->cond.notify_all();
+}
+
 ec2_info::ec2_info(const char *filename)
 {
-  Aws::Client::ClientConfiguration config;
-  config.connectTimeoutMs = 100;
-  config.httpRequestTimeoutMs = 100;
-  config.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(2, 10);
-  auto client = Aws::Internal::GetEC2MetadataClient();
+  Aws::Crt::Imds::ImdsClientConfig imdsConfig;
+  imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
+  Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
+
+  instance_id = "instance_id";
+  ami_id = "ami_id";
+  private_ipv4 = "private_ipv4";
+  public_ipv4 = "public_ipv4";
+
+  helper help;
+  help.ec2_inf = this;
+  help.items = 3;
+
+  imdsClient.GetUserData([](const Aws::Crt::StringView &resource, int errorCode, void *userData){
+    auto h = (helper*)userData;
+    std::unique_lock l(h->mtx);
+    if (errorCode == 0) {
+      auto ths = h->ec2_inf;
+      std::string ud(resource.begin(), resource.size());
+      ths->user_data = ud;
+    }
+    dec(userData);
+  }, &help);
+
+  imdsClient.GetInstanceInfo([](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
+    auto h = (helper*)userData;
+    std::unique_lock l(h->mtx);
+    if (errorCode == 0) {
+      auto ths = h->ec2_inf;
+      Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
+      ths->default_region = inf.region;
+      ths->instance_id = inf.instanceId;
+      ths->ami_id = inf.imageId;
+      ths->private_ipv4 = inf.privateIp;
+    }
+    dec(userData);
+  }, &help);
+
+  imdsClient.GetResource({"/latest/meta-data/public-ipv4"}, [](const Aws::Crt::StringView &resource, int errorCode, void *userData){
+    auto h = (helper*)userData;
+    std::unique_lock l(h->mtx);
+    if (errorCode == 0) {
+      auto ths = h->ec2_inf;
+      std::string ip(resource.begin(), resource.size());
+      ths->public_ipv4 = ip;
+    }
+    dec(userData);
+  }, &help);
+
+  std::unique_lock l(help.mtx);
+  while (help.items > 0)
+    help.cond.wait(l);
 
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
-    region = rgn;
-  else {
-    region = client->GetCurrentRegion();
-    if (region.size() == 0)
-      region = "us-east-1";
-  }
-
-  default_region = region;
-
-  ami_id = client->GetResource("/latest/meta-data/ami-id").c_str();
-  if (ami_id.size() != 0) {
-    instance_id = client->GetResource("/latest/meta-data/instance-id").c_str();
-    host_name = client->GetResource("/latest/meta-data/local-hostname").c_str();
-    private_ipv4 = client->GetResource("/latest/meta-data/local-ipv4").c_str();
-    public_ipv4 = client->GetResource("/latest/meta-data/public-ipv4").c_str();
-  }
-  else {
-    ami_id = "ami_id";
-    instance_id = "instance_id";
-    host_name = "host_name";
-    private_ipv4 = "private_ipv4";
-    public_ipv4 = "public_ipv4";
-  }
+    default_region = region;
 
   if (filename != 0) {
     json js = json::parse(std::ifstream(filename));
     user_data = js.dump();
   }
-  else
-    user_data = client->GetResource("/latest/user-data/").c_str();
 
   if (user_data.size() != 0)
     user_data_js = json::parse(user_data);
@@ -91,7 +131,7 @@ Aws::SDKOptions options;
 
 bool in_ec2(ec2_info &r)
 {
-  return r.ami_id.size() != 0 && r.instance_id.size() != 0 && r.host_name.size() != 0 && r.private_ipv4.size() != 0;
+  return r.private_ipv4 != "private_ipv4";
 }
 
 bool has_user_data(ec2_info &r)
@@ -105,6 +145,9 @@ extern "C" int main(int argc, char **argv)
 {
   anon_log("resin starting");
   int ret = 0;
+
+  // options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Debug;
+  // options.loggingOptions.logger_create_fn = []{return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<Aws::Utils::Logging::ConsoleLogSystem>(Aws::Utils::Logging::LogLevel::Debug));};
 
   Aws::InitAPI(options);
   try
