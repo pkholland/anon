@@ -35,6 +35,8 @@
 #include <aws/core/platform/Environment.h>
 #include <aws/core/internal/AWSHttpResourceClient.h>
 #include <aws/core/utils/logging/LogMacros.h>
+#include <aws/crt/ImdsClient.h>
+#include <aws/core/Globals.h>
 #include "aws_http.h"
 #include "http_client.h"
 
@@ -501,6 +503,12 @@ Aws::SDKOptions aws_options;
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
 std::string aws_default_region;
 
+struct helper {
+  std::mutex mtx;
+  std::condition_variable cond;
+  bool ready;
+};
+
 } // namespace
 
 void aws_client_init()
@@ -539,29 +547,44 @@ void aws_client_init()
         specific_profile = false;
     }
   }
-  if (specific_profile)
+  if (specific_profile) {
     aws_cred_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(aws_profile);
+    anon_log("loaded provider from " << aws_profile);
+  }
   else {
     const char* region_ = getenv("AWS_DEFAULT_REGION");
     if (!region_) {
       anon_log("no AWS_DEFAULT_REGION environment variable, trying ec2 metadata");
-      auto mdc = std::make_shared<fiberEC2MetadataClient>();
-      if (mdc->GetDefaultCredentialsSecurely().size() != 0) {
-        aws_default_region = mdc->GetCurrentRegion();
-        anon_log("ec2 metadata client found credentials, region: " << aws_default_region);
-        aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(mdc);
+      Aws::Crt::Imds::ImdsClientConfig imdsConfig;
+      imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
+      Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
+
+      helper help;
+      help.ready = false;
+
+      imdsClient.GetInstanceInfo([](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
+        auto h = (helper*)userData;
+        if (errorCode == 0) {
+          Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
+          aws_default_region = inf.region;
+          anon_log("aws_default_region: " << aws_default_region);
+        }
+        std::unique_lock l(h->mtx);
+        h->ready = true;
+        h->cond.notify_all();
+      }, &help);
+
+      {
+        std::unique_lock l(help.mtx);
+        while (!help.ready)
+          help.cond.wait(l);
       }
+
+      anon_log("imds reported default region: " << aws_default_region);
+      if (aws_default_region.size() == 0)
+        aws_default_region = "us-east-1";
     }
-    if (aws_default_region.size() == 0) {
-      if (!region_) {
-        anon_log("no AWS_DEFAULT_REGION environment variable, and ec2 metadata client failed, defaulting to region us-east-1");
-        region_ = "us-east-1";
-      } else {
-        anon_log("AWS_DEFAULT_REGION set to: " << region_);
-      }
-      aws_default_region = region_;
-      aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
-    }
+    aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
   }
 
 #if 0

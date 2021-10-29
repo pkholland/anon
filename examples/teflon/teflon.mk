@@ -104,6 +104,10 @@ LIBS:=-laws-cpp-sdk-email $(LIBS)
 cflags+=-DANON_AWS_SES
 endif
 
+ifneq ($(filter CRT,$(ANON_AWS)),)
+LIBS:=-laws-crt-cpp $(LIBS)
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\

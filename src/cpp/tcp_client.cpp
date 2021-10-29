@@ -41,6 +41,13 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
     return std::make_pair(errno, std::unique_ptr<fiber_pipe>());
   }
 
+  if (!non_blocking) {
+    struct timeval tv;
+    tv.tv_sec  = 0;  /* Set 1 second timeout */
+    tv.tv_usec = 1000000 / 4;
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+  }
+
   std::unique_ptr<fiber_pipe> pipe(new fiber_pipe(fd, fiber_pipe::network));
   // anon_log("connecting new socket, fd: " << fd);
   auto cr = ::connect(fd, addr, addrlen);
@@ -50,7 +57,7 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
     if (non_blocking)
       anon_log("a little weird, but ok.  non-blocking connect succeeded immediately: " << *addr);
   }
-  else if (errno != EINPROGRESS)
+  else if (errno != EINPROGRESS || !non_blocking)
   {
 #if ANON_LOG_NET_TRAFFIC > 0
     anon_log("connect(fd, " << *addr << ", addrlen) failed, err: " << error_string(errno));
