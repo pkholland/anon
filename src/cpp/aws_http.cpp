@@ -84,6 +84,15 @@ public:
       return;
     }
 
+    #if defined(ANON_AWS_LOG_IMDS)
+    if (uri.GetAuthority() == "169.254.169.254") {
+      anon_log("");
+      anon_log("imds " << HttpMethodMapper::GetNameForHttpMethod(request->GetMethod()) << " " << normalize(uri.GetPath()));
+      for (const auto &h : request->GetHeaders())
+        anon_log(" " << h.first << ": " << h.second);
+    }
+    #endif
+
     get_epc(uri.GetURIString())->with_connected_pipe([this, &request, &uri, &resp, readLimiter, writeLimiter, recursion](const pipe_t *pipe) -> bool {
       const auto& body = request->GetContentBody();
       auto method = request->GetMethod();
@@ -103,6 +112,13 @@ public:
       auto read_body = method != HttpMethod::HTTP_HEAD;
       http_client_response re;
       re.parse(*pipe, read_body, false/*throw_on_server_error*/);
+
+      #if defined(ANON_AWS_LOG_IMDS)
+      if (uri.GetAuthority() == "169.254.169.254") {
+        anon_log(" ** response: " << re.status_code << ", keep_alive: " << (re.should_keep_alive ? "true" : "false"));
+      }
+      #endif
+
       if ((re.status_code == 301 || re.status_code == 302) && re.headers.contains_header("location")) {
         MakeRequest(resp, request, URI(re.headers.get_header("location").astr()), readLimiter, writeLimiter, recursion+1);
       }
