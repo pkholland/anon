@@ -35,7 +35,7 @@ $(ANON_ROOT)/src/cpp/aws_client.cpp\
 $(ANON_ROOT)/src/cpp/aws_throttle.cpp
 INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DANON_AWS
-LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
+LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -laws-crt-cpp -lcurl $(LIBS)
 endif
 
 ifneq ($(filter SQS,$(ANON_AWS)),)
@@ -102,10 +102,6 @@ endif
 ifneq ($(filter SNS,$(ANON_AWS)),)
 LIBS:=-laws-cpp-sdk-email $(LIBS)
 cflags+=-DANON_AWS_SES
-endif
-
-ifneq ($(filter CRT,$(ANON_AWS)),)
-LIBS:=-laws-crt-cpp $(LIBS)
 endif
 
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
