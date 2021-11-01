@@ -35,8 +35,6 @@
 #include <aws/core/platform/Environment.h>
 #include <aws/core/internal/AWSHttpResourceClient.h>
 #include <aws/core/utils/logging/LogMacros.h>
-#include <aws/crt/ImdsClient.h>
-#include <aws/core/Globals.h>
 #include "aws_http.h"
 #include "http_client.h"
 #include "dns_lookup.h"

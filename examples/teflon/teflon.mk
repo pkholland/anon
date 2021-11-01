@@ -35,7 +35,7 @@ $(ANON_ROOT)/src/cpp/aws_client.cpp\
 $(ANON_ROOT)/src/cpp/aws_throttle.cpp
 INC_DIRS+=$(ANON_PARENT)/json/include
 cflags+=-DANON_AWS
-LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -laws-crt-cpp -lcurl $(LIBS)
+LIBS:=-laws-cpp-sdk-s3 -laws-cpp-sdk-core -lcurl $(LIBS)
 endif
 
 ifneq ($(filter SQS,$(ANON_AWS)),)
