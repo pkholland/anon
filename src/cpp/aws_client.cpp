@@ -208,7 +208,7 @@ public:
       : Aws::Internal::EC2MetadataClient(endpoint),
         m_endpoint(endpoint)
   {
-    auto dns = dns_lookup::get_addrinfo(endpoint, 80);
+    auto dns = dns_lookup::get_addrinfo(endpoint + strlen("http://"), 80);
     if (dns.first != 0 || dns.second.size() == 0)
       anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
     m_sockaddr = dns.second[0];
@@ -220,7 +220,7 @@ public:
       : Aws::Internal::EC2MetadataClient(clientConfiguration, endpoint),
         m_endpoint(endpoint)
   {
-    auto dns = dns_lookup::get_addrinfo(endpoint, 80);
+    auto dns = dns_lookup::get_addrinfo(endpoint + strlen("http://"), 80);
     if (dns.first != 0 || dns.second.size() == 0)
       anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
     m_sockaddr = dns.second[0];
@@ -237,11 +237,12 @@ public:
   {
   }
 
-  std::shared_ptr<http_client_response> get_resource(const std::string& message) const
+  static std::shared_ptr<http_client_response> get_resource(const std::string& message,
+    struct sockaddr* sock_addr, socklen_t sock_addr_len)
   {
     while (true) {
       try {
-        auto conn = tcp_client::connect((struct sockaddr*)&m_sockaddr, m_sockaddr_len);
+        auto conn = tcp_client::connect(sock_addr, sock_addr_len);
         if (conn.first == 0) {
           *conn.second << message;
           auto re = std::make_shared<http_client_response>();
@@ -258,7 +259,12 @@ public:
     }
   }
 
-  std::string trim(const std::string& str) const
+  std::shared_ptr<http_client_response> get_resource(const std::string& message) const
+  {
+    return get_resource(message, (struct sockaddr*)&m_sockaddr, m_sockaddr_len);
+  }
+
+  static std::string trim(const std::string& str)
   {
     if (str.size() == 0)
       return str;
@@ -274,7 +280,7 @@ public:
   std::pair<std::string, int> get_imds_token()
   {
     std::ostringstream oss;
-    oss << "PUT /latest/api/token HTTP/1.1\r\n";
+    oss << "PUT " << EC2_IMDS_TOKEN_RESOURCE << " HTTP/1.1\r\n";
     oss << EC2_IMDS_TOKEN_TTL_HEADER << ": " << EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE << "\r\n";
     oss << "\r\n";
     auto message = oss.str();
@@ -495,14 +501,6 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
 std::string aws_default_region;
 std::shared_ptr<fiberEC2MetadataClient> aws_metadata_client;
 
-#if 0
-struct helper {
-  std::mutex mtx;
-  std::condition_variable cond;
-  bool ready;
-};
-#endif
-
 } // namespace
 
 void aws_client_init()
@@ -549,8 +547,80 @@ void aws_client_init()
     const char* region_ = getenv("AWS_DEFAULT_REGION");
     if (!region_) {
       anon_log("no AWS_DEFAULT_REGION environment variable, trying ec2 metadata");
-      auto conn = tcp_client::connect("169.254.169.254", 80, false);
+
+      // sadly, complicated bootstrapping logic...
+      // we need to get the region we are running in in order to construct an aws "client configuration",
+      // object - which is needed by "credentials provider".  If we don't supply a custom one to
+      // the credentials provider ctor, then the credentials provider ctor will construct and use
+      // a default one - which doesn't use all of our fiber etc... logic.  But the credentials provider
+      // logic is really just the code that reads the metadata from 169.254.169.254.  So here we
+      // boostrap that logic
+
+      auto dns = dns_lookup::get_addrinfo("169.254.169.254", 80);
+      if (dns.first != 0 || dns.second.size() == 0)
+        anon_throw(std::runtime_error, "can't happen");
+      auto sockaddr = dns.second[0];
+      auto sockaddr_len = sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
+      auto conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len, false);
       if (conn.first == 0) {
+
+        // first get the token needed to get any metadata
+        std::ostringstream oss;
+        oss << "PUT " << EC2_IMDS_TOKEN_RESOURCE << " HTTP/1.1\r\n";
+        oss << EC2_IMDS_TOKEN_TTL_HEADER << ": " << EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE << "\r\n";
+        oss << "\r\n";
+        auto message = oss.str();
+
+        std::string imds_tok;
+        while (true) {
+          conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len);
+          if (conn.first == 0) {
+            auto re = fiberEC2MetadataClient::get_resource(message, (struct sockaddr*)&sockaddr, sockaddr_len);
+            if (re->status_code == 200) {
+              imds_tok = "";
+              for (const auto &data : re->body)
+                imds_tok += std::string(&data[0], data.size());
+              imds_tok = fiberEC2MetadataClient::trim(imds_tok);
+              break;
+            }
+          }
+          fiber::msleep(1000);
+        }
+
+        // now get the current region
+        oss.str("");
+        oss.clear();
+        oss << "GET " << EC2_REGION_RESOURCE << " HTTP/1.1\r\n";
+        oss << EC2_IMDS_TOKEN_HEADER << ": " << imds_tok << "\r\n";
+        oss << "\r\n";
+        message = oss.str();
+
+        std::string avzone;
+        while (true) {
+          conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len);
+          if (conn.first == 0) {
+            auto re = fiberEC2MetadataClient::get_resource(message, (struct sockaddr*)&sockaddr, sockaddr_len);
+            if (re->status_code == 200) {
+              avzone = "";
+              for (const auto &data : re->body)
+                avzone += std::string(&data[0], data.size());
+              avzone = fiberEC2MetadataClient::trim(avzone);
+              break;
+            }
+          }
+          fiber::msleep(1000);
+        }
+
+        aws_default_region.reserve(avzone.length());
+        bool digitFound = false;
+        for (auto character : avzone) {
+          if (digitFound && !isdigit(character))
+            break;
+          if (isdigit(character))
+            digitFound = true;
+          aws_default_region.append(1, character);
+        }
+
         aws_metadata_client = std::make_shared<fiberEC2MetadataClient>();
         aws_default_region = aws_metadata_client->GetCurrentRegion();
       } else
@@ -559,72 +629,7 @@ void aws_client_init()
     aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(aws_metadata_client);
   }
 
-#if 0
-  const char *region_ = getenv("AWS_DEFAULT_REGION");
-  if (region_)
-    aws_default_region = region_;
-  else
-  {
-    auto pfn = Aws::Auth::ProfileConfigFileAWSCredentialsProvider::GetCredentialsProfileFilename();
-    Aws::Config::AWSConfigFileProfileConfigLoader loader(pfn);
-    if (loader.Load())
-    {
-      auto profiles = loader.GetProfiles();
-      auto prof = profiles.find(aws_profile);
-      if (prof != profiles.end())
-        aws_default_region = prof->second.GetRegion().c_str();
-    }
 
-    if (aws_default_region.size() == 0)
-    {
-      bool success = false;
-      bool connected = false;
-      int attempts = 0;
-      std::string reply;
-      while (!success && attempts < 10) {
-        try
-        {
-          auto epc = endpoint_cluster::create("169.254.169.254", 80);
-          epc->set_blocking();
-          auto path = "/latest/meta-data/placement/availability-zone";
-          std::ostringstream str;
-          str << "GET " << path << " HTTP/1.1\r\n\r\n";
-          auto message = str.str();
-          epc->with_connected_pipe([&reply, &message, &success, &connected](const pipe_t *pipe) -> bool {
-            connected = true;
-            pipe->write(message.c_str(), message.size());
-            http_client_response re;
-            re.parse(*pipe, true);
-            if (re.status_code >= 200 && re.status_code < 300)
-            {
-              success = true;
-              std::ostringstream ret;
-              for (const auto &data : re.body)
-                ret << std::string(&data[0], data.size());
-              reply = ret.str();
-            } else {
-              anon_log("http://169.254.169.25/latest/meta-data/placement/availability-zone read returned status_code: " << re.status_code);
-            }
-            return false;
-          });
-        }
-        catch (...)
-        {
-          if (!connected)
-            attempts = 100;
-          else {
-            fiber::msleep(200);
-            ++attempts;
-          }
-        }
-      }
-      if (success && reply.size() > 1) {
-        aws_default_region = reply.substr(0, reply.size() - 1).c_str();
-      } else
-        aws_default_region = "us-east-1";
-    }
-  }
-#endif
 }
 
 void aws_client_term()
