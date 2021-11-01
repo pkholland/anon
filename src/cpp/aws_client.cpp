@@ -505,7 +505,6 @@ void aws_client_init()
       auto profile_it = profiles.find(aws_profile);
       if (profile_it != profiles.end()) {
         aws_default_region = profile_it->second.GetRegion();
-        anon_log("setting provider from profile: " << aws_profile << ", region: " << aws_default_region);
       }
       else
         specific_profile = false;
@@ -513,59 +512,58 @@ void aws_client_init()
   }
   if (specific_profile) {
     aws_cred_prov = std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>(aws_profile);
-    anon_log("loaded provider from " << aws_profile);
   }
   else {
-    const char* region_ = getenv("AWS_DEFAULT_REGION");
-    if (!region_) {
-      anon_log("no AWS_DEFAULT_REGION environment variable, trying ec2 metadata");
 
-      // sadly, complicated bootstrapping logic...
-      // we need to get the region we are running in in order to construct an aws "client configuration",
-      // object - which is needed by "credentials provider".  If we don't supply a custom one to
-      // the credentials provider ctor, then the credentials provider ctor will construct and use
-      // a default one - which doesn't use all of our fiber etc... logic.  But the credentials provider
-      // logic is really just the code that reads the metadata from 169.254.169.254.  So here we
-      // boostrap that logic
+    // sadly, complicated bootstrapping logic...
+    // we need to get the region we are running in in order to construct an aws "client configuration",
+    // object - which is needed by "credentials provider".  If we don't supply a custom one to
+    // the credentials provider ctor, then the credentials provider ctor will construct and use
+    // a default one - which doesn't use all of our fiber etc... logic.  But the credentials provider
+    // logic is really just the code that reads the metadata from 169.254.169.254.  So here we
+    // boostrap that logic
 
-      auto dns = dns_lookup::get_addrinfo("169.254.169.254", 80);
-      if (dns.first != 0 || dns.second.size() == 0)
-        anon_throw(std::runtime_error, "can't happen");
-      auto sockaddr = dns.second[0];
-      auto sockaddr_len = sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-      auto conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len, false);
-      if (conn.first == 0) {
+    auto dns = dns_lookup::get_addrinfo("169.254.169.254", 80);
+    if (dns.first != 0 || dns.second.size() == 0)
+      anon_throw(std::runtime_error, "can't happen");
+    auto sockaddr = dns.second[0];
+    auto sockaddr_len = sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
+    auto conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len, false);
+    if (conn.first == 0) {
 
-        // first get the token needed to get any metadata
-        std::ostringstream oss;
-        oss << "PUT " << EC2_IMDS_TOKEN_RESOURCE << " HTTP/1.1\r\n";
-        oss << EC2_IMDS_TOKEN_TTL_HEADER << ": " << EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE << "\r\n";
-        oss << "\r\n";
-        auto message = oss.str();
+      // first get the token needed to get any metadata
+      std::ostringstream oss;
+      oss << "PUT " << EC2_IMDS_TOKEN_RESOURCE << " HTTP/1.1\r\n";
+      oss << EC2_IMDS_TOKEN_TTL_HEADER << ": " << EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE << "\r\n";
+      oss << "\r\n";
+      auto message = oss.str();
 
-        std::string imds_tok;
-        int imds_valid_seconds = 0;
-        while (true) {
-          conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len);
-          if (conn.first == 0) {
-            auto re = fiberEC2MetadataClient::get_resource(message, (struct sockaddr*)&sockaddr, sockaddr_len);
-            if (re->status_code != 200 || !re->headers.contains_header(EC2_IMDS_TOKEN_TTL_HEADER)) {
-              anon_log("get token returned status code: " << re->status_code);
-            } else {
-              std::string body_str;
-              for (const auto &data : re->body)
-                body_str += std::string(&data[0], data.size());
-              imds_tok = fiberEC2MetadataClient::trim(body_str);
-              imds_valid_seconds = std::atoi(re->headers.get_header(EC2_IMDS_TOKEN_TTL_HEADER).str().c_str());
-              if (imds_valid_seconds < 1200)
-                anon_throw(std::runtime_error, "unusably small imds token expiration time: " << imds_valid_seconds);
-              break;
-            }
+      std::string imds_tok;
+      int imds_valid_seconds = 0;
+      while (true) {
+        conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len);
+        if (conn.first == 0) {
+          auto re = fiberEC2MetadataClient::get_resource(message, (struct sockaddr*)&sockaddr, sockaddr_len);
+          if (re->status_code != 200 || !re->headers.contains_header(EC2_IMDS_TOKEN_TTL_HEADER)) {
+            anon_log("get token returned status code: " << re->status_code);
+          } else {
+            std::string body_str;
+            for (const auto &data : re->body)
+              body_str += std::string(&data[0], data.size());
+            imds_tok = fiberEC2MetadataClient::trim(body_str);
+            imds_valid_seconds = std::atoi(re->headers.get_header(EC2_IMDS_TOKEN_TTL_HEADER).str().c_str());
+            if (imds_valid_seconds < 1200)
+              anon_throw(std::runtime_error, "unusably small imds token expiration time: " << imds_valid_seconds);
+            break;
           }
-          fiber::msleep(1000);
         }
+        fiber::msleep(1000);
+      }
 
-        // now get the current region
+      auto region_ = getenv("AWS_DEFAULT_REGION");
+      if (!region_) {
+
+        // if the region env variable isn't set, read it from metadata
         oss.str("");
         oss.clear();
         oss << "GET " << EC2_REGION_RESOURCE << " HTTP/1.1\r\n";
@@ -605,22 +603,29 @@ void aws_client_init()
         // client configuration options that tell it to use our
         // threading
         setenv("AWS_DEFAULT_REGION", aws_default_region.c_str(), 1);
-
-        aws_metadata_client = std::make_shared<fiberEC2MetadataClient>(imds_tok);
-
-        // update the imds token again 10 min before it is scheduled to expire
-        std::weak_ptr<fiberEC2MetadataClient> wp = aws_metadata_client->shared_from_this();
-        io_dispatch::schedule_task([wp] {
-          fiber::run_in_fiber([wp] {
-            auto mc = wp.lock();
-            if (mc)
-              mc->update_imds_token();
-          });
-        }, cur_time() + imds_valid_seconds - 600);
-
       } else
-        aws_default_region = "us-east-1";
+        aws_default_region = region_;
+
+      aws_metadata_client = std::make_shared<fiberEC2MetadataClient>(imds_tok);
+
+      // update the imds token again 10 min before it is scheduled to expire
+      std::weak_ptr<fiberEC2MetadataClient> wp = aws_metadata_client->shared_from_this();
+      io_dispatch::schedule_task([wp] {
+        fiber::run_in_fiber([wp] {
+          auto mc = wp.lock();
+          if (mc)
+            mc->update_imds_token();
+        });
+      }, cur_time() + imds_valid_seconds - 600);
+
+    } else {
+      // we don't appear to be in ec2, so hard code a few things (mostly for testing)
+      const char* region_ = getenv("AWS_DEFAULT_REGION");
+      if (!region_)
+        region_ = "us-east-1";
+      aws_default_region = region_;
     }
+
     aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(aws_metadata_client);
   }
 
