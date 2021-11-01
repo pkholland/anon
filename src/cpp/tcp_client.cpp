@@ -43,8 +43,8 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
 
   if (!non_blocking) {
     struct timeval tv;
-    tv.tv_sec  = 0;  /* Set 1 second timeout */
-    tv.tv_usec = 1000000 / 4;
+    tv.tv_sec  = 1;  /* Set 1 second timeout */
+    tv.tv_usec = 0;
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
   }
 
@@ -56,6 +56,13 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
   {
     if (non_blocking)
       anon_log("a little weird, but ok.  non-blocking connect succeeded immediately: " << *addr);
+    else {
+      struct timeval tv;
+      tv.tv_sec  = 16;  /* Set 16 second timeout */
+      tv.tv_usec = 0;
+      setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+      setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    }
   }
   else if (errno != EINPROGRESS || !non_blocking)
   {

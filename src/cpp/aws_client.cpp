@@ -39,6 +39,7 @@
 #include <aws/core/Globals.h>
 #include "aws_http.h"
 #include "http_client.h"
+#include "dns_lookup.h"
 
 #ifdef ANON_AWS_EC2
 #include <aws/ec2/EC2Client.h>
@@ -200,21 +201,31 @@ const char EC2_IMDS_TOKEN_TTL_HEADER[] = "x-aws-ec2-metadata-token-ttl-seconds";
 const char EC2_IMDS_TOKEN_HEADER[] = "x-aws-ec2-metadata-token";
 const char EC2_REGION_RESOURCE[] = "/latest/meta-data/placement/availability-zone";
 
-class fiberEC2MetadataClient : public Aws::Internal::EC2MetadataClient
+class fiberEC2MetadataClient : public Aws::Internal::EC2MetadataClient, public std::enable_shared_from_this<fiberEC2MetadataClient>
 {
 public:
   fiberEC2MetadataClient(const char *endpoint = "http://169.254.169.254")
       : Aws::Internal::EC2MetadataClient(endpoint),
-        m_endpoint(endpoint),
-        m_tokenRequired(true)
+        m_endpoint(endpoint)
   {
+    auto dns = dns_lookup::get_addrinfo(endpoint, 80);
+    if (dns.first != 0 || dns.second.size() == 0)
+      anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
+    m_sockaddr = dns.second[0];
+    m_sockaddr_len = m_sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
+    update_imds_token();
   }
 
   fiberEC2MetadataClient(const Aws::Client::ClientConfiguration &clientConfiguration, const char *endpoint = "http://169.254.169.254")
       : Aws::Internal::EC2MetadataClient(clientConfiguration, endpoint),
-        m_endpoint(endpoint),
-        m_tokenRequired(true)
+        m_endpoint(endpoint)
   {
+    auto dns = dns_lookup::get_addrinfo(endpoint, 80);
+    if (dns.first != 0 || dns.second.size() == 0)
+      anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
+    m_sockaddr = dns.second[0];
+    m_sockaddr_len = m_sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
+    update_imds_token();
   }
 
   fiberEC2MetadataClient &operator=(const fiberEC2MetadataClient &rhs) = delete;
@@ -226,155 +237,135 @@ public:
   {
   }
 
+  std::shared_ptr<http_client_response> get_resource(const std::string& message) const
+  {
+    while (true) {
+      try {
+        auto conn = tcp_client::connect((struct sockaddr*)&m_sockaddr, m_sockaddr_len);
+        if (conn.first == 0) {
+          *conn.second << message;
+          auto re = std::make_shared<http_client_response>();
+          re->parse(*conn.second, true);
+          return re;
+        } else {
+          anon_log("imds connect failed: " << conn.first);
+        }
+      }
+      catch(...) {
+        anon_log("imds io failed");
+      }
+      fiber::msleep(1000);
+    }
+  }
+
+  std::string trim(const std::string& str) const
+  {
+    if (str.size() == 0)
+      return str;
+    auto first = 0;
+    while (first < str.size() && std::isspace(str[first]))
+      ++first;
+    auto last = str.size() - 1;
+    while (last >= 0 && std::isspace(str[last]))
+      --last;
+    return str.substr(first, last + 1 - first);
+  }
+
+  std::pair<std::string, int> get_imds_token()
+  {
+    std::ostringstream oss;
+    oss << "PUT /latest/api/token HTTP/1.1\r\n";
+    oss << EC2_IMDS_TOKEN_TTL_HEADER << ": " << EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE << "\r\n";
+    oss << "\r\n";
+    auto message = oss.str();
+    while (true) {
+      auto re = get_resource(oss.str());
+      if (re->status_code != 200 || !re->headers.contains_header(EC2_IMDS_TOKEN_TTL_HEADER)) {
+        anon_log("get token returned status code: " << re->status_code);
+      } else {
+        std::string body_str;
+        for (const auto &data : re->body)
+          body_str += std::string(&data[0], data.size());
+        return std::make_pair(trim(body_str), std::atoi(re->headers.get_header(EC2_IMDS_TOKEN_TTL_HEADER).str().c_str()));
+      }
+    }
+  }
+
+  void update_imds_token()
+  {
+    auto tok = get_imds_token();
+    if (tok.second > 600) {
+      std::weak_ptr<fiberEC2MetadataClient> wp = shared_from_this();
+      io_dispatch::schedule_task([wp] {
+        fiber::run_in_fiber([wp] {
+          auto ths = wp.lock();
+          if (ths)
+            ths->update_imds_token();
+        });
+
+        auto ths = wp.lock();
+        if (ths) {
+          ths->update_imds_token();
+        }
+      }, cur_time() - (tok.second - 600));
+    }
+    fiber_lock l(m_tokenMutex);
+    m_token = tok.first;
+    m_tokCond.notify_all();
+  }
+
   using AWSHttpResourceClient::GetResource;
 
   virtual Aws::String GetResource(const char *resourcePath) const override
   {
-    return GetResource(m_endpoint.c_str(), resourcePath, nullptr /*authToken*/);
+    std::string auth;
+    {
+      auto ths = const_cast<fiberEC2MetadataClient*>(this);
+      fiber_lock l(ths->m_tokenMutex);
+      while (ths->m_token.size() == 0)
+        ths->m_tokCond.wait(l);
+      auth = ths->m_token;
+    }
+    std::ostringstream oss;
+    oss << "GET " << resourcePath << " HTTP/1.1\r\n";
+    oss << EC2_IMDS_TOKEN_HEADER << ": " << auth << "\r\n";
+    oss << "\r\n";
+    auto message = oss.str();
+    auto num_tries = 0;
+    while (++num_tries < 5) {
+      auto re = get_resource(message);
+      if (re->status_code == 200) {
+        std::string body_str;
+        for (const auto &data : re->body)
+          body_str += std::string(&data[0], data.size());
+        return body_str;
+      }
+    }
+    anon_log("failed to get " << resourcePath);
+    return "";
   }
 
   virtual Aws::String GetDefaultCredentials() const override
   {
-    auto ths = const_cast<fiberEC2MetadataClient *>(this);
-    fiber_lock locker(ths->m_tokenMutex);
-    if (m_tokenRequired)
-    {
-      locker.unlock();
-      return GetDefaultCredentialsSecurely();
-    }
-
-    AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Getting default credentials for ec2 instance");
-    auto result = GetResourceWithAWSWebServiceResult(m_endpoint.c_str(), EC2_SECURITY_CREDENTIALS_RESOURCE, nullptr);
-    Aws::String credentialsString = result.GetPayload();
-    auto httpResponseCode = result.GetResponseCode();
-
-    // Note, if service is insane, it might return 404 for our initial secure call,
-    // then when we fall back to insecure call, it might return 401 ask for secure call,
-    // Then, SDK might get into a recursive loop call situation between secure and insecure call.
-    if (httpResponseCode == Aws::Http::HttpResponseCode::UNAUTHORIZED)
-    {
-      m_tokenRequired = true;
+    auto reply = trim(GetResource(EC2_SECURITY_CREDENTIALS_RESOURCE));
+    if (reply.empty())
       return {};
-    }
-    locker.unlock();
-
-    Aws::String trimmedCredentialsString = Aws::Utils::StringUtils::Trim(credentialsString.c_str());
-    if (trimmedCredentialsString.empty()) {
+    Aws::Vector<Aws::String> securityCredentials = Aws::Utils::StringUtils::Split(reply, '\n');
+    if (securityCredentials.empty())
       return {};
-    }
-
-    Aws::Vector<Aws::String> securityCredentials = Aws::Utils::StringUtils::Split(trimmedCredentialsString, '\n');
-
-    AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource, " << EC2_SECURITY_CREDENTIALS_RESOURCE
-                                                                                  << " returned credential string " << trimmedCredentialsString);
-
-    if (securityCredentials.size() == 0)
-    {
-      AWS_LOGSTREAM_WARN(m_logtag.c_str(), "Initial call to ec2Metadataservice to get credentials failed");
-      return {};
-    }
-
-    Aws::StringStream ss;
-    ss << EC2_SECURITY_CREDENTIALS_RESOURCE << "/" << securityCredentials[0];
-    AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource " << ss.str());
-    return GetResource(ss.str().c_str());
+    std::ostringstream oss;
+    oss << EC2_SECURITY_CREDENTIALS_RESOURCE << "/" << securityCredentials[0];
+    return GetResource(oss.str().c_str());
   }
 
   virtual Aws::String GetDefaultCredentialsSecurely() const override
   {
-    auto ths = const_cast<fiberEC2MetadataClient *>(this);
-    fiber_lock locker(ths->m_tokenMutex);
-    if (!m_tokenRequired)
-    {
-      locker.unlock();
-      return GetDefaultCredentials();
-    }
-
-    Aws::StringStream ss;
-    ss << m_endpoint << EC2_IMDS_TOKEN_RESOURCE;
-    std::shared_ptr<Aws::Http::HttpRequest> tokenRequest(Aws::Http::CreateHttpRequest(ss.str(), Aws::Http::HttpMethod::HTTP_PUT,
-                                                                                      Aws::Utils::Stream::DefaultResponseStreamFactoryMethod));
-    tokenRequest->SetHeaderValue(EC2_IMDS_TOKEN_TTL_HEADER, EC2_IMDS_TOKEN_TTL_DEFAULT_VALUE);
-    auto userAgentString = Aws::Client::ComputeUserAgentString();
-    tokenRequest->SetUserAgent(userAgentString);
-    AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Calling EC2MetadataService to get token");
-    auto result = GetResourceWithAWSWebServiceResult(tokenRequest);
-    Aws::String tokenString = result.GetPayload();
-    Aws::String trimmedTokenString = Aws::Utils::StringUtils::Trim(tokenString.c_str());
-
-    if (result.GetResponseCode() == Aws::Http::HttpResponseCode::BAD_REQUEST)
-    {
-      return {};
-    }
-    else if (result.GetResponseCode() != Aws::Http::HttpResponseCode::OK || trimmedTokenString.empty())
-    {
-      m_tokenRequired = false;
-      AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Calling EC2MetadataService to get token failed, falling back to less secure way.");
-      locker.unlock();
-      return GetDefaultCredentials();
-    }
-    m_token = trimmedTokenString;
-    locker.unlock();
-    ss.str("");
-    ss << m_endpoint << EC2_SECURITY_CREDENTIALS_RESOURCE;
-    std::shared_ptr<Aws::Http::HttpRequest> profileRequest(Aws::Http::CreateHttpRequest(ss.str(), Aws::Http::HttpMethod::HTTP_GET,
-                                                                                        Aws::Utils::Stream::DefaultResponseStreamFactoryMethod));
-    profileRequest->SetHeaderValue(EC2_IMDS_TOKEN_HEADER, trimmedTokenString);
-    profileRequest->SetUserAgent(userAgentString);
-    Aws::String profileString = GetResourceWithAWSWebServiceResult(profileRequest).GetPayload();
-
-    Aws::String trimmedProfileString = Aws::Utils::StringUtils::Trim(profileString.c_str());
-    Aws::Vector<Aws::String> securityCredentials = Aws::Utils::StringUtils::Split(trimmedProfileString, '\n');
-
-    AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource, " << EC2_SECURITY_CREDENTIALS_RESOURCE
-                                                                                  << " with token returned profile string " << trimmedProfileString);
-    if (securityCredentials.size() == 0)
-    {
-      AWS_LOGSTREAM_WARN(m_logtag.c_str(), "Calling EC2Metadataservice to get profiles failed");
-      return {};
-    }
-
-    ss.str("");
-    ss << m_endpoint << EC2_SECURITY_CREDENTIALS_RESOURCE << "/" << securityCredentials[0];
-    std::shared_ptr<Aws::Http::HttpRequest> credentialsRequest(Aws::Http::CreateHttpRequest(ss.str(), Aws::Http::HttpMethod::HTTP_GET,
-                                                                                            Aws::Utils::Stream::DefaultResponseStreamFactoryMethod));
-    credentialsRequest->SetHeaderValue(EC2_IMDS_TOKEN_HEADER, trimmedTokenString);
-    credentialsRequest->SetUserAgent(userAgentString);
-    AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource " << ss.str() << " with token.");
-    return GetResourceWithAWSWebServiceResult(credentialsRequest).GetPayload();
+    return GetDefaultCredentials();
   }
 
   virtual Aws::String GetCurrentRegion() const override
   {
-    AWS_LOGSTREAM_TRACE(m_logtag.c_str(), "Getting current region for ec2 instance");
-
-    Aws::StringStream ss;
-    ss << m_endpoint << EC2_REGION_RESOURCE;
-    std::shared_ptr<Aws::Http::HttpRequest> regionRequest(Aws::Http::CreateHttpRequest(ss.str(), Aws::Http::HttpMethod::HTTP_GET,
-                                                                                       Aws::Utils::Stream::DefaultResponseStreamFactoryMethod));
-    {
-      auto ths = const_cast<fiberEC2MetadataClient *>(this);
-      fiber_lock locker(ths->m_tokenMutex);
-      if (m_tokenRequired)
-      {
-        regionRequest->SetHeaderValue(EC2_IMDS_TOKEN_HEADER, m_token);
-      }
-    }
-    regionRequest->SetUserAgent(Aws::Client::ComputeUserAgentString());
-
-    Aws::String azString = GetResourceWithAWSWebServiceResult(regionRequest).GetPayload();
-
-    if (azString.empty())
-    {
-      AWS_LOGSTREAM_INFO(m_logtag.c_str(),
-                         "Unable to pull region from instance metadata service ");
-      return {};
-    }
-
-    Aws::String trimmedAZString = Aws::Utils::StringUtils::Trim(azString.c_str());
-    AWS_LOGSTREAM_DEBUG(m_logtag.c_str(), "Calling EC2MetadataService resource "
-                                              << EC2_REGION_RESOURCE << " , returned credential string " << trimmedAZString);
-
+    auto trimmedAZString = trim(GetResource(EC2_REGION_RESOURCE));
     Aws::String region;
     region.reserve(trimmedAZString.length());
 
@@ -392,16 +383,16 @@ public:
 
       region.append(1, character);
     }
-
-    AWS_LOGSTREAM_INFO(m_logtag.c_str(), "Detected current region as " << region);
     return region;
   }
 
 private:
   Aws::String m_endpoint;
   fiber_mutex m_tokenMutex;
-  mutable Aws::String m_token;
-  mutable bool m_tokenRequired;
+  fiber_cond m_tokCond;
+  Aws::String m_token;
+  struct sockaddr_in6 m_sockaddr;
+  socklen_t m_sockaddr_len;
 };
 
 // the implementation of this class in Aws itself (InstanceProfileCredentialsProvider)
@@ -502,12 +493,15 @@ public:
 Aws::SDKOptions aws_options;
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_cred_prov;
 std::string aws_default_region;
+std::shared_ptr<fiberEC2MetadataClient> aws_metadata_client;
 
+#if 0
 struct helper {
   std::mutex mtx;
   std::condition_variable cond;
   bool ready;
 };
+#endif
 
 } // namespace
 
@@ -555,36 +549,14 @@ void aws_client_init()
     const char* region_ = getenv("AWS_DEFAULT_REGION");
     if (!region_) {
       anon_log("no AWS_DEFAULT_REGION environment variable, trying ec2 metadata");
-      Aws::Crt::Imds::ImdsClientConfig imdsConfig;
-      imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
-      Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
-
-      helper help;
-      help.ready = false;
-
-      imdsClient.GetInstanceInfo([](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
-        auto h = (helper*)userData;
-        if (errorCode == 0) {
-          Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
-          aws_default_region = inf.region;
-          anon_log("aws_default_region: " << aws_default_region);
-        }
-        std::unique_lock l(h->mtx);
-        h->ready = true;
-        h->cond.notify_all();
-      }, &help);
-
-      {
-        std::unique_lock l(help.mtx);
-        while (!help.ready)
-          help.cond.wait(l);
-      }
-
-      anon_log("imds reported default region: " << aws_default_region);
-      if (aws_default_region.size() == 0)
+      auto conn = tcp_client::connect("169.254.169.254", 80, false);
+      if (conn.first == 0) {
+        aws_metadata_client = std::make_shared<fiberEC2MetadataClient>();
+        aws_default_region = aws_metadata_client->GetCurrentRegion();
+      } else
         aws_default_region = "us-east-1";
     }
-    aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>();
+    aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(aws_metadata_client);
   }
 
 #if 0
@@ -732,6 +704,19 @@ std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRet
 {
   return std::make_shared<fiberRetryStrategy>(maxRetries, scaleFactor);
 }
+
+bool aws_in_ec2()
+{
+  return aws_metadata_client.get() != 0;
+}
+
+std::string aws_get_metadata(const std::string& path)
+{
+  if (aws_in_ec2())
+    return aws_metadata_client->GetResource(path.c_str());
+  return "";
+}
+
 
 namespace {
 

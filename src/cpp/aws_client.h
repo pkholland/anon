@@ -174,6 +174,13 @@ std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRet
 // a cache of configs set up with aws_init_client_config
 const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region);
 
+// returns whether or not you are running in ec2
+bool aws_in_ec2();
+
+// if you are running in ec2 this returns the result of querying the ec2 metadata url
+// (http://169.254.169.254) for the given object at "path"
+std::string aws_get_metadata(const std::string& path);
+
 #ifdef ANON_AWS_EC2
 const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region);
 #endif
