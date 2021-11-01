@@ -213,7 +213,6 @@ public:
       anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
     m_sockaddr = dns.second[0];
     m_sockaddr_len = m_sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-    update_imds_token();
   }
 
   fiberEC2MetadataClient(const Aws::Client::ClientConfiguration &clientConfiguration, const char *endpoint = "http://169.254.169.254")
@@ -225,7 +224,6 @@ public:
       anon_throw(std::runtime_error, "unsupported imds endpoint: " << endpoint);
     m_sockaddr = dns.second[0];
     m_sockaddr_len = m_sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-    update_imds_token();
   }
 
   fiberEC2MetadataClient &operator=(const fiberEC2MetadataClient &rhs) = delete;
@@ -629,6 +627,13 @@ void aws_client_init()
         setenv("AWS_DEFAULT_REGION", aws_default_region.c_str(), 1);
 
         aws_metadata_client = std::make_shared<fiberEC2MetadataClient>();
+
+        // note that this first call will block this fiber until the
+        // metadata service returns our imds token.  During ec2 startup
+        // this can take some time - many seconds...
+        anon_log("getting first imds token");
+        aws_metadata_client->update_imds_token();
+        anon_log("first imds token retrieved");
       } else
         aws_default_region = "us-east-1";
     }
