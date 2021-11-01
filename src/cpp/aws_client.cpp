@@ -300,7 +300,6 @@ public:
     }
     fiber_lock l(m_tokenMutex);
     m_token = tok.first;
-    m_tokCond.notify_all();
   }
 
   using AWSHttpResourceClient::GetResource;
@@ -311,8 +310,6 @@ public:
     {
       auto ths = const_cast<fiberEC2MetadataClient*>(this);
       fiber_lock l(ths->m_tokenMutex);
-      while (ths->m_token.size() == 0)
-        ths->m_tokCond.wait(l);
       auth = ths->m_token;
     }
     std::ostringstream oss;
@@ -378,7 +375,6 @@ public:
 private:
   Aws::String m_endpoint;
   fiber_mutex m_tokenMutex;
-  fiber_cond m_tokCond;
   Aws::String m_token;
   struct sockaddr_in6 m_sockaddr;
   socklen_t m_sockaddr_len;
