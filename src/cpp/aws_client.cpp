@@ -205,7 +205,7 @@ class fiberEC2MetadataClient : public Aws::Internal::EC2MetadataClient, public s
 {
 public:
   fiberEC2MetadataClient(const char *endpoint = "http://169.254.169.254")
-      : Aws::Internal::EC2MetadataClient(endpoint),
+      : Aws::Internal::EC2MetadataClient(aws_get_client_config(aws_get_default_region()), endpoint),
         m_endpoint(endpoint)
   {
     auto dns = dns_lookup::get_addrinfo(endpoint + strlen("http://"), 80);
@@ -622,13 +622,11 @@ void aws_client_init()
         }
 
         aws_metadata_client = std::make_shared<fiberEC2MetadataClient>();
-        aws_default_region = aws_metadata_client->GetCurrentRegion();
       } else
         aws_default_region = "us-east-1";
     }
     aws_cred_prov = std::make_shared<defaultFiberAWSCredentialsProviderChain>(aws_metadata_client);
   }
-
 
 }
 
