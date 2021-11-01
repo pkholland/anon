@@ -621,6 +621,13 @@ void aws_client_init()
           aws_default_region.append(1, character);
         }
 
+        // if this isn't set then the stupid aws std ctor's
+        // to to repeat the logic above - only with their own
+        // threads and such - before we are able to set the
+        // client configuration options that tell it to use our
+        // threading
+        setenv("AWS_DEFAULT_REGION", aws_default_region.c_str(), 1);
+
         aws_metadata_client = std::make_shared<fiberEC2MetadataClient>();
       } else
         aws_default_region = "us-east-1";
