@@ -206,7 +206,8 @@ class fiberEC2MetadataClient : public Aws::Internal::EC2MetadataClient, public s
 public:
   fiberEC2MetadataClient(const std::string& imds_token, const char *endpoint = "http://169.254.169.254")
       : Aws::Internal::EC2MetadataClient(aws_get_client_config(aws_get_default_region()), endpoint),
-        m_endpoint(endpoint)
+        m_endpoint(endpoint),
+        m_token(imds_token)
   {
     auto dns = dns_lookup::get_addrinfo(endpoint + strlen("http://"), 80);
     if (dns.first != 0 || dns.second.size() == 0)
@@ -558,7 +559,7 @@ void aws_client_init()
               std::string body_str;
               for (const auto &data : re->body)
                 body_str += std::string(&data[0], data.size());
-              imds_tok = fiberEC2MetadataClient::trim(imds_tok);
+              imds_tok = fiberEC2MetadataClient::trim(body_str);
               imds_valid_seconds = std::atoi(re->headers.get_header(EC2_IMDS_TOKEN_TTL_HEADER).str().c_str());
               if (imds_valid_seconds < 1200)
                 anon_throw(std::runtime_error, "unusably small imds token expiration time: " << imds_valid_seconds);
