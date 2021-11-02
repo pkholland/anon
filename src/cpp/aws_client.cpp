@@ -258,7 +258,7 @@ public:
     return str.substr(first, last + 1 - first);
   }
 
-  std::pair<std::string, int> get_imds_token()
+  std::pair<std::string, int> get_imds_token() const
   {
     std::ostringstream oss;
     oss << "PUT " << EC2_IMDS_TOKEN_RESOURCE << " HTTP/1.1\r\n";
@@ -289,11 +289,6 @@ public:
           if (ths)
             ths->update_imds_token();
         });
-
-        auto ths = wp.lock();
-        if (ths) {
-          ths->update_imds_token();
-        }
       }, cur_time() - (tok.second - 600));
     }
     fiber_lock l(m_tokenMutex);
@@ -310,19 +305,28 @@ public:
       fiber_lock l(ths->m_tokenMutex);
       auth = ths->m_token;
     }
-    std::ostringstream oss;
-    oss << "GET " << resourcePath << " HTTP/1.1\r\n";
-    oss << EC2_IMDS_TOKEN_HEADER << ": " << auth << "\r\n";
-    oss << "\r\n";
-    auto message = oss.str();
     auto num_tries = 0;
     while (++num_tries < 5) {
+
+      std::ostringstream oss;
+      oss << "GET " << resourcePath << " HTTP/1.1\r\n";
+      oss << EC2_IMDS_TOKEN_HEADER << ": " << auth << "\r\n";
+      oss << "\r\n";
+      auto message = oss.str();
+
       auto re = get_resource(message);
       if (re->status_code == 200) {
         std::string body_str;
         for (const auto &data : re->body)
           body_str += std::string(&data[0], data.size());
         return body_str;
+      }
+      else if (re->status_code == 401) {
+        anon_log("got a 401 back when loading resource " << resourcePath);
+        auto new_tok_re = get_imds_token();
+        auto ths = const_cast<fiberEC2MetadataClient*>(this);
+        fiber_lock l(ths->m_tokenMutex);
+        auth = ths->m_token = re->status_code;
       }
     }
     anon_log("failed to get " << resourcePath);
