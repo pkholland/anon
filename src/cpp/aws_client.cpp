@@ -280,6 +280,7 @@ public:
 
   void update_imds_token()
   {
+    anon_log("update_imds_token");
     auto tok = get_imds_token();
     if (tok.second > 600) {
       std::weak_ptr<fiberEC2MetadataClient> wp = shared_from_this();
@@ -289,7 +290,7 @@ public:
           if (ths)
             ths->update_imds_token();
         });
-      }, cur_time() - (tok.second - 600));
+      }, cur_time() + (tok.second - 600));
     }
     fiber_lock l(m_tokenMutex);
     m_token = tok.first;
