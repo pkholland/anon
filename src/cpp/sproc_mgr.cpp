@@ -54,12 +54,14 @@ std::thread death_thread;
 
 struct proc_info
 {
-  proc_info(const char *exe_name, bool do_tls, const std::vector<std::string> &args, const std::vector<std::string>& envs)
+  proc_info(const char *exe_name, bool do_tls, const std::vector<std::string> &args, const std::vector<std::string>& envs,
+          const std::function<void()>& unexpected_restart)
       : exe_name_(exe_name),
         do_tls_(do_tls),
         args_(args),
         envs_(envs),
-        exe_fd_(::open(exe_name, O_RDONLY))
+        exe_fd_(::open(exe_name, O_RDONLY)),
+        unexpected_restart_(unexpected_restart)
   {
     if (exe_fd_ == -1)
       do_error("open(\"" << exe_name << "\", O_RDONLY)");
@@ -80,6 +82,7 @@ struct proc_info
   std::string exe_name_;
   std::vector<std::string> args_;
   std::vector<std::string> envs_;
+  std::function<void()> unexpected_restart_;
   int exe_fd_;
   int cmd_pipe[2];
   bool do_tls_;
@@ -399,12 +402,15 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
               {
                 current_srv_pid = 0;
                 anon_log_error("child process " << chld << " unexpectedly exited, restarting");
+                auto notify = pi->unexpected_restart_;
                 auto new_chld = start_child(*pi);
                 if (write_cmd(pi->cmd_pipe[0], k_start))
                 {
                 }
                 proc_map.insert(std::make_pair(new_chld, std::move(pi)));
                 current_srv_pid = new_chld;
+                if (notify)
+                  notify();
               }
               catch (const std::exception &err)
               {
@@ -472,9 +478,10 @@ void sproc_mgr_term()
   anon_log("sproc_mgr_term finished");
 }
 
-void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args, const std::vector<std::string>& envs)
+void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args,
+    const std::vector<std::string>& envs, const std::function<void()>& unexpected_restart)
 {
-  std::unique_ptr<proc_info> pi(new proc_info(exe_name, do_tls, args, envs));
+  std::unique_ptr<proc_info> pi(new proc_info(exe_name, do_tls, args, envs, unexpected_restart));
   auto chld = start_child(*pi);
 
   std::unique_lock<std::mutex> lock(proc_map_mutex);

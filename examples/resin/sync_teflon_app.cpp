@@ -30,6 +30,8 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/QueryRequest.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
+#include <aws/sns/SNSClient.h>
+#include <aws/sns/model/PublishRequest.h>
 
 using namespace nlohmann;
 using namespace Aws::DynamoDB::Model;
@@ -303,7 +305,32 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   try
   {
     auto new_app = std::make_shared<tef_app>(uid, files_needed, ids);
-    start_server(efs.c_str(), do_tls, args, envs);
+    auto region  = ec2i.default_region;
+    auto sns_topic_it = ec2i.user_data_js.find("server_restart_sns_topic_arn");
+    auto sns_topic_region_it = ec2i.user_data_js.find("server_restart_sns_region");
+    std::string sns_topic_arn;
+    std::shared_ptr<Aws::SNS::SNSClient> sns_client;
+    if (sns_topic_it != ec2i.user_data_js.end() && sns_topic_region_it != ec2i.user_data_js.end()) {
+      Aws::Client::ClientConfiguration config;
+      config.region = *sns_topic_region_it;
+      sns_client.reset(new Aws::SNS::SNSClient(config));
+      sns_topic_arn = *sns_topic_it;
+    }
+    start_server(efs.c_str(), do_tls, args, envs, [sns_client, sns_topic_arn, region] {
+      if (sns_client) {
+        try {
+          std::ostringstream oss;
+          oss << "server restart: " << region;
+          Aws::SNS::Model::PublishRequest req;
+          req.WithTopicArn(sns_topic_arn)
+            .WithMessage(oss.str());
+          sns_client->Publish(req);
+        }
+        catch(...) {
+          anon_log("error thrown trying to notify sns");
+        }
+      }
+    });
     if (curr_app)
       remove_directory(ec2i, curr_app->id);
     curr_app = new_app;
