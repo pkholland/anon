@@ -409,8 +409,11 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
                 }
                 proc_map.insert(std::make_pair(new_chld, std::move(pi)));
                 current_srv_pid = new_chld;
-                if (notify)
+                anon_log("testing notify proc");
+                if (notify) {
+                  anon_log("calling notify proc");
                   notify();
+                }
               }
               catch (const std::exception &err)
               {
