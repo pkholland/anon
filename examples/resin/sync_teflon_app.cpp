@@ -310,8 +310,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
     auto sns_topic_region_it = ec2i.user_data_js.find("server_restart_sns_region");
     std::string sns_topic_arn;
     std::shared_ptr<Aws::SNS::SNSClient> sns_client;
-    anon_log("ans_topic set: " << (sns_topic_it != ec2i.user_data_js.end() ? "true" : "false"));
-    anon_log("ans_region set: " << (sns_topic_region_it != ec2i.user_data_js.end() ? "true" : "false"));
     if (sns_topic_it != ec2i.user_data_js.end() && sns_topic_region_it != ec2i.user_data_js.end()) {
       Aws::Client::ClientConfiguration config;
       config.region = *sns_topic_region_it;
@@ -319,7 +317,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       sns_topic_arn = *sns_topic_it;
     }
     start_server(efs.c_str(), do_tls, args, envs, [sns_client, sns_topic_arn, region] {
-      anon_log("sns restart notification called, sns_client set: " << (sns_client ? "true" : "false"));
       if (sns_client) {
         try {
           std::ostringstream oss;
@@ -328,7 +325,6 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
           req.WithTopicArn(sns_topic_arn)
             .WithMessage(oss.str());
           sns_client->PublishAsync(req, [](const Aws::SNS::SNSClient*, const Aws::SNS::Model::PublishRequest&, const Aws::SNS::Model::PublishOutcome&, const std::shared_ptr<const Aws::Client::AsyncCallerContext>&){
-            anon_log("PublishAsync completed");
           });
         }
         catch(...) {
