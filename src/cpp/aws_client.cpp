@@ -280,7 +280,6 @@ public:
 
   void update_imds_token()
   {
-    anon_log("update_imds_token");
     auto tok = get_imds_token();
     if (tok.second > 600) {
       std::weak_ptr<fiberEC2MetadataClient> wp = shared_from_this();
@@ -324,10 +323,10 @@ public:
       }
       else if (re->status_code == 401) {
         anon_log("got a 401 back when loading resource " << resourcePath);
-        auto new_tok_re = get_imds_token();
+        auto new_tok = get_imds_token();
         auto ths = const_cast<fiberEC2MetadataClient*>(this);
         fiber_lock l(ths->m_tokenMutex);
-        auth = ths->m_token = re->status_code;
+        auth = ths->m_token = new_tok.first;
       }
     }
     anon_log("failed to get " << resourcePath);
