@@ -224,7 +224,7 @@ fiber_mutex pipe_reader::mtx;
 namespace
 {
 
-class addrinfo_service
+class addrinfo_service : public std::enable_shared_from_this<addrinfo_service>
 {
 public:
   static void create()
@@ -246,7 +246,10 @@ public:
 #ifdef ANON_LOG_DNS_LOOKUP
     anon_log("addrinfo_service::stop");
 #endif
-    singleton.reset();
+    if (singleton) {
+      singleton->stop_thread();
+      singleton.reset();
+    }
   }
 
   addrinfo_service(int cmd_readFd, int cmd_writeFd)
@@ -273,10 +276,6 @@ public:
 
   ~addrinfo_service()
   {
-    anon_log("addrinfo_service::~addrinfo_service");
-    cmd_rec *cr = 0;
-    if (write(cmd_writeFd, &cr, sizeof(cr))) {}
-    read_thread.join();
     close(cmd_readFd);
     close(cmd_writeFd);
   }
@@ -309,13 +308,20 @@ private:
     else
       anon_log("addrinfo_service::start failed on getaddrinfo, err: " << (err < 0 ? gai_strerror(err) : error_string(err)));
 
+    std::weak_ptr<addrinfo_service> wp = shared_from_this();
+
     read_thread = std::thread(
-        [this] {
+        [wp] {
           anon_log("starting addrinfo_service");
+          auto ths = wp.lock();
+          if (!ths) {
+            anon_log("strange behavior, addrinfo_service weak_ptr lock returned null");
+            return;
+          }
           while (true)
           {
             cmd_rec *cr;
-            auto bytes_read = read(cmd_readFd, &cr, sizeof(cr));
+            auto bytes_read = read(ths->cmd_readFd, &cr, sizeof(cr));
             if (bytes_read != sizeof(cr))
             {
               anon_log("unexpected number of bytes read: " << bytes_read);
@@ -369,6 +375,15 @@ private:
                 stack_size, "getaddr_notifictaion");
           }
         });
+  }
+
+  void stop_thread()
+  {
+    if (read_thread.joinable()) {
+      cmd_rec *cr = 0;
+      if (write(cmd_writeFd, &cr, sizeof(cr))) {}
+      read_thread.join();
+    }
   }
 
   int cmd_readFd;
