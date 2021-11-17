@@ -303,11 +303,15 @@ private:
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     struct addrinfo *result;
-    if (getaddrinfo("127.0.0.1", "8080", &hints, &result) == 0)
+    auto err = getaddrinfo("127.0.0.1", "8080", &hints, &result);
+    if (err == 0)
       freeaddrinfo(result);
+    else
+      anon_log("addrinfo_service::start failed on getaddrinfo, err: " << (err < 0 ? gai_strerror(err) : error_string(err)));
 
     read_thread = std::thread(
         [this] {
+          anon_log("starting addrinfo_service");
           while (true)
           {
             cmd_rec *cr;
