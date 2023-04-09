@@ -24,7 +24,6 @@
 #include "log.h"
 #include <fcntl.h>
 #include <unistd.h>
-#include <openssl/sha.h>
 #include <iostream>
 
 static int rand_file = -1;
@@ -59,12 +58,9 @@ big_id big_rand_id()
 // the sha256sum of the given 'buf' as a big_id
 big_id sha256_id(const char *buf, size_t len)
 {
-  uint8_t hash[big_id::id_size];
-  SHA256_CTX sha256;
-  SHA256_Init(&sha256);
-  SHA256_Update(&sha256, buf, len);
-  SHA256_Final(hash, &sha256);
-  return big_id(hash);
+  sha256_builder builder;
+  builder.update(buf, len);
+  return builder.id();
 }
 
 small_id small_rand_id()
@@ -78,10 +74,7 @@ small_id small_rand_id()
 // the sha1sum of the given 'buf' as a big_id
 small_id sha1_id(const char *buf, size_t len)
 {
-  uint8_t hash[small_id::id_size];
-  SHA_CTX sha1;
-  SHA1_Init(&sha1);
-  SHA1_Update(&sha1, buf, len);
-  SHA1_Final(hash, &sha1);
-  return small_id(hash);
+  sha1_builder builder;
+  builder.update(buf, len);
+  return builder.id();
 }
