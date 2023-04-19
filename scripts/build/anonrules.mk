@@ -182,9 +182,9 @@ help:
 #
 # tools
 #
-anon.cc=gcc
-anon.cxx=gcc
-anon.link=gcc
+anon.cc=c++
+anon.cxx=c++
+anon.link=c++
 anon.protoc=protoc
 
 
