@@ -1,35 +1,36 @@
 {
-  "configurations": [
-    {
-      "name": "default",
-      "includePath": [
-        "${workspaceFolder}",
-        "${workspaceFolder}/src/cpp",
-        "${workspaceFolder}/secrets",
-        "${workspaceFolder}/../json/include",
-        "${workspaceFolder}/../http-parser"
-      ],
-      "intelliSenseMode": "gcc-x64",
-      "compilerPath": "/usr/bin/gcc",
-      "cStandard": "c11",
-      "cppStandard": "c++17",
-      "defines": [
-        "ANON_AWS",
-        "ANON_AWS_EC2",
-        "ANON_AWS_DDB",
-        "ANON_AWS_DDB_STREAMS",
-        "ANON_AWS_ROUTE53",
-        "ANON_AWS_S3",
-        "ANON_AWS_ACM",
-        "ANON_AWS_SQS",
-        "ANON_AWS_ELBV2",
-        "ANON_AWS_ACCEL",
-        "ANON_AWS_AUTOSCALING",
-        "ANON_AWS_COGNITO",
-        "ANON_AWS_SNS",
-        "ANON_AWS_SES"
-      ]
-    }
-  ],
-  "version": 4
+    "configurations": [
+        {
+            "name": "default",
+            "includePath": [
+                "${workspaceFolder}",
+                "${workspaceFolder}/src/cpp",
+                "${workspaceFolder}/secrets",
+                "${workspaceFolder}/../json/include",
+                "${workspaceFolder}/../http-parser"
+            ],
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "defines": [
+                "ANON_AWS",
+                "ANON_AWS_EC2",
+                "ANON_AWS_DDB",
+                "ANON_AWS_DDB_STREAMS",
+                "ANON_AWS_ROUTE53",
+                "ANON_AWS_S3",
+                "ANON_AWS_ACM",
+                "ANON_AWS_SQS",
+                "ANON_AWS_ELBV2",
+                "ANON_AWS_ACCEL",
+                "ANON_AWS_AUTOSCALING",
+                "ANON_AWS_COGNITO",
+                "ANON_AWS_SNS",
+                "ANON_AWS_SES"
+            ],
+            "configurationProvider": "ms-vscode.makefile-tools"
+        }
+    ],
+    "version": 4
 }

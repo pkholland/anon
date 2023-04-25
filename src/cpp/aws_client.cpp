@@ -866,7 +866,7 @@ const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
   fiber_lock l(config_mtx);
   if (s3_map.find(region) == s3_map.end()) {
     l.unlock();
-    auto client = Aws::S3::S3Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
+    auto client = Aws::S3::S3Client(aws_get_cred_provider(), std::make_shared<Aws::S3::S3EndpointProvider>(), aws_get_client_config_nl(region));
     l.lock();
     if (s3_map.find(region) == s3_map.end())
       s3_map.emplace(std::make_pair(region,std::move(client)));
