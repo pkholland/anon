@@ -432,9 +432,9 @@ public:
   fiber_pipe(int socket_fd, pipe_sock_t socket_type);
   virtual ~fiber_pipe();
 
-  virtual void io_avail(const struct epoll_event &event);
+  virtual void io_avail(const struct epoll_event &event) override;
 
-  virtual void limit_io_block_time(int seconds)
+  virtual void limit_io_block_time(int seconds) override
   {
     max_io_block_time_ = seconds;
   }
@@ -442,7 +442,7 @@ public:
   //int read_and_receive_fd(char* buff, int len, int& fd);
   //void write_and_send_fd(const char* buff, int len, int fd);
 
-  int get_fd() const
+  int get_fd() const override
   {
     return fd_;
   }
@@ -464,8 +464,8 @@ public:
     return ret;
   }
 
-  virtual size_t read(void *buff, size_t len) const;
-  virtual void write(const void *buff, size_t len) const;
+  virtual size_t read(void *buff, size_t len) const override;
+  virtual void write(const void *buff, size_t len) const override;
 
   static void wait_for_zero_net_pipes()
   {

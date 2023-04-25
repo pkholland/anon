@@ -273,11 +273,31 @@ public:
     return *this;
   }
 
+  http_response &operator<<(const sockaddr &sa)
+  {
+    ostr_ << sa;
+    return *this;
+  }
+
+  http_response &operator<<(const string_len &s)
+  {
+    ostr_ << s;
+    return *this;
+  }
+
   http_response &operator<<(const std::vector<char> &v)
   {
     ostr_.write(&v[0], v.size());
     return *this;
   }
+
+  #if defined(ANON_LOG_KEEP_RECENT)
+  http_response &operator<<(const recent_logs &r)
+  {
+    ostr_ << r;
+    return *this;
+  }
+  #endif
 
 private:
   std::string status_code_;

@@ -82,5 +82,6 @@ private:
 template <typename T>
 T &operator<<(T &str, const string_len &sl)
 {
-  return str << sl.str();
+  str << sl.str();
+  return str;
 }

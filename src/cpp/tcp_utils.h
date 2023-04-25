@@ -43,19 +43,22 @@ T &operator<<(T &str, const struct sockaddr_storage &addr)
     inet_ntop(AF_INET, &((struct ::sockaddr_in *)&addr)->sin_addr, ipaddr, sizeof(ipaddr));
     port = ntohs(((struct ::sockaddr_in *)&addr)->sin_port);
   }
-  return str << ipaddr << "/" << port;
+  str << ipaddr << "/" << port;
+  return str;
 }
 
 template <typename T>
 T &operator<<(T &str, const struct sockaddr &addr)
 {
-  return str << *(const struct sockaddr_storage *)&addr;
+  str << *(const struct sockaddr_storage *)&addr;
+  return str;
 }
 
 template <typename T>
 T &operator<<(T &str, const struct sockaddr_in6 &addr)
 {
-  return str << *(const struct sockaddr_storage *)&addr;
+  str << *(const struct sockaddr_storage *)&addr;
+  return str;
 }
 
 inline bool operator==(const struct sockaddr_in6 &addr1, const struct sockaddr_in6 &addr2)
