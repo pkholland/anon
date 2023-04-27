@@ -62,62 +62,73 @@ ec2_info::ec2_info(const char *filename)
   private_ipv4 = "private_ipv4";
   public_ipv4 = "public_ipv4";
 
-  helper help;
-  help.ec2_inf = this;
-  help.items = 3;
+  if (filename == nullptr)
+  {
+    helper help;
+    help.ec2_inf = this;
+    help.items = 3;
 
-  imdsClient.GetUserData([](const Aws::Crt::StringView &resource, int errorCode, void *userData){
-    auto h = (helper*)userData;
-    std::unique_lock l(h->mtx);
-    if (errorCode == 0) {
-      auto ths = h->ec2_inf;
-      std::string ud(resource.begin(), resource.size());
-      ths->user_data = ud;
-    }
-    dec(userData);
-  }, &help);
+    imdsClient.GetUserData([](const Aws::Crt::StringView &resource, int errorCode, void *userData){
+      auto h = (helper*)userData;
+      std::unique_lock<std::mutex> l(h->mtx);
+      if (errorCode == 0) {
+        auto ths = h->ec2_inf;
+        std::string ud(resource.begin(), resource.size());
+        ths->user_data = ud;
+      }
+      dec(userData);
+    }, &help);
 
-  imdsClient.GetInstanceInfo([](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
-    auto h = (helper*)userData;
-    std::unique_lock l(h->mtx);
-    if (errorCode == 0) {
-      auto ths = h->ec2_inf;
-      Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
-      ths->default_region = inf.region;
-      ths->instance_id = inf.instanceId;
-      ths->ami_id = inf.imageId;
-      ths->private_ipv4 = inf.privateIp;
-    }
-    dec(userData);
-  }, &help);
+    imdsClient.GetInstanceInfo([](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
+      auto h = (helper*)userData;
+      std::unique_lock<std::mutex> l(h->mtx);
+      if (errorCode == 0) {
+        auto ths = h->ec2_inf;
+        Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
+        ths->default_region = inf.region;
+        ths->instance_id = inf.instanceId;
+        ths->ami_id = inf.imageId;
+        ths->private_ipv4 = inf.privateIp;
+      }
+      dec(userData);
+    }, &help);
 
-  imdsClient.GetResource({"/latest/meta-data/public-ipv4"}, [](const Aws::Crt::StringView &resource, int errorCode, void *userData){
-    auto h = (helper*)userData;
-    std::unique_lock l(h->mtx);
-    if (errorCode == 0) {
-      auto ths = h->ec2_inf;
-      std::string ip(resource.begin(), resource.size());
-      ths->public_ipv4 = ip;
-    }
-    dec(userData);
-  }, &help);
+    imdsClient.GetResource({"/latest/meta-data/public-ipv4"}, [](const Aws::Crt::StringView &resource, int errorCode, void *userData){
+      auto h = (helper*)userData;
+      std::unique_lock<std::mutex> l(h->mtx);
+      if (errorCode == 0) {
+        auto ths = h->ec2_inf;
+        std::string ip(resource.begin(), resource.size());
+        ths->public_ipv4 = ip;
+      }
+      dec(userData);
+    }, &help);
 
-  std::unique_lock l(help.mtx);
-  while (help.items > 0)
-    help.cond.wait(l);
+    std::unique_lock<std::mutex> l(help.mtx);
+    while (help.items > 0)
+      help.cond.wait(l);
+  }
 
   Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
     default_region = region;
 
-  if (filename != 0) {
+  if (filename != nullptr) {
     json js = json::parse(std::ifstream(filename));
     user_data = js.dump();
   }
 
   if (user_data.size() != 0)
-    user_data_js = json::parse(user_data);
+  {
+    try {
+      user_data_js = json::parse(user_data);
+    }
+    catch (...)
+    {
+      anon_log("user_data does not appear to be json\n" << user_data);
+    }
+  }
 
   auto cwd = getcwd(0, 0);
   root_dir = cwd;
