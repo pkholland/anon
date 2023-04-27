@@ -126,7 +126,8 @@ ec2_info::ec2_info(const char *filename)
     }
     catch (...)
     {
-      anon_log("user_data does not appear to be json\n" << user_data);
+      anon_log("user_data does not appear to be json:\n" << user_data);
+      user_data.erase();
     }
   }
 
