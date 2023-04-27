@@ -255,6 +255,12 @@ static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
   case BIO_CTRL_DGRAM_SET_MTU:
     ret = num;
     break;
+  case BIO_CTRL_GET_KTLS_SEND:  // TODO, investiage ktls support
+    ret = 0;
+    break;
+  case BIO_CTRL_GET_KTLS_RECV:
+    ret = 0;
+    break;
   case BIO_CTRL_WPENDING:
     // anon_log("fp_ctl BIO_CTRL_WPENDING");
     break;
