@@ -149,6 +149,8 @@ private:
   bool is_locked_;
 };
 
+extern "C" void start_fiber_helper(int p1, int p2);
+
 class fiber
 {
 public:
@@ -203,7 +205,7 @@ public:
     auto sm = new start_mediator<Fn>(fn);
     int p1 = (int)((uint64_t)sm);
     int p2 = (int)(((uint64_t)sm) >> 32);
-    makecontext(&ucontext_, (void (*)()) & fiber::start_fiber, 2, p1, p2);
+    makecontext(&ucontext_, (void (*)())&start_fiber_helper, 2, p1, p2);
     in_fiber_start();
   }
 
@@ -318,6 +320,29 @@ public:
   static std::atomic_int num_fibers_;
   #endif
 
+  static void start_fiber(void* vsm)
+  {
+    start_mediator_ *sm = (start_mediator_ *)vsm;
+    try
+    {
+      sm->exec();
+    }
+    catch (std::exception &ex)
+    {
+      fiber *f = (fiber *)get_current_fiber();
+      std::string fiber_name = f ? f->fiber_name_ : "...";
+      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught exception, what() = " << ex.what());
+    }
+    catch (...)
+    {
+      fiber *f = (fiber *)get_current_fiber();
+      std::string fiber_name = f ? f->fiber_name_ : "...";
+      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught, unknown exception");
+    }
+    delete sm;
+    stop_fiber();
+  }
+
 private:
   // a 'parent' -like fiber, illegal to call 'start' on one of these
   // this is the kind that live in io_params.iod_fiber_
@@ -350,29 +375,6 @@ private:
     virtual void exec() { fn_(); }
     Fn fn_;
   };
-
-  static void start_fiber(int p1, int p2)
-  {
-    start_mediator_ *sm = (start_mediator_ *)(((uint64_t)p1 & 0x0ffffffff) + (((uint64_t)p2) << 32));
-    try
-    {
-      sm->exec();
-    }
-    catch (std::exception &ex)
-    {
-      fiber *f = (fiber *)get_current_fiber();
-      std::string fiber_name = f ? f->fiber_name_ : "...";
-      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught exception, what() = " << ex.what());
-    }
-    catch (...)
-    {
-      fiber *f = (fiber *)get_current_fiber();
-      std::string fiber_name = f ? f->fiber_name_ : "...";
-      anon_log_error("fiber \"" << fiber_name << "\" threw uncaught, unknown exception");
-    }
-    delete sm;
-    stop_fiber();
-  }
 
   void switch_to_fiber(fiber *target)
   {

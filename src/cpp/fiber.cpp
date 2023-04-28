@@ -30,6 +30,12 @@ recent_logs recent_logs::singleton;
 
 thread_local io_params tls_io_params;
 
+void start_fiber_helper(int p1, int p2)
+{
+  auto vsm = ((size_t)p1 & 0x0ffffffff) + ((size_t)p2 << 32);
+  fiber::start_fiber((void*)vsm);
+}
+
 // suspend the calling fiber on the fiber_cond's wake list
 // then jump back to the parent fiber, telling it to unlock
 // the mutex.  When we return (after some other fiber calls
