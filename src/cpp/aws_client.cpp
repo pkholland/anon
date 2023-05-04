@@ -111,7 +111,7 @@ public:
 protected:
   bool SubmitToThread(std::function<void()> &&f) override
   {
-    auto stack_size = 64 * 1024 - 256;
+    auto stack_size = 128 * 1024 - 256;
     fiber::run_in_fiber(
         [f] {
           f();
@@ -525,12 +525,16 @@ void aws_client_init()
     // logic is really just the code that reads the metadata from 169.254.169.254.  So here we
     // boostrap that logic
 
+    auto conn = std::make_pair<int, std::unique_ptr<fiber_pipe>>(-1, {});
     auto dns = dns_lookup::get_addrinfo("169.254.169.254", 80);
     if (dns.first != 0 || dns.second.size() == 0)
       anon_throw(std::runtime_error, "can't happen");
     auto sockaddr = dns.second[0];
     auto sockaddr_len = sockaddr.sin6_family == AF_INET6 ? sizeof(sockaddr_in6) : sizeof(sockaddr_in);
-    auto conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len, false);
+    if (getenv("ANON_OUTSIDE_EC2") == nullptr)
+    {
+      conn = tcp_client::connect((struct sockaddr*)&sockaddr, sockaddr_len, false);
+    }
     if (conn.first == 0) {
 
       // first get the token needed to get any metadata
@@ -674,6 +678,8 @@ std::string aws_get_region_display_name(const std::string& region)
     return "Singapore";
   if (region == "ap-southeast-2")
     return "Sydney";
+  if (region == "ap-southeast-3")
+    return "Jakarta";
   if (region == "ca-central-1")
     return "Canada Central";
   if (region == "cn-north-1")
@@ -696,6 +702,8 @@ std::string aws_get_region_display_name(const std::string& region)
     return "Bahrain";
   if (region == "sa-east-1")
     return "Sao Paulo";
+  if (region == "me-central-1")
+    return "Middle East (UEA)";
   return region;
 }
 
