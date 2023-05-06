@@ -210,7 +210,7 @@ static long fp_ctrl(BIO *b, int cmd, long num, void *ptr)
     anon_log("fp_ctrl BIO_CTRL_RESET");
     break;
   case BIO_CTRL_EOF:
-    anon_log("fp_ctrl BIO_CTRL_EOF");
+    //anon_log("fp_ctrl BIO_CTRL_EOF");
     break;
   case BIO_CTRL_INFO:
     anon_log("fp_ctrl BIO_CTRL_INFO");
