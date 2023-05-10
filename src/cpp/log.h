@@ -46,6 +46,32 @@
 extern int get_current_fiber_id();
 #endif
 
+inline std::string time_in_HH_MM_SS_MMM(int milliseconds_in_future = 0)
+{
+    using namespace std::chrono;
+
+    // get current time
+    auto now = system_clock::now() + std::chrono::milliseconds(milliseconds_in_future);
+
+    // get number of milliseconds for the current second
+    // (remainder after division into seconds)
+    auto ms = duration_cast<milliseconds>(now.time_since_epoch()) % 1000;
+
+    // convert to std::time_t in order to convert to std::tm (broken time)
+    auto timer = system_clock::to_time_t(now);
+
+    // convert to broken time
+    std::tm bt = *std::localtime(&timer);
+
+    std::ostringstream oss;
+
+    oss << std::put_time(&bt, "%H:%M:%S"); // HH:MM:SS
+    oss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
+    return oss.str();
+}
+
+
 #if defined(ANON_LOG_KEEP_RECENT)
 struct recent_logs
 {
@@ -96,17 +122,7 @@ static void output(const char *file_name, int line_num, Func func, bool err)
   std::ostringstream format;
 
   // hour:minute:second.milli
-  std::time_t t = std::time(nullptr);
-  char mbstr[100];
-  if (std::strftime(mbstr, sizeof(mbstr), "%H:%M:%S.", std::localtime(&t)))
-  {
-    format << mbstr;
-    auto realtime = std::chrono::high_resolution_clock::now();
-    std::ostringstream tm;
-    tm << std::setiosflags(std::ios_base::right) << std::setfill('0') << std::setw(3);
-    tm << (std::chrono::duration_cast<std::chrono::milliseconds>(realtime.time_since_epoch()).count() % 1000);
-    format << tm.str();
-  }
+  format << time_in_HH_MM_SS_MMM();
 
   // (threadID, file_name, line_num)
   std::ostringstream loc;
