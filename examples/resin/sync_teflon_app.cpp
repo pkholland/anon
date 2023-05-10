@@ -24,6 +24,7 @@
 #include "log.h"
 #include "sproc_mgr.h"
 #include "nlohmann/json.hpp"
+#include "aws_client.h"
 #include <sys/stat.h>
 #include <aws/core/Aws.h>
 #include <aws/core/utils/Outcome.h>
@@ -320,7 +321,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       if (sns_client) {
         try {
           std::ostringstream oss;
-          oss << "{\"text\": \"unexpected server restart: " << region << "\"}";
+          oss << "{\"text\": \"unexpected server restart: " << aws_get_region_display_name(region) << "\"}";
           Aws::SNS::Model::PublishRequest req;
           req.WithTopicArn(sns_topic_arn)
             .WithMessage(oss.str());

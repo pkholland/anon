@@ -652,61 +652,6 @@ const std::string &aws_get_default_region()
   return aws_default_region;
 }
 
-std::string aws_get_region_display_name(const std::string& region)
-{
-  if (region == "us-east-1")
-    return "N. Virginia";
-  if (region == "us-east-2")
-    return "Ohio";
-  if (region == "us-west-1")
-    return "N. California";
-  if (region == "us-west-2")
-    return "Oregon";
-  if (region == "af-south-1")
-    return "Cape Town";
-  if (region == "ap-east-1")
-    return "Hong Kong";
-  if (region == "ap-south-1")
-    return "Mumbai";
-  if (region == "ap-northeast-1")
-    return "Tokyo";
-  if (region == "ap-northeast-2")
-    return "Seoul";
-  if (region == "ap-northeast-3")
-    return "Osaka";
-  if (region == "ap-southeast-1")
-    return "Singapore";
-  if (region == "ap-southeast-2")
-    return "Sydney";
-  if (region == "ap-southeast-3")
-    return "Jakarta";
-  if (region == "ca-central-1")
-    return "Canada Central";
-  if (region == "cn-north-1")
-    return "Begijing";
-  if (region == "cn-northwest-1")
-    return "Ningxia";
-  if (region == "eu-central-1")
-    return "Frankfurt";
-  if (region == "eu-west-1")
-    return "Ireland";
-  if (region == "eu-west-2")
-    return "London";
-  if (region == "eu-west-3")
-    return "Paris";
-  if (region == "eu-south-1")
-    return "Milan";
-  if (region == "eu-north-1")
-    return "Stockholm";
-  if (region == "me-south-1")
-    return "Bahrain";
-  if (region == "sa-east-1")
-    return "Sao Paulo";
-  if (region == "me-central-1")
-    return "Middle East (UEA)";
-  return region;
-}
-
 void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const std::string &region)
 {
   client_cfg.region = region.c_str();
