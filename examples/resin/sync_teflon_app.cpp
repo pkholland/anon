@@ -320,7 +320,7 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
       if (sns_client) {
         try {
           std::ostringstream oss;
-          oss << "server restart: " << region;
+          oss << "{\"text\": \"unexpected server restart: " << region << "\"}";
           Aws::SNS::Model::PublishRequest req;
           req.WithTopicArn(sns_topic_arn)
             .WithMessage(oss.str());
