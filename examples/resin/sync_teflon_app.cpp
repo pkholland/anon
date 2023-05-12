@@ -226,6 +226,8 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
 
   files_cmd << "wait < <(jobs -p)\n";
 
+  anon_log("copying file with command:\n" << files_cmd.str());
+
   auto num_tries = 0;
   while (true) {
     try {
