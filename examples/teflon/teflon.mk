@@ -104,6 +104,11 @@ LIBS:=-laws-cpp-sdk-email $(LIBS)
 cflags+=-DANON_AWS_SES
 endif
 
+ifneq ($(filter APP_AUTOSCALING,$(ANON_AWS)),)
+LIBS:=-laws-cpp-sdk-application-autoscaling $(LIBS)
+cflags+=-DANON_AWS_APPLICATION_AUTOSCALING
+endif
+
 ifneq ($(TEFLON_REQUEST_DISPATCHER),)
 LIBS:=-lpcrecpp $(LIBS)
 SOURCES+=\
