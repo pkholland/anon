@@ -21,6 +21,8 @@
 */
 
 #include "aws_sqs.h"
+#include "aws_throttle.h"
+#include "aws_client.h"
 #include <aws/sqs/model/QueueAttributeName.h>
 #include <aws/sqs/model/SendMessageRequest.h>
 
@@ -271,6 +273,19 @@ void aws_sqs_listener::start_listen()
                     });
                   if (!success)
                     ths->remove_from_keep_alive(m, true, visibility_immediate_retry_time);
+                }
+                catch (const aws_throttle_error &exc)
+                {
+                  anon_log("caught throttling exception while processing sqs message, reposting to try again in 5 seconds");
+                  Model::SendMessageRequest req;
+                  req.WithQueueUrl(ths->_queue_url)
+                    .WithMessageBody(m.GetBody())
+                    .WithDelaySeconds(5);
+                  aws_throttle(aws_get_default_region(), [&]{
+                    auto outcome = ths->_client.SendMessage(req);
+                    aws_check(outcome, "sqs.SendMessage");
+                  });
+                  ths->delete_message(m);
                 }
                 catch (const std::exception &exc)
                 {
