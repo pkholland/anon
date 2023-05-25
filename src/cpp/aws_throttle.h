@@ -113,6 +113,14 @@ inline bool generic_retry(Aws::SNS::SNSErrors e)
 }
 #endif
 
+#ifdef ANON_AWS_DDB
+inline bool generic_retry(Aws::DynamoDB::DynamoDBErrors e)
+{
+  return generic_retry((Aws::Client::CoreErrors)e)
+    || e == Aws::DynamoDB::DynamoDBErrors::PROVISIONED_THROUGHPUT_EXCEEDED;
+}
+#endif
+
 /*
   the "ignorable duplicate" problem...
 
