@@ -124,20 +124,10 @@ std::function<bool(const Aws::SQS::Model::Message &m)> aws_sqs_listener::js_wrap
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
         return false;
       }
-      catch (...)
-      {
-        anon_log_error("caught unknown exception processing message, message body: '" << body << "'");
-        return false;
-      }
     }
     catch (const std::exception &exc)
     {
       anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
-      return true;
-    }
-    catch (...)
-    {
-      anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
       return true;
     }
   };
@@ -165,21 +155,10 @@ std::function<bool(const Aws::SQS::Model::Message &m, const std::function<void(b
         anon_log_error("caught exception processing message: " << exc.what() << ", message body: '" << body << "'");
         return false;
       }
-      catch (...)
-      {
-        anon_log_error("caught unknown exception processing message, message body: '" << body << "'");
-        return false;
-      }
     }
     catch (const std::exception &exc)
     {
       anon_log_error("caught exception parsing message: " << exc.what() << ", message body: '" << body << "'");
-      del(true, 0);
-      return true;
-    }
-    catch (...)
-    {
-      anon_log_error("caught unknown exception parsing message, message body: '" << body << "'");
       del(true, 0);
       return true;
     }
@@ -276,7 +255,6 @@ void aws_sqs_listener::start_listen()
                 }
                 catch (const aws_throttle_error &exc)
                 {
-                  anon_log("caught throttling exception while processing sqs message, reposting to try again in 5 seconds");
                   Model::SendMessageRequest req;
                   req.WithQueueUrl(ths->_queue_url)
                     .WithMessageBody(m.GetBody())

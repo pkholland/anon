@@ -50,12 +50,18 @@
 #include <aws/sns/SNSErrors.h>
 #endif
 
-class aws_throttle_error : public std::runtime_error
+class aws_throttle_error
 {
+  std::string msg;
 public:
   aws_throttle_error(const std::string &msg)
-      : std::runtime_error(msg)
+    : msg(msg)
   {
+  }
+
+  const std::string& what()
+  {
+    return msg;
   }
 };
 
