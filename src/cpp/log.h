@@ -80,6 +80,11 @@ struct recent_logs
         current(0)
   {
   }
+  void clear()
+  {
+    std::lock_guard<std::mutex> l(mutex);
+    current = 0;
+  }
   enum
   {
     num_kept = 1024
@@ -92,7 +97,7 @@ struct recent_logs
 
 inline void add_to_recent_logs(const std::string &line)
 {
-  std::unique_lock<std::mutex> l(recent_logs::singleton.mutex);
+  std::lock_guard<std::mutex> l(recent_logs::singleton.mutex);
   auto indx = recent_logs::singleton.current % recent_logs::num_kept;
   recent_logs::singleton.lines[indx] = line;
   ++recent_logs::singleton.current;

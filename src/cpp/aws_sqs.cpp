@@ -173,7 +173,7 @@ void aws_sqs_listener::start_listen()
   att.push_back(Model::QueueAttributeName::All);
   req.WithAttributeNames(std::move(att));
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
   anon_log("aws_sqs, calling ReceiveMessageAsync");
 #endif
   _client.ReceiveMessageAsync(req, [wp](const SQSClient *, const Model::ReceiveMessageRequest &, const Model::ReceiveMessageOutcome &out, const std::shared_ptr<const Aws::Client::AsyncCallerContext> &) {
@@ -204,7 +204,7 @@ void aws_sqs_listener::start_listen()
       auto &messages = out.GetResult().GetMessages();
       auto num_messages = messages.size();
 
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
       anon_log("aws_sqs, ReceiveMessageAsync completed sucessfully with " << num_messages << " messages");
 #endif
 
@@ -255,6 +255,9 @@ void aws_sqs_listener::start_listen()
                 }
                 catch (const aws_throttle_error &exc)
                 {
+                  #if EXTENSIVE_AWS_LOGS > 0
+                  anon_log("sqs message dispatch caught throttling error");
+                  #endif
                   Model::SendMessageRequest req;
                   req.WithQueueUrl(ths->_queue_url)
                     .WithMessageBody(m.GetBody())
@@ -275,7 +278,7 @@ void aws_sqs_listener::start_listen()
                 }
                 fiber_lock l(ths->_mtx);
                 --ths->_num_fibers;
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
                 anon_log("aws_sqs, message dispatch complete, num outstanding messages: " << ths->_num_fibers);
 #endif
                 ths->_num_fibers_cond.notify_all();
@@ -296,7 +299,7 @@ void aws_sqs_listener::start_listen()
         fiber_lock l(ths->_mtx);
         while (ths->_num_fibers >= max_in_flight_fibers)
         {
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
           anon_log("aws_sqs, stalling call to restart_listen because _num_fibers == " << ths->_num_fibers << ", (max_in_flight_fibers == " << max_in_flight_fibers << ")");
 #endif
           ths->_num_fibers_cond.wait(l);
@@ -342,7 +345,7 @@ void aws_sqs_listener::set_visibility_timeout()
         fiber::rename_fiber("aws_sqs_listener::set_visibility_timeout, ChangeMessageVisibilityBatchAsync");
         if (out.IsSuccess())
         {
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
           anon_log("aws_sqs, batch visibilty reset for " << nMessages << " message" << (nMessages > 1 ? "s" : ""));
 #endif
         }
@@ -409,7 +412,7 @@ void aws_sqs_listener::delete_message(const Model::Message &m)
     fiber::rename_fiber("aws_sqs_listener::delete_message, DeleteMessageAsync");
     if (out.IsSuccess())
     {
-#if EXTENSIVE_AWS_LOGS > 0
+#if EXTENSIVE_AWS_LOGS > 1
       anon_log("aws_sqs, deleted SQS message " << messageId);
 #endif
     }

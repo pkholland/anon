@@ -156,18 +156,29 @@ public:
   {
   }
 
-#if EXTENSIVE_AWS_LOGS > 0
   bool ShouldRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const override
   {
     auto ret = Aws::Client::DefaultRetryStrategy::ShouldRetry(error, attemptedRetries);
-    if (ret)
-      anon_log("retryStrategy::ShouldRetry(\"" << error.GetExceptionName() << "\"," << attemptedRetries << ") returning true");
+    if (ret) {
+      // general strategy on (ddb) "ProvisionedThroughputExceededException" errors is that the normal
+      // backoff-and-retry strategy is insufficient because we want whoever triggered the original
+      // operation that caused this call to back _way_ off while we wait for the ddb table's
+      // application-autoscaling to detect the condition and scale up our capacity.
+      auto& name = error.GetExceptionName();
+      if (name == "ProvisionedThroughputExceededException")
+        ret = false;
+      #if EXTENSIVE_AWS_LOGS > 0
+      anon_log("retryStrategy::ShouldRetry(\"" << name << "\"," << attemptedRetries << ") returning " << (ret ? "true" : "false"));
+      #endif
+    }
+    #if EXTENSIVE_AWS_LOGS > 0
     else
       anon_log("retryStrategy::ShouldRetry(\"" << error.GetExceptionName() << "\"," << attemptedRetries << ") returning false, "
                                                << "response code: " << (int)error.GetResponseCode() << ", message: " << error.GetMessage());
+    #endif
+
     return ret;
   }
-#endif
 
   long CalculateDelayBeforeNextRetry(const Aws::Client::AWSError<Aws::Client::CoreErrors> &error, long attemptedRetries) const override
   {
