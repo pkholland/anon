@@ -181,11 +181,7 @@ public:
         stack_size_(stack_size)
 #endif
   {
-    #if defined(ANON_LOG_FIBER_CREATION)
-    auto nf = ++num_fibers_;
-    if (nf > ANON_LOG_FIBER_CREATION)
-      anon_log("creating fiber: 0x" << this << ", " << fiber_name << ", num_fibers: " << nf);
-    #endif
+    ++num_fibers_;
 
     if (!auto_free_)
     {
@@ -222,11 +218,7 @@ public:
     }
 #endif
     ::operator delete(stack_);
-    #if defined(ANON_LOG_FIBER_CREATION)
-    auto nf = --num_fibers_;
-    if (nf >= ANON_LOG_FIBER_CREATION)
-      anon_log("deleting fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << nf);
-    #endif
+    --num_fibers_;
   }
 
   // note! calling join can switch threads -- that is, you can
@@ -289,6 +281,11 @@ public:
       zero_fiber_cond_.wait(lock);
   }
 
+  static int get_approximate_num_fibers()
+  {
+    return num_fibers_;
+  }
+
   static int get_current_fiber_id();
   int get_fiber_id()
   {
@@ -316,9 +313,7 @@ public:
     }, when);
   }
 
-  #if defined(ANON_LOG_FIBER_CREATION)
   static std::atomic_int num_fibers_;
-  #endif
 
   static void start_fiber(void* vsm)
   {
@@ -352,11 +347,7 @@ private:
         stack_(0),
         fiber_name_("ioparams parent")
   {
-    #if defined(ANON_LOG_FIBER_CREATION)
-    auto nf = ++num_fibers_;
-    if (nf > ANON_LOG_FIBER_CREATION)
-      anon_log("creating fiber: 0x" << this << ", " << fiber_name_ << ", num_fibers: " << nf);
-    #endif
+    ++num_fibers_;
     getcontext(&ucontext_);
   }
 

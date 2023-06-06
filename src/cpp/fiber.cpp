@@ -134,9 +134,7 @@ std::condition_variable fiber::zero_fiber_cond_;
 std::atomic<int> fiber::next_fiber_id_;
 fiber_mutex fiber::on_one_mutex_;
 fiber_pipe *fiber::on_one_pipe_;
-#if defined(ANON_LOG_FIBER_CREATION)
 std::atomic_int fiber::num_fibers_;
-#endif
 
 void fiber::initialize()
 {

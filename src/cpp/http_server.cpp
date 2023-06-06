@@ -236,6 +236,9 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
 #if defined(ANON_FORCE_NO_KEEP_ALIVE)
             keep_alive = false;
 #endif
+#if defined(ANON_TOO_MANY_FIBERS)
+            keep_alive &= fiber::get_approximate_num_fibers() < ANON_TOO_MANY_FIBERS;
+#endif
             if (keep_alive)
             {
               http_parser_init(&parser, HTTP_REQUEST);
