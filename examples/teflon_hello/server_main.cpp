@@ -48,6 +48,10 @@ void server_respond(http_server::pipe_t &pipe, const http_request &request, bool
   pipe.respond(response);
 }
 
+void tcp_server_respond(std::unique_ptr<fiber_pipe>&&, const sockaddr* src_addr, socklen_t src_addr_len)
+{
+}
+
 void server_sync()
 {
 }

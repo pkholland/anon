@@ -80,12 +80,17 @@ static void validate_command_file(const char* cmd_path)
 void run_server(const ec2_info &ec2i)
 {
   auto &ud = ec2i.user_data_js;
-  if (ud.find("server_port") == ud.end() || ud.find("control_port") == ud.end()) {
+  if (
+    ud.find("server_port") == ud.end()|| ud.find("control_port") == ud.end()) {
     anon_log_error("user data missing required \"server_port\" and/or \"control_port\"");
     return;
   }
   int port = ud["server_port"];
   int cnt_port = ud["control_port"];
+  auto private_port = 0;
+  auto pport_it = ud.find("private_port");
+  if (pport_it != ud.end())
+    private_port = *pport_it;
 
   std::vector<int> udp_ports;
   bool udp_is_ipv6 = false;
@@ -125,7 +130,7 @@ void run_server(const ec2_info &ec2i)
   sigaddset(&sigs, SIGPIPE);
   pthread_sigmask(SIG_BLOCK, &sigs, NULL);
 
-  sproc_mgr_init(port, udp_ports, udp_is_ipv6);
+  sproc_mgr_init(port, private_port, udp_ports, udp_is_ipv6);
   anon_log("resin bound to network port " << port);
 
   teflon_state st = teflon_server_failed;

@@ -154,6 +154,10 @@ void server_respond(http_server::pipe_t &pipe, const http_request &request, bool
   pipe.respond(response);
 }
 
+void tcp_server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls)
+{
+}
+
 void server_sync()
 {
 }

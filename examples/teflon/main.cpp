@@ -46,6 +46,7 @@
 
 void server_init();
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls);
+void tcp_server_respond(std::unique_ptr<fiber_pipe>&&, const sockaddr* src_addr, socklen_t src_addr_len);
 void server_sync();
 void server_term();
 void server_close_outgoing();
@@ -94,6 +95,7 @@ extern "C" int main(int argc, char **argv)
   bool auto_shutdown = false;
   int http_port = -1;
   int https_port = -1;
+  int private_port = -1;
   int cmd_pipe = -1;
   const char *cert_verify_dir = 0;
   const char *cert = 0;
@@ -127,6 +129,10 @@ extern "C" int main(int argc, char **argv)
     else if (!strcmp("-https_port", argv[i]))
     {
       https_port = atoi(argv[++i]);
+    }
+    else if (!strcmp("-private_fd", argv[i]))
+    {
+      private_port = atoi(argv[++i]);
     }
     else if (!strcmp("-udp_ports", argv[i]))
     {
@@ -224,6 +230,7 @@ extern "C" int main(int argc, char **argv)
     // and/or my_https
     std::unique_ptr<http_server> my_http;
     std::unique_ptr<http_server> my_https;
+    std::unique_ptr<tcp_server> my_private_tcp;
     auto create_srvs_proc = [&] {
 
       #ifdef ANON_AWS
@@ -280,6 +287,10 @@ extern "C" int main(int argc, char **argv)
                                                                  server_respond(pipe, request, false);
                                                                },
                                                                tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
+
+      if (private_port > 0)
+        my_private_tcp = std::unique_ptr<tcp_server>(new tcp_server(private_port, tcp_server_respond,
+                                                              tcp_server::k_default_backlog, true, SERVER_STACK_SIZE));
     };
 
     // if we have been run by a tool capable of giving

@@ -47,6 +47,7 @@ namespace
 {
 
 int listen_sock = -1;
+int private_listen_sock = -1;
 int current_srv_pid = 0;
 int death_pipe[2];
 std::vector<int> udps;
@@ -220,6 +221,12 @@ int start_child(proc_info &pi)
     char lsock_buf[10];
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
+    if (private_listen_sock != -1)
+    {
+      args2.push_back(const_cast<char *>("-private_fd"));
+      sprintf(&lsock_buf[0], "%d", private_listen_sock);
+      args2.push_back(&lsock_buf[0]);
+    }
 
     if (udps.size() > 0)
     {
@@ -300,7 +307,7 @@ void handle_sigchld(int sig)
 
 } // namespace
 
-void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6)
+void sproc_mgr_init(int port, int private_port, const std::vector<int> udp_ports, bool udp_is_ipv6)
 {
   // no SOCK_CLOEXEC since we inherit this socket down to the child
   listen_sock = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
@@ -325,6 +332,33 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
   {
     close(listen_sock);
     do_error("listen(" << listen_sock << ", SOMAXCONN)");
+  }
+
+  if (private_port != 0)
+  {
+    private_listen_sock = socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP);
+    if (private_listen_sock == -1)
+      do_error("socket(AF_INET6, SOCK_STREAM | SOCK_NONBLOCK, IPPROTO_TCP)");
+
+    anon_log("using fd " << private_listen_sock << " for private listening socket");
+
+    // bind to any address that will route to this machine
+    struct sockaddr_in6 addr = {0};
+
+    addr.sin6_family = AF_INET6;
+    addr.sin6_port = htons(private_port);
+    addr.sin6_addr = in6addr_any;
+    if (bind(private_listen_sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+    {
+      close(private_listen_sock);
+      do_error("bind(" << private_listen_sock << ", <port: " << private_port << ", in6addr_any>, sizeof(addr))");
+    }
+
+    if (listen(private_listen_sock, SOMAXCONN) != 0)
+    {
+      close(private_listen_sock);
+      do_error("listen(" << private_listen_sock << ", SOMAXCONN)");
+    }
   }
 
   for (auto udp : udp_ports)
@@ -362,6 +396,11 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0]) != 0)
   {
     close(listen_sock);
+    listen_sock = -1;
+    if (private_listen_sock != -1) {
+      close(private_listen_sock);
+      private_listen_sock = -1;
+    }
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0])");
   }
 
@@ -433,6 +472,12 @@ void sproc_mgr_init(int port, const std::vector<int> udp_ports, bool udp_is_ipv6
   if (sigaction(SIGCHLD, &sa, 0) == -1)
   {
     close(listen_sock);
+    listen_sock = -1;
+    if (private_listen_sock != -1)
+    {
+      close(private_listen_sock);
+      private_listen_sock = -1;
+    }
     do_error("sigaction(SIGCHLD, &sa, 0)");
   }
 }
@@ -442,6 +487,11 @@ void sproc_mgr_term()
   stop_server();
   close(listen_sock);
   listen_sock = -1;
+  if (private_listen_sock != -1)
+  {
+    close(private_listen_sock);
+    private_listen_sock = -1;
+  }
 
   {
     // wait a reasonable amount of time for all child processes to exit

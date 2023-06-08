@@ -26,7 +26,7 @@
 #include <string>
 #include <functional>
 
-void sproc_mgr_init(int port, const std::vector<int> udp_ports = std::vector<int>(), bool udp_is_ipv6 = false);
+void sproc_mgr_init(int port, int pivate_port = 0, const std::vector<int> udp_ports = std::vector<int>(), bool udp_is_ipv6 = false);
 void sproc_mgr_term();
 void start_server(const char *exe_name, bool do_tls, const std::vector<std::string> &args,
                 const std::vector<std::string>& envs = std::vector<std::string>(),
