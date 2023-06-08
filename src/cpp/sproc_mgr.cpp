@@ -219,13 +219,14 @@ int start_child(proc_info &pi)
     else
       args2.push_back(const_cast<char *>("-http_fd"));
     char lsock_buf[10];
+    char psock_buf[10];
     sprintf(&lsock_buf[0], "%d", listen_sock);
     args2.push_back(&lsock_buf[0]);
     if (private_listen_sock != -1)
     {
       args2.push_back(const_cast<char *>("-private_fd"));
-      sprintf(&lsock_buf[0], "%d", private_listen_sock);
-      args2.push_back(&lsock_buf[0]);
+      sprintf(&psock_buf[0], "%d", private_listen_sock);
+      args2.push_back(&psock_buf[0]);
     }
 
     if (udps.size() > 0)
