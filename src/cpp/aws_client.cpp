@@ -214,7 +214,7 @@ class fiberEC2MetadataClient : public Aws::Internal::EC2MetadataClient, public s
 {
 public:
   fiberEC2MetadataClient(const std::string& imds_token, const char *endpoint = "http://169.254.169.254")
-      : Aws::Internal::EC2MetadataClient(aws_get_client_config(aws_get_default_region()), endpoint),
+      : Aws::Internal::EC2MetadataClient(*aws_get_client_config(aws_get_default_region()), endpoint),
         m_endpoint(endpoint),
         m_token(imds_token)
   {
@@ -653,7 +653,7 @@ void aws_client_term()
   Aws::ShutdownAPI(aws_options);
 }
 
-const std::shared_ptr<Aws::Auth::AWSCredentialsProvider> &aws_get_cred_provider()
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_get_cred_provider()
 {
   return aws_cred_prov;
 }
@@ -691,261 +691,264 @@ std::string aws_get_metadata(const std::string& path)
 namespace {
 
 fiber_mutex config_mtx;
-std::map<std::string, Aws::Client::ClientConfiguration> config_map;
+std::map<std::string, std::shared_ptr<Aws::Client::ClientConfiguration>> config_map;
 
 #ifdef ANON_AWS_EC2
-std::map<std::string, Aws::EC2::EC2Client> ec2_map;
+std::map<std::string, std::shared_ptr<Aws::EC2::EC2Client>> ec2_map;
 #endif
 
 #ifdef ANON_AWS_DDB
-std::map<std::string, std::unique_ptr<Aws::DynamoDB::DynamoDBClient>> ddb_map;
+std::map<std::string, std::shared_ptr<Aws::DynamoDB::DynamoDBClient>> ddb_map;
 #endif
 
 #ifdef ANON_AWS_DDB_STREAMS
-std::map<std::string, std::unique_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient>> ddb_streams_map;
+std::map<std::string, std::shared_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient>> ddb_streams_map;
 #endif
 
 #ifdef ANON_AWS_ROUTE53
-std::map<std::string, Aws::Route53::Route53Client> r53_map;
+std::map<std::string, std::shared_ptr<Aws::Route53::Route53Client>> r53_map;
 #endif
 
 #ifdef ANON_AWS_S3
-std::map<std::string, Aws::S3::S3Client> s3_map;
+std::map<std::string, std::shared_ptr<Aws::S3::S3Client>> s3_map;
 #endif
 
 #ifdef ANON_AWS_ACM
-std::map<std::string, Aws::ACM::ACMClient> acm_map;
+std::map<std::string, std::shared_ptr<Aws::ACM::ACMClient>> acm_map;
 #endif
 
 #ifdef ANON_AWS_SQS
-std::map<std::string, Aws::SQS::SQSClient> sqs_map;
+std::map<std::string, std::shared_ptr<Aws::SQS::SQSClient>> sqs_map;
 #endif
 
 #ifdef ANON_AWS_ELBV2
-std::map<std::string, Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client> elbv2_map;
+std::map<std::string, std::shared_ptr<Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client>> elbv2_map;
 #endif
 
 #ifdef ANON_AWS_ACCEL
-std::map<std::string, Aws::GlobalAccelerator::GlobalAcceleratorClient> accel_map;
+std::map<std::string, std::shared_ptr<Aws::GlobalAccelerator::GlobalAcceleratorClient>> accel_map;
 #endif
 
 #ifdef ANON_AWS_AUTOSCALING
-std::map<std::string, Aws::AutoScaling::AutoScalingClient> auto_map;
+std::map<std::string, std::shared_ptr<Aws::AutoScaling::AutoScalingClient>> auto_map;
 #endif
 
 #ifdef ANON_AWS_COGNITO
-std::map<std::string, Aws::CognitoIdentity::CognitoIdentityClient> cognito_map;
+std::map<std::string, std::shared_ptr<Aws::CognitoIdentity::CognitoIdentityClient>> cognito_map;
 #endif
 
 #ifdef ANON_AWS_SNS
-std::map<std::string, Aws::SNS::SNSClient> sns_map;
+std::map<std::string, std::shared_ptr<Aws::SNS::SNSClient>> sns_map;
 #endif
 
 #ifdef ANON_AWS_SES
-std::map<std::string, Aws::SES::SESClient> ses_map;
+std::map<std::string, std::shared_ptr<Aws::SES::SESClient>> ses_map;
 #endif
 
-const Aws::Client::ClientConfiguration& aws_get_client_config_nl(const std::string& region)
+std::shared_ptr<Aws::Client::ClientConfiguration> aws_get_client_config_nl(const std::string& region)
 {
   if (config_map.find(region) == config_map.end()) {
-    aws_init_client_config(config_map[region], region);
+    auto cm = std::make_shared<Aws::Client::ClientConfiguration>();
+    aws_init_client_config(*cm, region);
+    config_map.insert(std::make_pair(region, std::move(cm)));
   }
   return config_map[region];
 }
 
 }
 
-const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region)
+std::shared_ptr<Aws::Client::ClientConfiguration> aws_get_client_config(const std::string& region)
 {
   fiber_lock l(config_mtx);
   return aws_get_client_config_nl(region);
 }
 
 #ifdef ANON_AWS_EC2
-const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region)
+std::shared_ptr<Aws::EC2::EC2Client> aws_get_ec2_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (ec2_map.find(region) == ec2_map.end()) {
-    l.unlock();
-    auto client =  Aws::EC2::EC2Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (ec2_map.find(region) == ec2_map.end())
-      ec2_map.emplace(std::make_pair(region, std::move(client)));
+    Aws::EC2::EC2ClientConfiguration config;
+    aws_init_client_config(config, region);
+    auto client =  std::make_shared<Aws::EC2::EC2Client>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::EC2::EC2EndpointProvider>(),
+      config);
+    ec2_map.emplace(std::make_pair(region, std::move(client)));
   }
   return ec2_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_DDB
-const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region)
+std::shared_ptr<Aws::DynamoDB::DynamoDBClient> aws_get_ddb_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (ddb_map.find(region) == ddb_map.end()) {
-    l.unlock();
-    std::unique_ptr<Aws::DynamoDB::DynamoDBClient>
-    c(new Aws::DynamoDB::DynamoDBClient(aws_get_cred_provider(), aws_get_client_config_nl(region)));
-    l.lock();
-    if (ddb_map.find(region) == ddb_map.end())
-      ddb_map[region] = std::move(c);
+    auto client = std::make_shared<Aws::DynamoDB::DynamoDBClient>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::DynamoDB::DynamoDBEndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    ddb_map.emplace(std::make_pair(region, std::move(client)));
   }
-  return *ddb_map[region];
+  return ddb_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_DDB_STREAMS
-const Aws::DynamoDBStreams::DynamoDBStreamsClient& aws_get_ddb_streams_client(const std::string& region)
+std::shared_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient> aws_get_ddb_streams_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (ddb_streams_map.find(region) == ddb_streams_map.end()) {
-    l.unlock();
-    std::unique_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient>
-    c(new Aws::DynamoDBStreams::DynamoDBStreamsClient(aws_get_cred_provider(), aws_get_client_config_nl(region)));
-    l.lock();
-    if (ddb_streams_map.find(region) == ddb_streams_map.end())
-      ddb_streams_map[region] = std::move(c);
+    auto client = std::make_shared<Aws::DynamoDBStreams::DynamoDBStreamsClient>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::DynamoDBStreams::DynamoDBStreamsEndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    ddb_streams_map.emplace(std::make_pair(region, std::move(client)));
   }
-  return *ddb_streams_map[region];
+  return ddb_streams_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_ROUTE53
-const Aws::Route53::Route53Client& aws_get_r53_client()
+std::shared_ptr<Aws::Route53::Route53Client> aws_get_r53_client()
 {
   fiber_lock l(config_mtx);
   std::string region = "us-east-1";
   if (r53_map.find(region) == r53_map.end()) {
-    l.unlock();
-    auto client = Aws::Route53::Route53Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (r53_map.find(region) == r53_map.end())
-      r53_map.emplace(std::make_pair(region, std::move(client)));
+    auto client = std::make_shared<Aws::Route53::Route53Client>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::Route53::Route53EndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    r53_map.emplace(std::make_pair(region, std::move(client)));
   }
   return r53_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_S3
-const Aws::S3::S3Client& aws_get_s3_client(const std::string& region)
+std::shared_ptr<Aws::S3::S3Client> aws_get_s3_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (s3_map.find(region) == s3_map.end()) {
-    l.unlock();
-    auto client = Aws::S3::S3Client(aws_get_cred_provider(), std::make_shared<Aws::S3::S3EndpointProvider>(), aws_get_client_config_nl(region));
-    l.lock();
-    if (s3_map.find(region) == s3_map.end())
-      s3_map.emplace(std::make_pair(region,std::move(client)));
+    auto client = std::make_shared<Aws::S3::S3Client>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::S3::S3EndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    s3_map.emplace(std::make_pair(region,std::move(client)));
   }
   return s3_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_ACM
-const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region)
+std::shared_ptr<Aws::ACM::ACMClient> aws_get_acm_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (acm_map.find(region) == acm_map.end()) {
-    l.unlock();
-    auto client = Aws::ACM::ACMClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (acm_map.find(region) == acm_map.end())
-      acm_map.emplace(std::make_pair(region, std::move(client)));
+    auto client = std::make_shared<Aws::ACM::ACMClient>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::ACM::ACMEndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    acm_map.emplace(std::make_pair(region, std::move(client)));
   }
   return acm_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_SQS
-const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region)
+std::shared_ptr<Aws::SQS::SQSClient> aws_get_sqs_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (sqs_map.find(region) == sqs_map.end()) {
-    l.unlock();
-    auto client = Aws::SQS::SQSClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (sqs_map.find(region) == sqs_map.end())
-      sqs_map.emplace(std::make_pair(region, std::move(client)));
+    auto client = std::make_shared<Aws::SQS::SQSClient>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::SQS::SQSEndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    sqs_map.emplace(std::make_pair(region, std::move(client)));
   }
   return sqs_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_ELBV2
-const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client&
+std::shared_ptr<Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client>
 aws_get_elbv2_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
   if (elbv2_map.find(region) == elbv2_map.end()) {
-    l.unlock();
-    auto client = Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (elbv2_map.find(region) == elbv2_map.end())
-      elbv2_map.emplace(std::make_pair(region, std::move(client)));
+    auto client = std::make_shared<Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client>(
+      aws_get_cred_provider(),
+      std::make_shared<Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2EndpointProvider>(),
+      *aws_get_client_config_nl(region));
+    elbv2_map.emplace(std::make_pair(region, std::move(client)));
   }
   return elbv2_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_ACCEL
-const Aws::GlobalAccelerator::GlobalAcceleratorClient&
+std::shared_ptr<Aws::GlobalAccelerator::GlobalAcceleratorClient>
 aws_get_accel_client()
 {
   fiber_lock l(config_mtx);
   std::string region = "us-west-2";
   if (accel_map.find(region) == accel_map.end()) {
-    l.unlock();
-    auto client = Aws::GlobalAccelerator::GlobalAcceleratorClient(aws_get_cred_provider(), aws_get_client_config_nl(region));
-    l.lock();
-    if (accel_map.find(region) == accel_map.end())
-      accel_map.emplace(std::make_pair(region, std::move(client)));
+    auto client = std::make_shared<Aws::GlobalAccelerator::GlobalAcceleratorClient>(aws_get_cred_provider(), *aws_get_client_config_nl(region));
+    accel_map.emplace(std::make_pair(region, std::move(client)));
   }
   return accel_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_AUTOSCALING
-const Aws::AutoScaling::AutoScalingClient&
+std::shared_ptr<Aws::AutoScaling::AutoScalingClient>
 aws_get_autoscaling_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (auto_map.find(region) == auto_map.end())
-    auto_map.emplace(std::make_pair(region,
-      Aws::AutoScaling::AutoScalingClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (auto_map.find(region) == auto_map.end()) {
+    auto client = std::make_shared<Aws::AutoScaling::AutoScalingClient>(aws_get_cred_provider(), *aws_get_client_config_nl(region));
+    auto_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return auto_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_COGNITO
-const Aws::CognitoIdentity::CognitoIdentityClient&
+std::shared_ptr<Aws::CognitoIdentity::CognitoIdentityClient>
 aws_get_cognito_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (cognito_map.find(region) == cognito_map.end())
-    cognito_map.emplace(std::make_pair(region,
-      Aws::CognitoIdentity::CognitoIdentityClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (cognito_map.find(region) == cognito_map.end()) {
+    auto client = std::make_shared<Aws::CognitoIdentity::CognitoIdentityClient>(aws_get_cred_provider(), *aws_get_client_config_nl(region));
+    cognito_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return cognito_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_SNS
-const Aws::SNS::SNSClient&
+std::shared_ptr<Aws::SNS::SNSClient>
 aws_get_sns_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (sns_map.find(region) == sns_map.end())
-    sns_map.emplace(std::make_pair(region,
-      Aws::SNS::SNSClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (sns_map.find(region) == sns_map.end()) {
+    auto client = std::make_shared<Aws::SNS::SNSClient>(aws_get_cred_provider(), std::make_shared<Aws::SNS::SNSEndpointProvider>(), *aws_get_client_config_nl(region));
+    sns_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return sns_map[region];
 }
 #endif
 
 #ifdef ANON_AWS_SES
-const Aws::SES::SESClient&
+std::shared_ptr<Aws::SES::SESClient>
 aws_get_ses_client(const std::string& region)
 {
   fiber_lock l(config_mtx);
-  if (ses_map.find(region) == ses_map.end())
-    ses_map.emplace(std::make_pair(region,
-      Aws::SES::SESClient(aws_get_cred_provider(), aws_get_client_config_nl(region))));
+  if (ses_map.find(region) == ses_map.end()) {
+    auto client = std::make_shared<Aws::SES::SESClient>(aws_get_cred_provider(), *aws_get_client_config_nl(region));
+    ses_map.emplace(std::make_pair(region, std::move(client)));
+  }
   return ses_map[region];
 }
 #endif

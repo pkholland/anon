@@ -142,7 +142,7 @@ void aws_client_term();
 // that this returns reads from EC2's bootstrap ip address to get the credentials
 // (just as AWSCredentialsProviderChain would do) - but it does it in a fiber-safe
 // way - which AWSCredentialsProviderChain would not be fiber safe.
-const std::shared_ptr<Aws::Auth::AWSCredentialsProvider>& aws_get_cred_provider();
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_get_cred_provider();
 
 // returns the "default" aws region using the following rules:
 //  a) if the environment variable AWS_DEFAULT_REGION is set it will be set to that value
@@ -225,7 +225,7 @@ void aws_init_client_config(Aws::Client::ClientConfiguration &client_cfg, const 
 std::shared_ptr<Aws::Client::RetryStrategy> aws_fiber_retry_strategy(long maxRetries = 10, long scaleFactor = 25);
 
 // a cache of configs set up with aws_init_client_config
-const Aws::Client::ClientConfiguration& aws_get_client_config(const std::string& region);
+std::shared_ptr<Aws::Client::ClientConfiguration> aws_get_client_config(const std::string& region);
 
 // returns whether or not you are running in ec2
 bool aws_in_ec2();
@@ -235,55 +235,55 @@ bool aws_in_ec2();
 std::string aws_get_metadata(const std::string& path);
 
 #ifdef ANON_AWS_EC2
-const Aws::EC2::EC2Client& aws_get_ec2_client(const std::string& region);
+std::shared_ptr<Aws::EC2::EC2Client> aws_get_ec2_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_DDB
-const Aws::DynamoDB::DynamoDBClient& aws_get_ddb_client(const std::string& region);
+std::shared_ptr<Aws::DynamoDB::DynamoDBClient> aws_get_ddb_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_DDB_STREAMS
-const Aws::DynamoDBStreams::DynamoDBStreamsClient& aws_get_ddb_streams_client(const std::string& region);
+std::shared_ptr<Aws::DynamoDBStreams::DynamoDBStreamsClient> aws_get_ddb_streams_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_ROUTE53
-const Aws::Route53::Route53Client& aws_get_r53_client();
+std::shared_ptr<Aws::Route53::Route53Client> aws_get_r53_client();
 #endif
 
 #ifdef ANON_AWS_S3
-const Aws::S3::S3Client& aws_get_s3_client(const std::string& region);
+std::shared_ptr<Aws::S3::S3Client> aws_get_s3_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_ACM
-const Aws::ACM::ACMClient& aws_get_acm_client(const std::string& region);
+std::shared_ptr<Aws::ACM::ACMClient> aws_get_acm_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_SQS
-const Aws::SQS::SQSClient& aws_get_sqs_client(const std::string& region);
+std::shared_ptr<Aws::SQS::SQSClient> aws_get_sqs_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_ELBV2
-const Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client& aws_get_elbv2_client(const std::string& region);
+std::shared_ptr<Aws::ElasticLoadBalancingv2::ElasticLoadBalancingv2Client> aws_get_elbv2_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_ACCEL
-const Aws::GlobalAccelerator::GlobalAcceleratorClient& aws_get_accel_client();
+std::shared_ptr<Aws::GlobalAccelerator::GlobalAcceleratorClient> aws_get_accel_client();
 #endif
 
 #ifdef ANON_AWS_AUTOSCALING
-const Aws::AutoScaling::AutoScalingClient& aws_get_autoscaling_client(const std::string& region);
+std::shared_ptr<Aws::AutoScaling::AutoScalingClient> aws_get_autoscaling_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_COGNITO
-const Aws::CognitoIdentity::CognitoIdentityClient& aws_get_cognito_client(const std::string& region);
+std::shared_ptr<Aws::CognitoIdentity::CognitoIdentityClient> aws_get_cognito_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_SNS
-const Aws::SNS::SNSClient& aws_get_sns_client(const std::string& region);
+std::shared_ptr<Aws::SNS::SNSClient> aws_get_sns_client(const std::string& region);
 #endif
 
 #ifdef ANON_AWS_SES
-const Aws::SES::SESClient& aws_get_ses_client(const std::string& region);
+std::shared_ptr<Aws::SES::SESClient> aws_get_ses_client(const std::string& region);
 #endif
 
 #endif
