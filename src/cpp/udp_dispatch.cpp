@@ -114,10 +114,10 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
 #endif
         return;
       }
-      else if (dlen == sizeof(buff->size()))
+      else if (dlen == buff->size())
       {
 #if ANON_LOG_NET_TRAFFIC > 1
-        anon_log("message too big! all " << sizeof(buff->size()) << " bytes consumed in recvfrom call");
+        anon_log("message too big! all " << buff->size() << " bytes consumed in recvfrom call");
 #endif
       }
       else
@@ -141,18 +141,18 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
 
 std::shared_ptr<std::vector<unsigned char>> udp_dispatch::get_avail_buff()
 {
-  std::unique_lock<std::mutex> l(mtx);
+  std::lock_guard<std::mutex> l(mtx);
   if (free_buffs.size() > 0)
   {
     auto b = free_buffs.front();
     free_buffs.pop();
     return b;
   }
-  return std::make_shared<std::vector<unsigned char>>(65536);
+  return std::make_shared<std::vector<unsigned char>>(65536); // slighly larger than the maximum size of a udp datagram
 }
 
 void udp_dispatch::release_buff(const std::shared_ptr<std::vector<unsigned char>>& buff)
 {
-  std::unique_lock<std::mutex> l(mtx);
+  std::lock_guard<std::mutex> l(mtx);
   free_buffs.push(buff);
 }
