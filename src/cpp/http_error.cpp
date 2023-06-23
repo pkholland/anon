@@ -30,4 +30,9 @@ response_strings::response_strings()
 #define XX(num, name, string) _map[num] = #string;
   HTTP_STATUS_MAP(XX)
 #undef XX
+
+  // we encourage this particular meaning to 503,
+  // so replace the nlohmann one (Service Unavailable)
+  // with this one.
+  _map[503] = "Slow Down";
 }
