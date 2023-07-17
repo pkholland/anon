@@ -23,7 +23,7 @@
 #include "http_server.h"
 
 
-void server_init()
+void server_init(bool is_live_reload)
 {
 }
 

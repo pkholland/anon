@@ -139,7 +139,7 @@ std::shared_ptr<tef_app> curr_app;
 
 } // namespace
 
-teflon_state sync_teflon_app(const ec2_info &ec2i)
+teflon_state sync_teflon_app(const ec2_info &ec2i, bool live_reload)
 {
   auto &ud = ec2i.user_data_js;
   if (!validate_all_user_data_strings(ud))
@@ -151,6 +151,11 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   std::string efs;
   auto do_tls = false;
   std::vector<std::string> args;
+
+  if (live_reload)
+  {
+    args.push_back("-live_reload");
+  }
 
   if (ud.find("local_debug_path") != ud.end()) {
     efs = ud["local_debug_path"];

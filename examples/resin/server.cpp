@@ -137,7 +137,7 @@ void run_server(const ec2_info &ec2i)
   auto num_attempts = 0;
   while (true) {
     try {
-      st = sync_teflon_app(ec2i);
+      st = sync_teflon_app(ec2i, false);
       break;
     }
     catch(const std::exception& exc)

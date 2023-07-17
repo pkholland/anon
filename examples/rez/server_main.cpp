@@ -93,7 +93,7 @@ static bool permits_gzip(const string_len &s)
   return false;
 }
 
-void server_init()
+void server_init(bool is_live_reload)
 {
   for_each_rez([](const std::string &path, const rez_file_ent *ent) {
     add_mapping("GET", path, [ent](http_server::pipe_t &pipe, const http_request &request) {

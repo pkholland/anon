@@ -44,7 +44,7 @@
 // called every time there is a GET/POST/etc...
 // http message sent to this server.
 
-void server_init();
+void server_init(bool is_live_reload);
 void server_respond(http_server::pipe_t &pipe, const http_request &request, bool is_tls);
 void tcp_server_respond(std::unique_ptr<fiber_pipe>&&, const sockaddr* src_addr, socklen_t src_addr_len);
 void server_sync();
@@ -93,6 +93,7 @@ extern "C" int main(int argc, char **argv)
   bool port_is_fd = false;
   bool sport_is_fd = false;
   bool auto_shutdown = false;
+  bool is_live_reload = false;
   int http_port = -1;
   int https_port = -1;
   int private_port = -1;
@@ -158,6 +159,11 @@ extern "C" int main(int argc, char **argv)
     else if (!strcmp("-cmd_fd", argv[i]))
     {
       cmd_pipe = atoi(argv[++i]);
+    }
+    else if (!strcmp("-live_reload", argv[i]))
+    {
+      is_live_reload = true;
+      ++i;
     }
     else if (!strcmp("-auto-shutdown", argv[i]))
     {
@@ -272,7 +278,7 @@ extern "C" int main(int argc, char **argv)
         }
       }
 
-      server_init();
+      server_init(is_live_reload);
 
       if (https_port > 0)
         my_https = std::unique_ptr<http_server>(new http_server(https_port,
