@@ -34,6 +34,7 @@
 #include <fstream>
 #include "log.h"
 #include "resin.h"
+#include "big_id_crypto.h"
 
 using namespace nlohmann;
 
@@ -109,10 +110,9 @@ ec2_info::ec2_info(const char *filename)
       help.cond.wait(l);
   }
 
-  Aws::String region;
   auto rgn = getenv("AWS_DEFAULT_REGION");
   if (rgn)
-    default_region = region;
+    default_region = rgn;
 
   if (filename != nullptr) {
     json js = json::parse(std::ifstream(filename));
@@ -158,6 +158,8 @@ extern "C" int main(int argc, char **argv)
   anon_log("resin starting");
   int ret = 0;
 
+  init_big_id_crypto();
+
   // options.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Debug;
   // options.loggingOptions.logger_create_fn = []{return std::static_pointer_cast<Aws::Utils::Logging::LogSystemInterface>(std::make_shared<Aws::Utils::Logging::ConsoleLogSystem>(Aws::Utils::Logging::LogLevel::Debug));};
 
@@ -166,7 +168,7 @@ extern "C" int main(int argc, char **argv)
   {
     const char* filename = argc >= 2 ? argv[1] : (const char*)0;
     ec2_info ec2i(filename);
-    if (!in_ec2(ec2i))
+    if (!filename && !in_ec2(ec2i))
       anon_log("resin run outside of ec2, stopping now");
     else if (!has_user_data(ec2i))
       anon_log("resin run without supplying user data, stopping now");
@@ -200,5 +202,6 @@ extern "C" int main(int argc, char **argv)
     ret = 1;
   }
   Aws::ShutdownAPI(options);
+  term_big_id_crypto();
   return ret;
 }

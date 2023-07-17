@@ -17,6 +17,7 @@ $(ANON_ROOT)/src/cpp/io_dispatch.cpp\
 $(ANON_ROOT)/src/cpp/fiber.cpp\
 $(ANON_ROOT)/src/cpp/lock_checker.cpp\
 $(ANON_ROOT)/src/cpp/exe_cmd.cpp\
+$(ANON_ROOT)/src/cpp/big_id_crypto.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c\
 
 

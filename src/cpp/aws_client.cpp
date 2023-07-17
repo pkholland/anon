@@ -648,11 +648,6 @@ void aws_client_init()
 
 }
 
-void aws_client_term()
-{
-  Aws::ShutdownAPI(aws_options);
-}
-
 std::shared_ptr<Aws::Auth::AWSCredentialsProvider> aws_get_cred_provider()
 {
   return aws_cred_prov;
@@ -953,6 +948,61 @@ aws_get_ses_client(const std::string& region)
 }
 #endif
 
+void aws_client_term()
+{
+  #ifdef ANON_AWS_EC2
+  ec2_map.clear();
+  #endif
 
+  #ifdef ANON_AWS_DDB
+  ddb_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_DDB_STREAMS
+  ddb_streams_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_ROUTE53
+  r53_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_S3
+  s3_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_ACM
+  acm_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_SQS
+  sqs_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_ELBV2
+  elbv2_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_ACCEL
+  accel_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_AUTOSCALING
+  auto_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_COGNITO
+  cognito_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_SNS
+  sns_map.clear();
+  #endif
+
+  #ifdef ANON_AWS_SES
+  ses_map.clear();
+  #endif
+
+  Aws::ShutdownAPI(aws_options);
+}
 
 #endif

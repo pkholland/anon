@@ -25,6 +25,8 @@
 #include "sproc_mgr.h"
 #include "nlohmann/json.hpp"
 #include "aws_client.h"
+#include "big_id_serial.h"
+#include "big_id_crypto.h"
 #include <sys/stat.h>
 #include <aws/core/Aws.h>
 #include <aws/core/utils/Outcome.h>
@@ -143,160 +145,171 @@ teflon_state sync_teflon_app(const ec2_info &ec2i)
   if (!validate_all_user_data_strings(ud))
     return teflon_server_failed;
 
-  Aws::Client::ClientConfiguration ddb_config;
-  std::string region = ud["artifacts_ddb_table_region"];
-  ddb_config.region = region.c_str();
-  Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
-
-  if (!curr_app) {
-    create_empty_directory(ec2i, "");
-  }
-
-  std::string table_name = ud["artifacts_ddb_table_name"];
-  std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
-  std::string p_key_value = ud["artifacts_ddb_table_primary_key_value"];
-  std::string s_key_name = ud["artifacts_ddb_table_secondary_key_name"];
-  std::string s_key_value = ud["artifacts_ddb_table_secondary_key_value"];
-
-  QueryRequest  q_req;
-  q_req.WithTableName(table_name)
-    .WithKeyConditionExpression("#P = :p AND #S = :s")
-    .WithScanIndexForward(false)
-    .AddExpressionAttributeNames("#P", p_key_name)
-    .AddExpressionAttributeValues(":p", AttributeValue(p_key_value))
-    .AddExpressionAttributeNames("#S", s_key_name)
-    .AddExpressionAttributeValues(":s", AttributeValue(s_key_value));
-
-  auto outcome = ddbc.Query(q_req);
-  if (!outcome.IsSuccess())
-    anon_throw(std::runtime_error, "Query failed: " << outcome.GetError());
-  auto &result = outcome.GetResult();
-  auto &items = result.GetItems();
-  if (items.size() == 0)
-    anon_throw(std::runtime_error, "no item for " << p_key_value << "/" << s_key_value << " in ddb table " << table_name);
-  auto &cur_def = items[0];
-  auto end = cur_def.end();
-
-  auto uid_it = cur_def.find("uid");
-  if (uid_it == end)
-    anon_throw(std::runtime_error, "item missing \"uid\" entry");
-
-  auto uid = uid_it->second.GetS();
-  if (curr_app && uid == curr_app->id)
-  {
-    anon_log("current server definition matches running server, no-op");
-    return teflon_server_still_running;
-  }
-
-  auto files_it = cur_def.find("files");
-  auto exe_it = cur_def.find("entry");
-  auto ids_it = cur_def.find("fids");
-  if (files_it == end || exe_it == end || ids_it == end)
-    anon_throw(std::runtime_error, "current_server record missing required \"files\", \"entry\", and/or \"fids\" field(s)");
-
-  auto files_needed = files_it->second.GetSS();
-  auto file_to_execute = exe_it->second.GetS();
-  auto ids = ids_it->second.GetM();
-
-  std::string bucket = ud["artifacts_s3_bucket"];
-  std::string key = ud["artifacts_s3_key"];
-
-  std::ostringstream files_cmd;
-  for (const auto &f : files_needed)
-  {
-    if (ids.find(f) == ids.end())
-      anon_throw(std::runtime_error, "file: \"" << f << "\" missing in fids");
-    if (curr_app && curr_app->files.find(f) != curr_app->files.end())
-    {
-      // f matches a file we have already downloaded, so just hard link it
-      // to the new directory
-      auto existing_file = curr_app->files[f];
-      files_cmd << "ln " << ec2i.root_dir << "/" << curr_app->id << "/" << curr_app->files[f]
-                << " " << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
-    }
-    else
-    {
-      // does not match an existing file, so download it from s3
-      files_cmd << "aws s3 cp s3://" << bucket << "/" << key
-                << "/" << ids[f]->GetS() << "/" << f << " "
-                << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
-    }
-  }
-  create_empty_directory(ec2i, uid);
-
-  files_cmd << "wait < <(jobs -p)\n";
-
-  auto num_tries = 0;
-  while (true) {
-    try {
-      exe_cmd(files_cmd.str());
-      // also needs to wait until we can do this without launching a
-      // sub bash process
-      // if (files_needed.size() > 0) {
-      //   std::ostringstream oss;
-      //   oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
-      //   exe_cmd(oss.str());
-      // }
-      break;
-    }
-    catch(...) {
-      anon_log_error("file copy failed");
-      if (++num_tries > 10) {
-        remove_directory(ec2i, uid);
-        return teflon_server_failed;
-      }
-      sleep(15);
-    }
-  }
-
-  std::ostringstream ef;
-  ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
-  auto efs = ef.str();
-  chmod(efs.c_str(), ACCESSPERMS);
-
+  std::string uid;
+  std::vector<std::string> files_needed;
+  std::map<std::string, const std::shared_ptr<AttributeValue>> ids;
+  std::string efs;
   auto do_tls = false;
   std::vector<std::string> args;
 
-  if (ud.find("certs_ddb_table_name") != ud.end()
-      && ud.find("serving_domain") != ud.end()) {
+  if (ud.find("local_debug_path") != ud.end()) {
+    efs = ud["local_debug_path"];
+    uid = toHexString(small_rand_id());
+  }
+  else {
 
-    Aws::Client::ClientConfiguration home_ddb_config;
-    std::string home_region = ud["home_region"];
-    home_ddb_config.region = home_region.c_str();
-    Aws::DynamoDB::DynamoDBClient home_ddbc(home_ddb_config);
+    Aws::Client::ClientConfiguration ddb_config;
+    std::string region = ud["artifacts_ddb_table_region"];
+    ddb_config.region = region.c_str();
+    Aws::DynamoDB::DynamoDBClient ddbc(ddb_config);
 
-    std::string domain = ud["serving_domain"];
-    std::string table = ud["certs_ddb_table_name"];
-    GetItemRequest  req;
-    req.WithTableName(table)
-      .AddKey("domain", AttributeValue(domain));
-    auto outcome = home_ddbc.GetItem(req);
+    if (!curr_app) {
+      create_empty_directory(ec2i, "");
+    }
+
+    std::string table_name = ud["artifacts_ddb_table_name"];
+    std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
+    std::string p_key_value = ud["artifacts_ddb_table_primary_key_value"];
+    std::string s_key_name = ud["artifacts_ddb_table_secondary_key_name"];
+    std::string s_key_value = ud["artifacts_ddb_table_secondary_key_value"];
+
+    QueryRequest  q_req;
+    q_req.WithTableName(table_name)
+      .WithKeyConditionExpression("#P = :p AND #S = :s")
+      .WithScanIndexForward(false)
+      .AddExpressionAttributeNames("#P", p_key_name)
+      .AddExpressionAttributeValues(":p", AttributeValue(p_key_value))
+      .AddExpressionAttributeNames("#S", s_key_name)
+      .AddExpressionAttributeValues(":s", AttributeValue(s_key_value));
+
+    auto outcome = ddbc.Query(q_req);
     if (!outcome.IsSuccess())
-      anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
+      anon_throw(std::runtime_error, "Query failed: " << outcome.GetError());
+    auto &result = outcome.GetResult();
+    auto &items = result.GetItems();
+    if (items.size() == 0)
+      anon_throw(std::runtime_error, "no item for " << p_key_value << "/" << s_key_value << " in ddb table " << table_name);
+    auto &cur_def = items[0];
+    auto end = cur_def.end();
 
-    auto &item = outcome.GetResult().GetItem();
-    auto fc_it = item.find("fullchain");
-    auto key_it = item.find("privkey");
-    if (fc_it == item.end() || key_it == item.end())
-      anon_throw(std::runtime_error, "dynamodb entry missing required fullchain and/or privkey entries");
+    auto uid_it = cur_def.find("uid");
+    if (uid_it == end)
+      anon_throw(std::runtime_error, "item missing \"uid\" entry");
 
-    auto certs_file = ec2i.root_dir + "/fullchain.pem";
-    std::ostringstream certs_cmd;
-    certs_cmd << "echo \"" << fc_it->second.GetS() << "\" >> " << certs_file;
-    exe_cmd(certs_cmd.str());
+    uid = uid_it->second.GetS();
+    if (curr_app && uid == curr_app->id)
+    {
+      anon_log("current server definition matches running server, no-op");
+      return teflon_server_still_running;
+    }
 
-    auto key_file = ec2i.root_dir + "/privkey.pem";
-    std::ostringstream key_cmd;
-    key_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
-    exe_cmd(key_cmd.str());
+    auto files_it = cur_def.find("files");
+    auto exe_it = cur_def.find("entry");
+    auto ids_it = cur_def.find("fids");
+    if (files_it == end || exe_it == end || ids_it == end)
+      anon_throw(std::runtime_error, "current_server record missing required \"files\", \"entry\", and/or \"fids\" field(s)");
 
-    args.push_back("-cert_verify_dir");
-    args.push_back("/etc/ssl/certs");
-    args.push_back("-server_cert");
-    args.push_back(certs_file);
-    args.push_back("-server_key");
-    args.push_back(key_file);
-    do_tls = true;
+    files_needed = files_it->second.GetSS();
+    auto file_to_execute = exe_it->second.GetS();
+    ids = ids_it->second.GetM();
+
+    std::string bucket = ud["artifacts_s3_bucket"];
+    std::string key = ud["artifacts_s3_key"];
+
+    std::ostringstream files_cmd;
+    for (const auto &f : files_needed)
+    {
+      if (ids.find(f) == ids.end())
+        anon_throw(std::runtime_error, "file: \"" << f << "\" missing in fids");
+      if (curr_app && curr_app->files.find(f) != curr_app->files.end())
+      {
+        // f matches a file we have already downloaded, so just hard link it
+        // to the new directory
+        auto existing_file = curr_app->files[f];
+        files_cmd << "ln " << ec2i.root_dir << "/" << curr_app->id << "/" << curr_app->files[f]
+                  << " " << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
+      }
+      else
+      {
+        // does not match an existing file, so download it from s3
+        files_cmd << "aws s3 cp s3://" << bucket << "/" << key
+                  << "/" << ids[f]->GetS() << "/" << f << " "
+                  << ec2i.root_dir << "/" << uid << "/" << f << " || exit 1 &\n";
+      }
+    }
+    create_empty_directory(ec2i, uid);
+
+    files_cmd << "wait < <(jobs -p)\n";
+
+    auto num_tries = 0;
+    while (true) {
+      try {
+        exe_cmd(files_cmd.str());
+        // also needs to wait until we can do this without launching a
+        // sub bash process
+        // if (files_needed.size() > 0) {
+        //   std::ostringstream oss;
+        //   oss << "ls " << ec2i.root_dir << "/" << uid << "/" << files_needed[0];
+        //   exe_cmd(oss.str());
+        // }
+        break;
+      }
+      catch(...) {
+        anon_log_error("file copy failed");
+        if (++num_tries > 10) {
+          remove_directory(ec2i, uid);
+          return teflon_server_failed;
+        }
+        sleep(15);
+      }
+    }
+
+    std::ostringstream ef;
+    ef << ec2i.root_dir << "/" << uid << "/" << file_to_execute;
+    efs = ef.str();
+    chmod(efs.c_str(), ACCESSPERMS);
+
+    if (ud.find("certs_ddb_table_name") != ud.end()
+        && ud.find("serving_domain") != ud.end()) {
+
+      Aws::Client::ClientConfiguration home_ddb_config;
+      std::string home_region = ud["home_region"];
+      home_ddb_config.region = home_region.c_str();
+      Aws::DynamoDB::DynamoDBClient home_ddbc(home_ddb_config);
+
+      std::string domain = ud["serving_domain"];
+      std::string table = ud["certs_ddb_table_name"];
+      GetItemRequest  req;
+      req.WithTableName(table)
+        .AddKey("domain", AttributeValue(domain));
+      auto outcome = home_ddbc.GetItem(req);
+      if (!outcome.IsSuccess())
+        anon_throw(std::runtime_error, "DynamoDB.GetItem(" << table << "/" << domain << ") failed: " << outcome.GetError().GetMessage());
+
+      auto &item = outcome.GetResult().GetItem();
+      auto fc_it = item.find("fullchain");
+      auto key_it = item.find("privkey");
+      if (fc_it == item.end() || key_it == item.end())
+        anon_throw(std::runtime_error, "dynamodb entry missing required fullchain and/or privkey entries");
+
+      auto certs_file = ec2i.root_dir + "/fullchain.pem";
+      std::ostringstream certs_cmd;
+      certs_cmd << "echo \"" << fc_it->second.GetS() << "\" >> " << certs_file;
+      exe_cmd(certs_cmd.str());
+
+      auto key_file = ec2i.root_dir + "/privkey.pem";
+      std::ostringstream key_cmd;
+      key_cmd << "echo \"" << key_it->second.GetS() << "\" >> " << key_file;
+      exe_cmd(key_cmd.str());
+
+      args.push_back("-cert_verify_dir");
+      args.push_back("/etc/ssl/certs");
+      args.push_back("-server_cert");
+      args.push_back(certs_file);
+      args.push_back("-server_key");
+      args.push_back(key_file);
+      do_tls = true;
+    }
   }
 
   std::vector<std::string> envs;

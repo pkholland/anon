@@ -45,7 +45,7 @@ bool subscription_confirmed = false;
 
 bool process_control_message(const ec2_info& ec2i, const std::string& method, const std::string& url, const std::map<std::string, std::string>& headers, const std::vector<char>& body)
 {
-  if (true) {
+  if (false) {
     anon_log("received control message - " << method << ":");
     anon_log(" url: " << url);
     anon_log(" headers: ");
@@ -56,8 +56,9 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
   }
 
   if (method == "POST" && url == "/reload") {
-      if (sync_teflon_app(ec2i) == teflon_shut_down)
-        return false;
+    
+    if (sync_teflon_app(ec2i) == teflon_shut_down)
+      return false;
   }
 
 #if 0
@@ -294,7 +295,7 @@ bool process_control_message(const ec2_info& ec2i, int fd)
         }
       }
       auto ret = process_control_message(ec2i, http_method_str((enum http_method)pcallback.method), pcallback.url_str, pcallback.headers, body);
-      auto reply = "HTTP/1.1 200 OK\r\ncontent-length 0\r\n\r\n";
+      auto reply = "HTTP/1.1 204 No Content\r\n\r\n";
       if (write(fd, reply, strlen(reply))){}
       return ret;
     }
