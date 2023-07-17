@@ -56,7 +56,7 @@ bool process_control_message(const ec2_info& ec2i, const std::string& method, co
   }
 
   if (method == "POST" && url == "/reload") {
-    
+    anon_log("received reload request");
     if (sync_teflon_app(ec2i, true) == teflon_shut_down)
       return false;
   }

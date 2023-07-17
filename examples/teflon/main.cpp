@@ -56,7 +56,7 @@ bool teflon_udps_are_file_descriptors = false;
 
 #define SERVER_STACK_SIZE 64 * 1024 - 128
 
-static void show_help()
+static void show_help(int argc, char** argv)
 {
   printf("usage: teflon -http_fd <socket file descriptor number to use for listening for plain tcp connections>\n");
   printf("              or\n");
@@ -75,6 +75,14 @@ static void show_help()
   printf("              -server_key <private key file for the server's certificate>\n");
   printf("              -server_pw <OPTIONAL - password to decrypt server_key>\n");
   printf("              -cmd_fd <OPTIONAL - file descriptor number for the command pipe>\n");
+  for (int i = 0; i < argc; i++) {
+    printf("%s", argv[i]);
+    if (i < argc - 1)
+    {
+      printf(" ");
+    }
+  }
+  printf("\n");
 }
 
 static void get_ints(const std::string& arg, std::vector<int>& ints)
@@ -102,76 +110,66 @@ extern "C" int main(int argc, char **argv)
   const char *cert = 0;
   const char *key = 0;
 
-  // all options are pairs for us, so there must
-  // be an odd number of arguments (the first
-  // one is the name of our executable).
-  if (!(argc & 1))
+  for (int i = 1; i < argc; i++)
   {
-    show_help();
-    return 1;
-  }
-
-  for (int i = 1; i < argc - 1; i++)
-  {
-    if (!strcmp("-http_fd", argv[i]))
+    if (!strcmp("-http_fd", argv[i]) && i < argc - 1)
     {
       http_port = atoi(argv[++i]);
       port_is_fd = true;
     }
-    else if (!strcmp("-http_port", argv[i]))
+    else if (!strcmp("-http_port", argv[i]) && i < argc - 1)
     {
       http_port = atoi(argv[++i]);
     }
-    else if (!strcmp("-https_fd", argv[i]))
+    else if (!strcmp("-https_fd", argv[i]) && i < argc - 1)
     {
       https_port = atoi(argv[++i]);
       sport_is_fd = true;
     }
-    else if (!strcmp("-https_port", argv[i]))
+    else if (!strcmp("-https_port", argv[i]) && i < argc - 1)
     {
       https_port = atoi(argv[++i]);
     }
-    else if (!strcmp("-private_fd", argv[i]))
+    else if (!strcmp("-private_fd", argv[i]) && i < argc - 1)
     {
       private_port = atoi(argv[++i]);
     }
-    else if (!strcmp("-udp_ports", argv[i]))
+    else if (!strcmp("-udp_ports", argv[i]) && i < argc - 1)
     {
       get_ints(argv[++i], teflon_udp_ports_or_sockets);
     }
-    else if (!strcmp("-udp_fds", argv[i]))
+    else if (!strcmp("-udp_fds", argv[i]) && i < argc - 1)
     {
       get_ints(argv[++i], teflon_udp_ports_or_sockets);
       teflon_udps_are_file_descriptors = true;
     }
-    else if (!strcmp("-cert_verify_dir", argv[i]))
+    else if (!strcmp("-cert_verify_dir", argv[i]) && i < argc - 1)
     {
       cert_verify_dir = argv[++i];
     }
-    else if (!strcmp("-server_cert", argv[i]))
+    else if (!strcmp("-server_cert", argv[i]) && i < argc - 1)
     {
       cert = argv[++i];
     }
-    else if (!strcmp("-server_key", argv[i]))
+    else if (!strcmp("-server_key", argv[i]) && i < argc - 1)
     {
       key = argv[++i];
     }
-    else if (!strcmp("-cmd_fd", argv[i]))
+    else if (!strcmp("-cmd_fd", argv[i]) && i < argc - 1)
     {
       cmd_pipe = atoi(argv[++i]);
     }
     else if (!strcmp("-live_reload", argv[i]))
     {
       is_live_reload = true;
-      ++i;
     }
-    else if (!strcmp("-auto-shutdown", argv[i]))
+    else if (!strcmp("-auto-shutdown", argv[i]) && i < argc - 1)
     {
       auto_shutdown = !strcmp("true", argv[++i]);
     }
     else
     {
-      show_help();
+      show_help(argc, argv);
       return 1;
     }
   }
@@ -179,13 +177,13 @@ extern "C" int main(int argc, char **argv)
   // did we get all the arguments we need?
   if (http_port <= 0 && https_port <= 0)
   {
-    show_help();
+    show_help(argc, argv);
     return 1;
   }
 
   if (https_port > 0 && (!cert_verify_dir || !cert || !key))
   {
-    show_help();
+    show_help(argc, argv);
     return 1;
   }
 
