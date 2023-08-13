@@ -49,6 +49,7 @@ namespace
 int listen_sock = -1;
 int private_listen_sock = -1;
 int current_srv_pid = 0;
+int upcoming_srv_pid = -1;
 int death_pipe[2];
 std::vector<int> udps;
 std::thread death_thread;
@@ -185,11 +186,11 @@ void write_stop(int fd0, int fd1)
 
 int start_child(proc_info &pi)
 {
-  auto pid = fork();
-  if (pid == -1)
+  upcoming_srv_pid = fork();
+  if (upcoming_srv_pid == -1)
     do_error("fork()");
 
-  if (pid != 0)
+  if (upcoming_srv_pid != 0)
   {
 
     // here we are the (calling) parent, 'pid' is the child's process id
@@ -197,8 +198,8 @@ int start_child(proc_info &pi)
 
     if (!read_ok(pi.cmd_pipe[0], pi.cmd_pipe[1]))
     {
-      anon_log_error("child process " << pid << " started, but did not reply correctly, so was killed");
-      kill(pid, SIGKILL);
+      anon_log_error("child process " << upcoming_srv_pid << " started, but did not reply correctly, so was killed");
+      kill(upcoming_srv_pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
   }
@@ -279,7 +280,7 @@ int start_child(proc_info &pi)
     exit(1);
   }
 
-  return pid;
+  return upcoming_srv_pid;
 }
 
 std::map<int /*pid*/, std::unique_ptr<proc_info>> proc_map;
@@ -288,8 +289,14 @@ std::condition_variable proc_map_cond;
 
 void handle_sigchld(int sig)
 {
-  pid_t chld;
-  while ((chld = waitpid(-1, 0, WNOHANG)) > 0)
+  pid_t chld = 0;;
+  if (current_srv_pid != 0 && waitpid(current_srv_pid, 0, WNOHANG) != -1) {
+    chld = current_srv_pid;
+  } else if (upcoming_srv_pid != -1 && waitpid(upcoming_srv_pid, 0, WNOHANG) != -1) {
+    chld = upcoming_srv_pid;
+  }
+
+  if (chld != 0)
   {
     size_t tot_bytes = 0;
     char *data = (char *)&chld;
@@ -449,6 +456,7 @@ void sproc_mgr_init(int port, int private_port, const std::vector<int> udp_ports
                 }
                 proc_map.insert(std::make_pair(new_chld, std::move(pi)));
                 current_srv_pid = new_chld;
+                upcoming_srv_pid = -1;
                 if (notify)
                   notify();
               }
@@ -538,6 +546,7 @@ void start_server(const char *exe_name, bool do_tls, const std::vector<std::stri
   std::unique_lock<std::mutex> lock(proc_map_mutex);
   auto p = proc_map.find(current_srv_pid);
   current_srv_pid = chld;
+  upcoming_srv_pid = -1;
   if (p != proc_map.end())
     write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
   if (write_cmd(pi->cmd_pipe[0], k_start))
