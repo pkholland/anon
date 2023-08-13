@@ -32,6 +32,12 @@
 
 namespace {
 
+// TODO:
+// https://unix.stackexchange.com/questions/616555/what-is-the-relation-between-sigchld-and-waitpid-orwait
+//
+// it would be more efficient to track the child process lifetime via pidfd_open, adding that fd to
+// our io_dispatch epoll watcher, and then being notified via that mechanism when the process exits
+
 struct sock_pr {
   int sv[2];
 
@@ -57,6 +63,7 @@ struct sock_pr {
 
 };
 
+#if 0
 int death_pipe[2];
 fiber* death_fiber;
 fiber_mutex mtx;
@@ -92,12 +99,14 @@ void handle_sigchld(int sig)
   }
 }
 
+#endif
 std::atomic_int cmd_count;
 
 }
 
 void exe_cmd_init()
 {
+  #if 0
   if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0]) != 0)
     do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0])");
 
@@ -145,15 +154,18 @@ void exe_cmd_init()
   sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
   if (sigaction(SIGCHLD, &sa, 0) == -1)
     do_error("sigaction(SIGCHLD, &sa, 0)");
+  #endif
 }
 
 void exe_cmd_term()
 {
+  #if 0
   proc_exit_status pes = {0,0};
   if (::write(death_pipe[0], &pes, sizeof(pes))){};
   death_fiber->join();
   delete death_fiber;
   ::close(death_pipe[0]);
+  #endif
 }
 
 std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, bool first_line_only)
@@ -161,14 +173,15 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   ++cmd_count;
 
   sock_pr iop;
-  proc_exit pe;
+  // proc_exit pe;
   std::ostringstream cmd;
   fn(cmd);
   auto bash_cmd = cmd.str();
   std::ostringstream oss;
+  int exit_status = 0;
 
   {
-    fiber_lock l(mtx);
+    //fiber_lock l(mtx);
 
     auto pid = fork();
     if (pid == -1)
@@ -191,19 +204,37 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
               break;
             if (bytes < 0)
               do_error("fp->read(&buff[0], sizeof(buff))");
+            anon_log("read " << bytes << " from child process stdout");
             oss << std::string(&buff[0], bytes);
           }
           catch(...) {
+            anon_log("caught exception in fp->read, treating as eof");
             break;
           }
         }
       }));
 
-      death_map[pid] = &pe;
-      while(!pe.finished)
-        pe.cond.wait(l);
-      death_map.erase(pid);
+      fiber_cond running_cond;
+      fiber_mutex running_mtx;
+      bool running = true;
+      std::thread([pid, &running_cond, &running_mtx, &running, &exit_status] {
+        anon_log("calling waitpid on child process");
+        auto ret = waitpid(pid, &exit_status, 0);
+        anon_log("waitpid returned " << ret << ", exit_status: " << exit_status);
+        fiber::run_in_fiber([&] { 
+          fiber_lock l(running_mtx);
+          running = false;
+          running_cond.notify_one();
+        });
+      }).detach();
+
+      {
+        fiber_lock l(running_mtx);
+        while (running) { running_cond.wait(l); }
+      }
+
       f->join();
+      anon_log("done waiting for pipe-reading fiber to finish");
     }
     else
     {
@@ -239,12 +270,12 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   }
 
   int exit_code = 1;
-  if (WIFEXITED(pe.status))
-    exit_code = WEXITSTATUS(pe.status);
-  else if (WIFSIGNALED(pe.status))
-    anon_log("bash killed by signal: " << WTERMSIG(pe.status));
-  else if (WIFSTOPPED(pe.status))
-    anon_log("bash stopped by signal: " << WSTOPSIG(pe.status));
+  if (WIFEXITED(exit_status))
+    exit_code = WEXITSTATUS(exit_status);
+  else if (WIFSIGNALED(exit_status))
+    anon_log("bash killed by signal: " << WTERMSIG(exit_status));
+  else if (WIFSTOPPED(exit_status))
+    anon_log("bash stopped by signal: " << WSTOPSIG(exit_status));
 
   if (exit_code != 0)
     anon_throw(std::runtime_error, "bash script failed: " << bash_cmd);
