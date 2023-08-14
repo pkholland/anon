@@ -27,9 +27,6 @@
 #include "dns_lookup.h"
 #include "http_server.h"
 #include "fiber.h"
-#ifdef TEFLON_EXE_CMD
-#include "exe_cmd.h"
-#endif
 #include "epc.h"
 
 #ifdef ANON_AWS
@@ -209,9 +206,6 @@ extern "C" int main(int argc, char **argv)
   dns_lookup::start_service();
   fiber::initialize();
   init_big_id_crypto();
-  #ifdef TEFLON_EXE_CMD
-  exe_cmd_init();
-  #endif
 
   int ret = 0;
   try
@@ -389,9 +383,6 @@ extern "C" int main(int argc, char **argv)
                   fiber_pipe::wait_for_zero_net_pipes();
 
                   dns_lookup::end_service();
-                  #ifdef TEFLON_EXE_CMD
-                  exe_cmd_term();
-                  #endif
 
                   // instruct the io dispatch threads to all wake up and
                   // terminate.
@@ -418,9 +409,6 @@ extern "C" int main(int argc, char **argv)
               endpoint_cluster::erase_all();
               fiber_pipe::wait_for_zero_net_pipes();
               dns_lookup::end_service();
-              #ifdef TEFLON_EXE_CMD
-              exe_cmd_term();
-              #endif
               io_dispatch::stop();
             }
 

@@ -29,6 +29,8 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
+#include <sys/syscall.h>      /* Definition of SYS_* constants */
+#include <unistd.h>
 
 namespace {
 
@@ -37,6 +39,14 @@ namespace {
 //
 // it would be more efficient to track the child process lifetime via pidfd_open, adding that fd to
 // our io_dispatch epoll watcher, and then being notified via that mechanism when the process exits
+
+// glibc doesn't provide pidfd_open.  Documentation for
+// it frequently discusses the need to directly call
+// syscall exactly like this...
+int pidfd_open(pid_t pid, unsigned int flags)
+{
+  return syscall(SYS_pidfd_open, pid, flags);
+}
 
 struct sock_pr {
   int sv[2];
@@ -63,117 +73,50 @@ struct sock_pr {
 
 };
 
-#if 0
-int death_pipe[2];
-fiber* death_fiber;
-fiber_mutex mtx;
-struct proc_exit {
-  fiber_cond cond;
-  bool finished;
-  int status;
-  proc_exit() : finished(false) {}
-};
-std::map<pid_t, proc_exit*> death_map;
-
-struct proc_exit_status {
-  pid_t pid;
-  int status;
-};
-
-void handle_sigchld(int sig)
+class child_proc_handler : public io_dispatch::handler
 {
-  proc_exit_status pes;
-  while ((pes.pid = waitpid(-1, &pes.status, WNOHANG)) > 0)
-  {
-    size_t tot_bytes = 0;
-    char *data = (char *)&pes;
-    while (tot_bytes < sizeof(pes))
-    {
-      auto written = ::write(death_pipe[0], &data[tot_bytes], sizeof(pes) - tot_bytes);
-      if (written < 0) {
-        anon_log_error("couldn't write to death pipe");
-        continue;
-      }
-      tot_bytes += written;
-    }
-  }
-}
+  bool& running_;
+  fiber_mutex& mtx_;
+  fiber_cond& cond_;
 
-#endif
+public:
+  child_proc_handler(bool& running, fiber_mutex& mtx, fiber_cond& cond)
+    : running_(running),
+      mtx_(mtx),
+      cond_(cond)
+  {
+  }
+
+  ~child_proc_handler()
+  {
+  }
+
+  virtual void io_avail(const struct epoll_event &evt)
+  {
+    if (evt.events & EPOLLIN)
+    {
+      fiber::run_in_fiber([this] {
+        fiber_lock l(mtx_);
+        running_ = false;
+        cond_.notify_one();
+      });
+    }
+    else
+      anon_log_error("child_proc_handler::io_avail called with event that does not have EPOLLIN set!");
+  }
+
+};
+
 std::atomic_int cmd_count;
 
 }
 
-void exe_cmd_init()
-{
-  #if 0
-  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0]) != 0)
-    do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0])");
-
-  death_fiber = new fiber([]{
-    if (fcntl(death_pipe[1], F_SETFL, fcntl(death_pipe[1], F_GETFL) | O_NONBLOCK) != 0)
-      do_error("fcntl(death_pipe[1], F_SETFL, fnctl(death_pipe[1], F_GETFL) | O_NONBLOCK)");
-    std::unique_ptr<fiber_pipe> fp(new fiber_pipe(death_pipe[1], fiber_pipe::unix_domain));
-    death_pipe[1] = 0;
-
-    while (true)
-    {
-      // read a pid for a child that has died
-      proc_exit_status pes;
-      char *data = (char *)&pes;
-      size_t tot_bytes = 0;
-      while (tot_bytes < sizeof(pes))
-      {
-        auto bytes_read = fp->read(&data[tot_bytes], sizeof(pes) - tot_bytes);
-        if (bytes_read <= 0)
-        {
-          anon_log_error("couldn't read from the death pipe");
-          return;
-        }
-        tot_bytes += bytes_read;
-      }
-
-      // you stop this fiber by writting 0,0 into death_pipe[0];
-      if (pes.pid == 0)
-        return;
-
-      fiber_lock lock(mtx);
-      auto p = death_map.find(pes.pid);
-      if (p != death_map.end()) {
-        p->second->finished = true;
-        p->second->status = pes.status;
-        p->second->cond.notify_all();
-      }
-    }
-
-  }, fiber::k_default_stack_size, false, "exe_cmd");
-
-  struct sigaction sa;
-  sa.sa_handler = &handle_sigchld;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-  if (sigaction(SIGCHLD, &sa, 0) == -1)
-    do_error("sigaction(SIGCHLD, &sa, 0)");
-  #endif
-}
-
-void exe_cmd_term()
-{
-  #if 0
-  proc_exit_status pes = {0,0};
-  if (::write(death_pipe[0], &pes, sizeof(pes))){};
-  death_fiber->join();
-  delete death_fiber;
-  ::close(death_pipe[0]);
-  #endif
-}
 
 std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, bool first_line_only)
 {
   ++cmd_count;
 
   sock_pr iop;
-  // proc_exit pe;
   std::ostringstream cmd;
   fn(cmd);
   auto bash_cmd = cmd.str();
@@ -181,60 +124,62 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   int exit_status = 0;
 
   {
-    //fiber_lock l(mtx);
-
     auto pid = fork();
     if (pid == -1)
       do_error("fork()");
     if (pid != 0)
     {
-      // the calling parent
+      // the calling parent process
+
+      // close the socket that the child will use for its stdout
       iop.close(0);
+
+      // build a (non-blocking) fiber_pipe, allowing us to read
+      // whatever the child writes into their stdout.  This will get
+      // built up and stored into 'oss'
       auto rfd = iop.sv[1];
       if (fcntl(rfd, F_SETFL, fcntl(rfd, F_GETFL) | O_NONBLOCK) != 0)
         do_error("fcntl(rfd, F_SETFL, fnctl(rfd, F_GETFL) | O_NONBLOCK)");
+      fiber_pipe read_pipe(rfd, fiber_pipe::unix_domain);
       iop.sv[1] = 0;
-      std::unique_ptr<fiber> f(new fiber([rfd, &oss] {
-        std::unique_ptr<fiber_pipe> fp(new fiber_pipe(rfd, fiber_pipe::unix_domain));
-        char buff[1024];
+
+      // create and run the fiber that does this reading and recording
+      fiber::run_in_fiber([&read_pipe, &oss] {
+        std::vector<char> buff(4096);
         while (true) {
           try {
-            auto bytes = fp->read(&buff[0], sizeof(buff));
+            auto bytes = read_pipe.read(&buff[0], buff.size());
             if (bytes == 0)
               break;
             if (bytes < 0)
-              do_error("fp->read(&buff[0], sizeof(buff))");
-            anon_log("read " << bytes << " from child process stdout");
+              do_error("read_pipe.read(&buff[0], buff.size())");
             oss << std::string(&buff[0], bytes);
           }
           catch(...) {
-            anon_log("caught exception in fp->read, treating as eof");
             break;
           }
         }
-      }));
+      });
 
-      fiber_cond running_cond;
-      fiber_mutex running_mtx;
+      // get a file descriptor that represents the process identified by 'pid'
+      auto pid_fd = pidfd_open(pid, 0);
+
+      // wait/watch for the process exit
       bool running = true;
-      std::thread([pid, &running_cond, &running_mtx, &running, &exit_status] {
-        anon_log("calling waitpid on child process");
-        auto ret = waitpid(pid, &exit_status, 0);
-        anon_log("waitpid returned " << ret << ", exit_status: " << exit_status);
-        fiber::run_in_fiber([&] { 
-          fiber_lock l(running_mtx);
-          running = false;
-          running_cond.notify_one();
-        });
-      }).detach();
-
+      fiber_mutex running_mtx;
+      fiber_cond running_cond;
+      child_proc_handler child(running, running_mtx, running_cond);
+      io_dispatch::epoll_ctl(EPOLL_CTL_ADD, pid_fd, EPOLLIN, &child);
       {
         fiber_lock l(running_mtx);
-        while (running) { running_cond.wait(l); }
+        while (running) {
+          running_cond.wait(l);
+        }
       }
-
-      f->join();
-      anon_log("done waiting for pipe-reading fiber to finish");
+      // at this point the child process is no longer running, we can now call waitpid
+      // to get the exit status info and reap the child's process record
+      waitpid(pid, &exit_status, 0);
+      close(pid_fd);
     }
     else
     {
