@@ -34,12 +34,6 @@
 
 namespace {
 
-// TODO:
-// https://unix.stackexchange.com/questions/616555/what-is-the-relation-between-sigchld-and-waitpid-orwait
-//
-// it would be more efficient to track the child process lifetime via pidfd_open, adding that fd to
-// our io_dispatch epoll watcher, and then being notified via that mechanism when the process exits
-
 // glibc doesn't provide pidfd_open.  Documentation for
 // it frequently discusses the need to directly call
 // syscall exactly like this...
