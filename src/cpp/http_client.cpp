@@ -226,12 +226,12 @@ http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_se
     http_parser_init(&parser, HTTP_RESPONSE);
 
     // because of the "while (true)" loop, it is possible
-    // that there is unparsed data in header_buf_ already
+    // that there is unparsed data in header_buff_ already
     // at this point.  If so, we scoot it to be the start
     // of the buffer
     if (bep > bsp)
     {
-      memmove(&header_buf_[0], &header_buf_[bsp], bep - bsp);
+      memmove(&header_buff_[0], &header_buff_[bsp], bep - bsp);
       bep -= bsp;
       bsp = 0;
     }
@@ -239,17 +239,17 @@ http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_se
     while (!pcallback.message_complete && !parser.http_errno)
     {
 
-      // have we already filled all of header_buf_ without seeing the end of the headers?
-      if (!pcallback.headers_complete_ && (bsp == sizeof(header_buf_)))
+      // have we already filled all of header_buff_ without seeing the end of the headers?
+      if (!pcallback.headers_complete_ && (bsp == header_buff_.size()))
       {
-        anon_throw(std::runtime_error, "invalid http response - headers bigger than " << sizeof(header_buf_) << " bytes");
+        anon_throw(std::runtime_error, "invalid http response - headers bigger than " << header_buff_.size() << " bytes");
       }
 
       // if there is no un-parsed data in our read buffer then read more
       if (bsp == bep)
       {
         if (!pcallback.headers_complete_)
-          bep += pipe.read(&header_buf_[bep], sizeof(header_buf_) - bep);
+          bep += pipe.read(&header_buff_[bep], header_buff_.size() - bep);
         else
         {
           bep = pipe.read(&bdy_tmp[0], bdy_tmp.size());
@@ -258,14 +258,14 @@ http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_se
       }
 
       // call the joyent parser
-      bsp += http_parser_execute(&parser, &settings, !pcallback.headers_complete_ ? &header_buf_[bsp] : &bdy_tmp[bsp], bep - bsp);
+      bsp += http_parser_execute(&parser, &settings, !pcallback.headers_complete_ ? &header_buff_[bsp] : &bdy_tmp[bsp], bep - bsp);
     }
 
     if (!pcallback.message_complete && parser.http_errno)
     {
       //anon_log("bsp: " << bsp << ", bep: " << bep);
-      //header_buf_[bep] = 0;
-      //anon_log("http data:\n" << &header_buf_[bsp]);
+      //header_buff_[bep] = 0;
+      //anon_log("http data:\n" << &header_buff_[bsp]);
       anon_throw(fiber_io_error, "invalid http received, error: " << http_errno_description((enum http_errno)parser.http_errno));
     }
 
@@ -305,7 +305,7 @@ size_t http_client_response::body_pipe_t::read(void *buff, size_t len)
   {
     if (len > cr->bep - cr->bsp)
       len = cr->bep - cr->bsp;
-    memcpy(buff, &cr->header_buf_[cr->bsp], len);
+    memcpy(buff, &cr->header_buff_[cr->bsp], len);
     cr->bsp += len;
     return len;
   }

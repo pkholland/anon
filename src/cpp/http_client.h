@@ -28,7 +28,8 @@
 struct http_client_response
 {
   http_client_response()
-      : http_major_(0),
+      : header_buff_(kMaxHeaderSize),
+        http_major_(0),
         http_minor_(0),
         should_keep_alive(false),
         has_content_length(false),
@@ -64,12 +65,13 @@ struct http_client_response
   void set_http_minor(int minor) { http_minor_ = minor; }
   int get_http_minor() const { return http_minor_; }
 
-  const char *get_header_buf() const { return &header_buf_[0]; }
+  const char *get_header_buf() const { return &header_buff_[0]; }
   bool has_content_length;
   size_t content_length;
 
 private:
-  char header_buf_[4096];
+  enum {kMaxHeaderSize = 4096*2};
+  std::vector<char> header_buff_;
   std::string status_;
   int http_major_;
   int http_minor_;
