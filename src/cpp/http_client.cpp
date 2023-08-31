@@ -96,7 +96,7 @@ http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_se
         [](char c){ return std::tolower(c); });
       string_len fld(c->last_field_start, c->last_field_len);
       string_len val(c->last_value_start, c->last_value_len);
-      c->cr->headers.headers[fld] = val;
+      c->cr->headers.headers.insert(std::make_pair(fld, val));
 
       c->last_field_start = at;
       c->last_field_len = 0;
@@ -132,7 +132,7 @@ http_client_response::parse(const pipe_t &pipe, bool read_body, bool throw_on_se
         [](char c){ return std::tolower(c); });
       string_len fld(c->last_field_start, c->last_field_len);
       string_len val(c->last_value_start, c->last_value_len);
-      c->cr->headers.headers[fld] = val;
+      c->cr->headers.headers.insert(std::make_pair(fld, val));
     }
     c->cr->has_content_length = (p->flags & F_CONTENTLENGTH) != 0;
     c->cr->content_length = p->content_length;

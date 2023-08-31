@@ -49,7 +49,7 @@ struct http_headers
     headers.clear();
   }
 
-  std::map<string_len, string_len> headers;
+  std::multimap<string_len, string_len> headers;
 };
 
 // method, headers, url, etc... (not body)

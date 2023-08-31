@@ -103,7 +103,7 @@ public:
   }
 };
 
-// Function to return a big_id whose value is random (with crypto strengh randomness).
+// Function to return a small_id whose value is random (with crypto strengh randomness).
 small_id small_rand_id();
 
 // Function to return a big_id whose value is the SHA1 checksum value of the given 'buf'.

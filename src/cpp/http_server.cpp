@@ -99,7 +99,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
               [](char c){ return std::tolower(c); });
             string_len fld(c->last_field_start, c->last_field_len);
             string_len val(c->last_value_start, c->last_value_len);
-            c->request.headers.headers[fld] = val;
+            c->request.headers.headers.insert(std::make_pair(fld, val));
 
             c->last_field_start = at;
             c->last_field_len = 0;
@@ -135,7 +135,7 @@ void http_server::start_(int tcp_port, body_handler *base_handler, int listen_ba
               [](char c){ return std::tolower(c); });
             string_len fld(c->last_field_start, c->last_field_len);
             string_len val(c->last_value_start, c->last_value_len);
-            c->request.headers.headers[fld] = val;
+            c->request.headers.headers.insert(std::make_pair(fld, val));
           }
           c->request.has_content_length = (p->flags & F_CONTENTLENGTH) != 0;
           c->request.content_length = p->content_length;
