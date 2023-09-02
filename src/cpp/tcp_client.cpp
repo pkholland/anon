@@ -61,7 +61,6 @@ std::pair<int, std::unique_ptr<fiber_pipe>> connect(const struct sockaddr *addr,
       tv.tv_sec  = 16;  /* Set 16 second timeout */
       tv.tv_usec = 0;
       setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-      setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     }
   }
   else if (errno != EINPROGRESS || !non_blocking)
