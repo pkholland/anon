@@ -59,9 +59,10 @@ struct tef_app
   std::map<Aws::String, Aws::String> files;
 };
 
-void exe_cmd(const std::string &str)
+std::string exe_cmd(const std::string &str)
 {
   std::string cmd = "bash -c '" + str + "'";
+  std::string out;
   auto f = popen(cmd.c_str(), "r");
   if (f)
   {
@@ -70,6 +71,7 @@ void exe_cmd(const std::string &str)
       auto bytes = fread(&buff[0], 1, sizeof(buff), f);
       if (bytes <= 0)
         break;
+      out += std::string(&buff[0], bytes);
     }
     auto exit_code = pclose(f);
     // for now, because the resin watchdog may be watching this process
@@ -83,6 +85,7 @@ void exe_cmd(const std::string &str)
   {
     anon_throw(std::runtime_error, "popen failed: " << errno_string());
   }
+  return out;
 }
 
 void create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
@@ -171,6 +174,8 @@ teflon_state sync_teflon_app(const ec2_info &ec2i, bool live_reload)
     if (!curr_app) {
       create_empty_directory(ec2i, "");
     }
+
+    auto uname = std::string("-") + exe_cmd("uname -m");
 
     std::string table_name = ud["artifacts_ddb_table_name"];
     std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
