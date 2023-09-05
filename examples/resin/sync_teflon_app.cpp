@@ -178,7 +178,15 @@ teflon_state sync_teflon_app(const ec2_info &ec2i, bool live_reload)
     std::string table_name = ud["artifacts_ddb_table_name"];
     std::string p_key_name = ud["artifacts_ddb_table_primary_key_name"];
     std::string p_key_value = ud["artifacts_ddb_table_primary_key_value"];
-    p_key_value += std::string("-") + exe_cmd("uname -m");
+    auto arch = exe_cmd("uname -m");
+    while (true) {
+      auto pos = arch.rfind("\n");
+      if (pos == std::string::npos) {
+        break;
+      }
+      arch = arch.substr(0, pos);
+    }
+    p_key_value += std::string("-") + arch;
     std::string s_key_name = ud["artifacts_ddb_table_secondary_key_name"];
     std::string s_key_value = ud["artifacts_ddb_table_secondary_key_value"];
 
