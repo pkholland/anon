@@ -270,25 +270,33 @@ extern "C" int main(int argc, char **argv)
         }
       }
 
-      server_init(is_live_reload);
+      try {
+        server_init(is_live_reload);
 
-      if (https_port > 0)
-        my_https = std::unique_ptr<http_server>(new http_server(https_port,
+        if (https_port > 0)
+          my_https = std::unique_ptr<http_server>(new http_server(https_port,
+                                                                  [](http_server::pipe_t &pipe, const http_request &request) {
+                                                                    server_respond(pipe, request, true);
+                                                                  },
+                                                                  tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
+
+        if (http_port > 0)
+          my_http = std::unique_ptr<http_server>(new http_server(http_port,
                                                                 [](http_server::pipe_t &pipe, const http_request &request) {
-                                                                  server_respond(pipe, request, true);
+                                                                  server_respond(pipe, request, false);
                                                                 },
-                                                                tcp_server::k_default_backlog, server_ctx.get(), sport_is_fd, SERVER_STACK_SIZE));
+                                                                tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
 
-      if (http_port > 0)
-        my_http = std::unique_ptr<http_server>(new http_server(http_port,
-                                                               [](http_server::pipe_t &pipe, const http_request &request) {
-                                                                 server_respond(pipe, request, false);
-                                                               },
-                                                               tcp_server::k_default_backlog, 0, port_is_fd, SERVER_STACK_SIZE));
-
-      if (private_port > 0)
-        my_private_tcp = std::unique_ptr<tcp_server>(new tcp_server(private_port, tcp_server_respond,
-                                                              tcp_server::k_default_backlog, true, SERVER_STACK_SIZE));
+        if (private_port > 0)
+          my_private_tcp = std::unique_ptr<tcp_server>(new tcp_server(private_port, tcp_server_respond,
+                                                                tcp_server::k_default_backlog, true, SERVER_STACK_SIZE));
+      }
+      catch (const std::exception& exc) {
+        anon_log("caught exception starting server, " << exc.what());
+      }
+      catch (...) {
+        anon_log("caught unknown exception starting server");
+      }
     };
 
     // if we have been run by a tool capable of giving
@@ -321,7 +329,6 @@ extern "C" int main(int argc, char **argv)
                   // until we get one that tells us to stop
                   while (true)
                   {
-
                     try
                     {
                       pipe.read(&cmd, 1);

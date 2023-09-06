@@ -74,12 +74,8 @@ std::string exe_cmd(const std::string &str)
       out += std::string(&buff[0], bytes);
     }
     auto exit_code = pclose(f);
-    // for now, because the resin watchdog may be watching this process
-    // it can mess with exit codes of subprocesses.  Ignore whatever
-    // exit code we get.  We should implement all of this stuff without
-    // needing execute bash commands anyway...
-    // if (exit_code != 0)
-    //   anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
+    if (exit_code != 0)
+      anon_throw(std::runtime_error, "command: " << str << " exited non-zero: " << error_string(exit_code));
   }
   else
   {
