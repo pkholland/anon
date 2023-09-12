@@ -40,6 +40,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <chrono>
+#include <poll.h>
 
 extern char **environ;
 
@@ -49,10 +50,15 @@ namespace
 int listen_sock = -1;
 int private_listen_sock = -1;
 int current_srv_pid = 0;
-int upcoming_srv_pid = -1;
-int death_pipe[2];
 std::vector<int> udps;
-std::thread death_thread;
+
+// glibc doesn't provide pidfd_open.  Documentation for
+// it frequently discusses the need to directly call
+// syscall exactly like this...
+int pidfd_open(pid_t pid, unsigned int flags)
+{
+  return syscall(SYS_pidfd_open, pid, flags);
+}
 
 struct proc_info
 {
@@ -186,11 +192,11 @@ void write_stop(int fd0, int fd1)
 
 int start_child(proc_info &pi)
 {
-  upcoming_srv_pid = fork();
-  if (upcoming_srv_pid == -1)
+  auto pid = fork();
+  if (pid == -1)
     do_error("fork()");
 
-  if (upcoming_srv_pid != 0)
+  if (pid != 0)
   {
 
     // here we are the (calling) parent, 'pid' is the child's process id
@@ -198,8 +204,8 @@ int start_child(proc_info &pi)
 
     if (!read_ok(pi.cmd_pipe[0], pi.cmd_pipe[1]))
     {
-      anon_log_error("child process " << upcoming_srv_pid << " started, but did not reply correctly, so was killed");
-      kill(upcoming_srv_pid, SIGKILL);
+      anon_log_error("child process " << pid << " started, but did not reply correctly, so was killed");
+      kill(pid, SIGKILL);
       throw std::runtime_error("child process failed to start correctly");
     }
   }
@@ -250,8 +256,10 @@ int start_child(proc_info &pi)
     // descriptors and that allows us to call dup on pi.cmd_pipe[1] causing
     // it to have a consistent, low number in the exec'ed process, letting us
     // reveal a little less about the state of this calling process.
+    #if 0
     close(death_pipe[0]);
     close(death_pipe[1]);
+    #endif
 
     args2.push_back(const_cast<char *>("-cmd_fd"));
     int new_pipe = dup(pi.cmd_pipe[1]);
@@ -280,37 +288,49 @@ int start_child(proc_info &pi)
     exit(1);
   }
 
-  return upcoming_srv_pid;
+  return pid;
 }
 
-std::map<int /*pid*/, std::unique_ptr<proc_info>> proc_map;
-std::mutex proc_map_mutex;
-std::condition_variable proc_map_cond;
+std::map<int /*pid*/, std::unique_ptr<proc_info>> running_procs_map;
+std::mutex running_procs_map_mutex;
+std::condition_variable running_procs_map_cond;
 
-void handle_sigchld(int sig)
+void watch_for_child_death_and_restart(int child_pid)
 {
-  pid_t chld = 0;;
-  if (current_srv_pid != 0 && waitpid(current_srv_pid, 0, WNOHANG) != -1) {
-    chld = current_srv_pid;
-  } else if (upcoming_srv_pid != -1 && waitpid(upcoming_srv_pid, 0, WNOHANG) != -1) {
-    chld = upcoming_srv_pid;
-  }
-
-  if (chld != 0)
-  {
-    size_t tot_bytes = 0;
-    char *data = (char *)&chld;
-    while (tot_bytes < sizeof(chld))
-    {
-      auto written = ::write(death_pipe[0], &data[tot_bytes], sizeof(chld) - tot_bytes);
-      if (written < 0)
-      {
-        anon_log_error("couldn't write to death pipe");
-        exit(1);
+  std::thread([child_pid] {
+    auto pid_fd = pidfd_open(child_pid, 0);
+    struct pollfd pfd = {0};
+    pfd.fd = pid_fd;
+    pfd.events = POLLIN;
+    auto ready = poll(&pfd, 1, -1);
+    if (ready > 0) {
+      int exit_status;
+      waitpid(child_pid, &exit_status, 0);
+      std::unique_lock<std::mutex> lock(running_procs_map_mutex);
+      auto p = running_procs_map.find(child_pid);
+      if (p != running_procs_map.end()) {
+        // if it is still in running_procs_map then we think
+        // the process is supposed to be running, so
+        // restart it
+        anon_log_error("child process " << child_pid << " unexpectedly exited with exit_status: " << exit_status << ", restarting");
+        auto pi = std::move(p->second);
+        running_procs_map.erase(p);
+        auto notify = pi->unexpected_restart_;
+        auto new_chld = start_child(*pi);
+        if (write_cmd(pi->cmd_pipe[0], k_start))
+        {
+        }
+        running_procs_map.insert(std::make_pair(new_chld, std::move(pi)));
+        if (notify)
+          notify();
+        watch_for_child_death_and_restart(new_chld);
       }
-      tot_bytes += written;
     }
-  }
+    else {
+      anon_log("strange, poll with no timeout specified timed out anyway");
+    }
+    close(pid_fd);
+  }).detach();
 }
 
 } // namespace
@@ -400,95 +420,6 @@ void sproc_mgr_init(int port, int private_port, const std::vector<int> udp_ports
     }
     udps.push_back(sock);
   }
-
-  if (socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0]) != 0)
-  {
-    close(listen_sock);
-    listen_sock = -1;
-    if (private_listen_sock != -1) {
-      close(private_listen_sock);
-      private_listen_sock = -1;
-    }
-    do_error("socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, &death_pipe[0])");
-  }
-
-  death_thread = std::thread(
-      [] {
-        while (true)
-        {
-          // read a pid for a child that has died
-          pid_t chld;
-          char *data = (char *)&chld;
-          size_t tot_bytes = 0;
-          while (tot_bytes < sizeof(chld))
-          {
-            auto bytes_read = ::read(death_pipe[1], &data[tot_bytes], sizeof(chld) - tot_bytes);
-            if (bytes_read <= 0)
-            {
-              anon_log_error("couldn't read from the death pipe");
-              exit(1);
-            }
-            tot_bytes += bytes_read;
-          }
-
-          // you stop this thread by writting 0 into death_pipe[0];
-          if (chld == 0)
-            return;
-
-          std::unique_lock<std::mutex> lock(proc_map_mutex);
-          auto p = proc_map.find(chld);
-          if (p == proc_map.end())
-            anon_log("ignoring unregistered child process id: " << chld);
-          else
-          {
-            auto pi = std::move(p->second);
-            proc_map.erase(p);
-            if (chld == current_srv_pid)
-            {
-              try
-              {
-                current_srv_pid = 0;
-                anon_log_error("child process " << chld << " unexpectedly exited, restarting");
-                auto notify = pi->unexpected_restart_;
-                auto new_chld = start_child(*pi);
-                if (write_cmd(pi->cmd_pipe[0], k_start))
-                {
-                }
-                proc_map.insert(std::make_pair(new_chld, std::move(pi)));
-                current_srv_pid = new_chld;
-                upcoming_srv_pid = -1;
-                if (notify)
-                  notify();
-              }
-              catch (const std::exception &err)
-              {
-                anon_log_error("caught exception: " << err.what());
-              }
-              catch (...)
-              {
-                anon_log_error("caught unknown exception trying to launch new server process");
-              }
-            }
-            proc_map_cond.notify_all();
-          }
-        }
-      });
-
-  struct sigaction sa;
-  sa.sa_handler = &handle_sigchld;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
-  if (sigaction(SIGCHLD, &sa, 0) == -1)
-  {
-    close(listen_sock);
-    listen_sock = -1;
-    if (private_listen_sock != -1)
-    {
-      close(private_listen_sock);
-      private_listen_sock = -1;
-    }
-    do_error("sigaction(SIGCHLD, &sa, 0)");
-  }
 }
 
 void sproc_mgr_term()
@@ -501,39 +432,6 @@ void sproc_mgr_term()
     close(private_listen_sock);
     private_listen_sock = -1;
   }
-
-  {
-    // wait a reasonable amount of time for all child processes to exit
-    std::unique_lock<std::mutex> lock(proc_map_mutex);
-    while (proc_map.size() != 0)
-      proc_map_cond.wait_for(lock, std::chrono::seconds(10));
-  }
-
-  size_t tot_bytes = 0;
-  pid_t chld = 0;
-  char *data = (char *)&chld;
-  while (tot_bytes < sizeof(chld))
-  {
-    auto written = ::write(death_pipe[0], &data[tot_bytes], sizeof(chld) - tot_bytes);
-    if (written < 0)
-    {
-      anon_log_error("couldn't write to death pipe");
-      exit(1);
-    }
-    tot_bytes += written;
-  }
-  death_thread.join();
-
-  close(death_pipe[0]);
-  close(death_pipe[1]);
-
-  std::unique_lock<std::mutex> lock(proc_map_mutex);
-  for (auto chld = proc_map.begin(); chld != proc_map.end(); chld++)
-  {
-    anon_log("killing child " << chld->first);
-    kill(chld->first, SIGKILL);
-  }
-  proc_map = std::map<int /*pid*/, std::unique_ptr<proc_info>>();
   anon_log("sproc_mgr_term finished");
 }
 
@@ -543,32 +441,38 @@ void start_server(const char *exe_name, bool do_tls, const std::vector<std::stri
   std::unique_ptr<proc_info> pi(new proc_info(exe_name, do_tls, args, envs, unexpected_restart));
   auto chld = start_child(*pi);
 
-  std::unique_lock<std::mutex> lock(proc_map_mutex);
-  auto p = proc_map.find(current_srv_pid);
+  std::unique_lock<std::mutex> lock(running_procs_map_mutex);
+  auto p = running_procs_map.find(current_srv_pid);
   current_srv_pid = chld;
-  upcoming_srv_pid = -1;
-  if (p != proc_map.end())
-    write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
+  if (p != running_procs_map.end()) {
+    auto pp = std::move(p->second);
+    running_procs_map.erase(p);
+    write_stop(pp->cmd_pipe[0], pp->cmd_pipe[1]);
+  }
   if (write_cmd(pi->cmd_pipe[0], k_start))
   {
   }
-  proc_map.insert(std::make_pair(chld, std::move(pi)));
+  running_procs_map.insert(std::make_pair(chld, std::move(pi)));
+  watch_for_child_death_and_restart(chld);
 }
 
 void stop_server()
 {
-  std::unique_lock<std::mutex> lock(proc_map_mutex);
-  auto p = proc_map.find(current_srv_pid);
-  current_srv_pid = 0; // so death_thread doesn't try to relaunch the child
-  if (p != proc_map.end())
+  std::unique_lock<std::mutex> lock(running_procs_map_mutex);
+  auto p = running_procs_map.find(current_srv_pid);
+  current_srv_pid = 0;
+  if (p != running_procs_map.end()) {
+    auto pp = std::move(p->second);
+    running_procs_map.erase(p);
     write_stop(p->second->cmd_pipe[0], p->second->cmd_pipe[1]);
+  }
 }
 
 void send_sync()
 {
-  std::unique_lock<std::mutex> lock(proc_map_mutex);
-  auto p = proc_map.find(current_srv_pid);
-  if (p != proc_map.end())
+  std::unique_lock<std::mutex> lock(running_procs_map_mutex);
+  auto p = running_procs_map.find(current_srv_pid);
+  if (p != running_procs_map.end())
     write_cmd(p->second->cmd_pipe[0], k_sync);
 }
 
