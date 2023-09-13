@@ -96,7 +96,7 @@ void create_empty_directory(const ec2_info &ec2i, const Aws::String &id)
   oss << "rm -rf " << dir << "/*";
   exe_cmd(oss.str());
   oss.str("");
-  oss << "mkdir " << dir;
+  oss << "mkdir -p " << dir;
   exe_cmd(oss.str());
 }
 
