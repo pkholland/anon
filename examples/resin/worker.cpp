@@ -218,6 +218,7 @@ void start_done_action(const ec2_info &ec2i)
 }
 
 const int wait_secs = 10; // maximum time to wait for sqs messages
+const int default_idle_time = wait_secs;
 const int timeout_ms = wait_secs * 2 * 1000;
 const int visibility_secs = 60;
 const int visibility_refresh_secs = 30;
@@ -236,6 +237,12 @@ void run_worker(const ec2_info &ec2i)
 
   std::string queue_url = ec2i.user_data_js["task_queue_url"];
   anon_log("reading tasks from: " << queue_url);
+
+  auto idle_time = default_idle_time;
+  auto idle_time_it = ec2i.user_data_js.find("idle_time_in_seconds");
+  if (idle_time_it != ec2i.user_data_js.end() && idle_time_it->is_number()) {
+    idle_time = *idle_time_it;
+  }
 
   Aws::SQS::SQSClient client(config);
   std::mutex keep_alive_mutex;
@@ -298,6 +305,8 @@ void run_worker(const ec2_info &ec2i)
       timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
     }
   });
+
+  auto last_message_time = cur_time();
 
   while (true)
   {
@@ -404,8 +413,9 @@ void run_worker(const ec2_info &ec2i)
           exit(1);
         }
       }
+      last_message_time = cur_time();
     }
-    else
+    else if (to_seconds(cur_time() - last_message_time) >= idle_time)
     {
       anon_log("no tasks after wating " << wait_secs << " seconds");
       if (should_shut_down(ec2i))
