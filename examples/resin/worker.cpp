@@ -161,12 +161,20 @@ bool should_shut_down(const ec2_info &ec2i)
 
 void do_shutdown(const ec2_info &ec2i, int attempts = 0)
 {
+  // we do certain kinds of debugging when this code isn't
+  // running in EC2, and so there is nothing to "shut down".
+  // If we are in that situation ec2.instance_id is set to
+  // "instance_id" (which would never be a valid EC2 instance id)
+  if (ec2i.instance_id == "instance_id") {
+    return;
+  }
+
   Aws::Client::ClientConfiguration ec2_config;
   ec2_config.region = ec2i.default_region;
   Aws::EC2::EC2Client ec2(ec2_config);
 
   Aws::EC2::Model::TerminateInstancesRequest request;
-  request.AddInstanceIds(ec2i.instance_id.c_str());
+  request.AddInstanceIds(ec2i.instance_id);
   auto outcome = ec2.TerminateInstances(request);
 
   if (!outcome.IsSuccess() && attempts < 10)
@@ -182,9 +190,10 @@ void do_shutdown(const ec2_info &ec2i, int attempts = 0)
 
 void start_done_action(const ec2_info &ec2i)
 {
-  if (ec2i.user_data_js.find("done_action") != ec2i.user_data_js.end())
+  auto done_action_it = ec2i.user_data_js.find("done_action");
+  if (done_action_it != ec2i.user_data_js.end())
   {
-    std::string done_action = ec2i.user_data_js["done_action"];
+    std::string done_action = *done_action_it;
     if (done_action == "terminate")
     {
       std::srand(std::time(0) + *(int *)ec2i.instance_id.c_str());
@@ -218,9 +227,9 @@ const int visibility_refresh_secs = 30;
 void run_worker(const ec2_info &ec2i)
 {
   Aws::Client::ClientConfiguration config;
-  if (ec2i.user_data_js.find("task_queue_region") != ec2i.user_data_js.end()) {
-    std::string task_region = ec2i.user_data_js["task_queue_region"];
-    config.region = task_region.c_str();
+  auto queue_region_it = ec2i.user_data_js.find("task_queue_region");
+  if (queue_region_it != ec2i.user_data_js.end()) {
+    config.region = *queue_region_it;
   } else
     config.region = ec2i.default_region;
   config.httpRequestTimeoutMs = config.requestTimeoutMs = config.connectTimeoutMs = timeout_ms;
@@ -335,9 +344,9 @@ void run_worker(const ec2_info &ec2i)
         {
           // the calling parent
           int status;
-          auto w = waitpid(-1, &status, WUNTRACED | WCONTINUED);
+          auto w = waitpid(pid, &status, 0);
           if (w == -1)
-            do_error("waitpid(-1, &status, WUNTRACED | WCONTINUED)");
+            do_error("waitpid(pid, &status, 0)");
 
           auto script_exited_zero = false;
           if (WIFEXITED(status))
