@@ -29,6 +29,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include "nlohmann/json.hpp"
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/ChangeMessageVisibilityBatchRequest.h>
@@ -41,6 +42,8 @@
 #include <aws/ec2/model/DescribeInstancesRequest.h>
 #include <aws/ec2/model/TerminateInstancesRequest.h>
 #include <aws/ec2/model/StopInstancesRequest.h>
+
+using namespace nlohmann;
 
 namespace
 {
@@ -217,6 +220,25 @@ void start_done_action(const ec2_info &ec2i)
     anon_log("no done action specified, leaving instance running");
 }
 
+std::pair<bool, std::string> exe_cmd(const std::string &cmd)
+{
+  std::string out;
+  auto f = popen(cmd.c_str(), "r");
+  if (f) {
+    char buff[1024];
+    while (true) {
+      auto bytes = fread(&buff[0], 1, sizeof(buff), f);
+      if (bytes <= 0)
+        break;
+      out += std::string(&buff[0], bytes);
+    }
+    auto exit_code = pclose(f);
+    return std::make_pair(exit_code == 0, out);
+  }
+  return std::make_pair(false, std::string());
+}
+
+
 const int wait_secs = 10; // maximum time to wait for sqs messages
 const int default_idle_time = wait_secs;
 const int timeout_ms = wait_secs * 2 * 1000;
@@ -336,7 +358,88 @@ void run_worker(const ec2_info &ec2i)
 
       for (auto &m : messages)
       {
-        auto bash_cmd = get_body(m);
+        auto valid_message = true;
+        auto cmd = get_body(m);
+        std::string bash_cmd;
+        std::string done_trigger_url;
+        try {
+          auto js = json::parse(cmd);
+          auto type_it = js.find("type");
+          if (type_it == js.end() || !type_it->is_string()) {
+            anon_log("\"type\" field is missing/incorrect");
+            valid_message = false;
+          }
+          else {
+            std::string type = *type_it;
+            if (type != "bash_command") {
+              anon_log("unsupported command type: " << type);
+              valid_message = false;
+            }
+            auto cmd_it = js.find("command");
+            if (cmd_it == js.end() || !cmd_it->is_string()) {
+              anon_log("\"command\" field is missing/incorrect");
+              valid_message = false;
+            }
+            else {
+              bash_cmd = *cmd_it;
+              auto done_it = js.find("done_url");
+              if (done_it != js.end() && done_it->is_string()) {
+                done_trigger_url = *done_it;
+                if (done_trigger_url.find("https://") != 0) {
+                  anon_log("unsupported done trigger url: " << done_trigger_url);
+                  valid_message = false;
+                }
+              }
+            }
+          }
+        }
+        catch(...) {
+          anon_log("command message could not be parsed as json: " << cmd);
+          valid_message = false;
+        }
+
+        if (!valid_message) {
+          Aws::SQS::Model::DeleteMessageRequest req;
+          req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
+          auto outcome = client.DeleteMessage(req);
+          if (!outcome.IsSuccess())
+            anon_log("DeleteMessage failed: " << outcome.GetError());
+          continue;
+        }
+
+#if 1
+        const auto max_retries = 2;
+
+        const auto &att = m.GetAttributes();
+        auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
+        auto approx_receive_count = 1000;
+        if (arc != att.end())
+          approx_receive_count = std::stoull(arc->second.c_str());
+        auto start_time = cur_time();
+
+        auto out = exe_cmd(bash_cmd);
+        if (out.first || approx_receive_count >= max_retries)
+        {
+          if (!done_trigger_url.empty()) {
+            json js = {
+              {"status", "complete"},
+              {"success", out.first},
+              {"stdout", out.second},
+              {"exec_time", to_seconds(cur_time() - start_time)}
+            };
+            std::ostringstream oss;
+            oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
+            exe_cmd(oss.str());
+          }
+
+          Aws::SQS::Model::DeleteMessageRequest req;
+          req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
+          auto outcome = client.DeleteMessage(req);
+          if (!outcome.IsSuccess())
+            anon_log("DeleteMessage failed: " << outcome.GetError());
+        }
+
+#else
 
         const auto max_retries = 2;
 
@@ -412,6 +515,7 @@ void run_worker(const ec2_info &ec2i)
           fprintf(stderr, "fexecve(%d, ...) failed with errno: %d - %s\n", bash_fd, errno, strerror(errno));
           exit(1);
         }
+#endif
       }
       last_message_time = cur_time();
     }
