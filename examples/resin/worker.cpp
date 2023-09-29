@@ -407,7 +407,6 @@ void run_worker(const ec2_info &ec2i)
           continue;
         }
 
-#if 1
         const auto max_retries = 2;
 
         const auto &att = m.GetAttributes();
@@ -417,8 +416,7 @@ void run_worker(const ec2_info &ec2i)
           approx_receive_count = std::stoull(arc->second.c_str());
         }
 
-        auto start_time = cur_time();
-        if (approx_receive_count == 1 && !done_trigger_url.empty()) {
+        if (!done_trigger_url.empty()) {
           json js = {
             {"status", "started"},
           };
@@ -426,13 +424,15 @@ void run_worker(const ec2_info &ec2i)
           oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
           exe_cmd(oss.str());
         }
+        auto start_time = cur_time();
 
         auto out = exe_cmd(bash_cmd);
+
         if (out.first || approx_receive_count >= max_retries)
         {
           if (!done_trigger_url.empty()) {
             json js = {
-              {"status", "complete"},
+              {"status", out.first ? "complete" : "failed"},
               {"success", out.first},
               {"stdout", out.second},
               {"exec_time", to_seconds(cur_time() - start_time)}
@@ -448,84 +448,6 @@ void run_worker(const ec2_info &ec2i)
           if (!outcome.IsSuccess())
             anon_log("DeleteMessage failed: " << outcome.GetError());
         }
-
-#else
-
-        const auto max_retries = 2;
-
-        const auto &att = m.GetAttributes();
-        auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
-        auto approx_receive_count = 1000;
-        if (arc != att.end())
-          approx_receive_count = std::stoull(arc->second.c_str());
-
-        auto pid = fork();
-        if (pid == -1)
-          do_error("fork()");
-        if (pid != 0)
-        {
-          // the calling parent
-          int status;
-          auto w = waitpid(pid, &status, 0);
-          if (w == -1)
-            do_error("waitpid(pid, &status, 0)");
-
-          auto script_exited_zero = false;
-          if (WIFEXITED(status))
-          {
-            anon_log("bash exited with exit code: " << WEXITSTATUS(status));
-            script_exited_zero = WEXITSTATUS(status) == 0;
-          }
-          else if (WIFSIGNALED(status))
-            anon_log("bash killed by signal: " << WTERMSIG(status));
-          else if (WIFSTOPPED(status))
-            anon_log("bash stopped by signal: " << WSTOPSIG(status));
-
-          {
-            // regardless of whether the bash command succeeded or not
-            // we don't want to keep calling ChangeVisibilityStatus on this message
-            std::unique_lock<std::mutex> l(keep_alive_mutex);
-            keep_alive_set.erase(m.GetReceiptHandle());
-          }
-
-          // if the script succeeded, or if we have failed too many times,
-          // delete the message from sqs
-          if (script_exited_zero || approx_receive_count >= max_retries)
-          {
-            Aws::SQS::Model::DeleteMessageRequest req;
-            req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
-            auto outcome = client.DeleteMessage(req);
-            if (!outcome.IsSuccess())
-              anon_log("DeleteMessage failed: " << outcome.GetError());
-          }
-        }
-        else
-        {
-          // the child process
-          auto bash_file_name = "/bin/bash";
-          auto bash_fd = open(bash_file_name, O_RDONLY);
-          if (bash_fd == -1)
-            do_error("open(\"" << bash_file_name << "\", O_RDONLY)");
-
-          const char *dash_c = "-c";
-          const char *script = bash_cmd.c_str();
-          const char *do_retry = approx_receive_count < max_retries ? "1" : "0";
-          char *args[]{
-              const_cast<char *>(bash_file_name),
-              const_cast<char *>(dash_c),
-              const_cast<char *>(script),
-              const_cast<char *>(do_retry),
-              0};
-
-          fexecve(bash_fd, &args[0], environ);
-
-          // if fexecve succeeded then we never get here.  So getting here is a failure,
-          // but we are already in the child process at this point, so we do what we can
-          // to signifify the error and then exit
-          fprintf(stderr, "fexecve(%d, ...) failed with errno: %d - %s\n", bash_fd, errno, strerror(errno));
-          exit(1);
-        }
-#endif
       }
       last_message_time = cur_time();
     }
