@@ -44,7 +44,7 @@ void body_as_json(http_server::pipe_t &pipe, const http_request &request, bool i
   if (!request.has_content_length)
     throw_request_error(HTTP_STATUS_LENGTH_REQUIRED, "required Content-Length header is missing");
   auto clen = request.content_length;
-  if (clen <= 2)
+  if (clen < 2)
     throw_request_error(HTTP_STATUS_NOT_ACCEPTABLE, "Content-Length cannot be less than 2 (" << clen << ")");
   if (clen > 16384) {
     struct sockaddr_in6 addr6;
