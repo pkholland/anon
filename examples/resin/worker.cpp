@@ -359,14 +359,11 @@ void run_worker(const ec2_info &ec2i)
       for (auto &m : messages)
       {
         auto valid_message = true;
-        anon_log("fetched message, body: " << m.GetBody());
         auto cmd = get_body(m);
-        anon_log("message after replacements: " << cmd);
         std::string bash_cmd;
         std::string done_trigger_url;
         try {
           auto js = json::parse(cmd);
-          anon_log("parsed json msg:\n" << js.dump(2));
           auto type_it = js.find("type");
           if (type_it == js.end() || !type_it->is_string()) {
             anon_log("\"type\" field is missing/incorrect");
@@ -400,8 +397,6 @@ void run_worker(const ec2_info &ec2i)
           anon_log("command message could not be parsed as json: " << cmd);
           valid_message = false;
         }
-        anon_log("message valid: " << (valid_message ? "true" : "false"));
-        anon_log("bash_cmd: " << bash_cmd);
 
         if (!valid_message) {
           Aws::SQS::Model::DeleteMessageRequest req;
@@ -418,16 +413,23 @@ void run_worker(const ec2_info &ec2i)
         const auto &att = m.GetAttributes();
         auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
         auto approx_receive_count = 1000;
-        if (arc != att.end())
+        if (arc != att.end()) {
           approx_receive_count = std::stoull(arc->second.c_str());
-        auto start_time = cur_time();
+        }
 
-        anon_log("executing bash command: " << bash_cmd);
+        auto start_time = cur_time();
+        if (approx_receive_count == 1 && !done_trigger_url.empty()) {
+          json js = {
+            {"status", "started"},
+          };
+          std::ostringstream oss;
+          oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
+          exe_cmd(oss.str());
+        }
+
         auto out = exe_cmd(bash_cmd);
-        anon_log("execution result: " << (out.first ? "true" : "false"));
         if (out.first || approx_receive_count >= max_retries)
         {
-          anon_log("done_trigger_url: " << done_trigger_url);
           if (!done_trigger_url.empty()) {
             json js = {
               {"status", "complete"},
@@ -437,7 +439,6 @@ void run_worker(const ec2_info &ec2i)
             };
             std::ostringstream oss;
             oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
-            anon_log("done trigger command: " << oss.str());
             exe_cmd(oss.str());
           }
 
