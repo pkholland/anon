@@ -309,7 +309,6 @@ void send_udp_message(const resin_worker::Message& msg)
 {
   std::string bytes;
   if (msg.SerializeToString(&bytes)) {
-    anon_log("sending upd message");
     if (::sendto(udp_sock, bytes.c_str(), bytes.size(), 0, (sockaddr*)&udp_addr, udp_addr_sz) == -1) {
       anon_log("sendto failed with errno: " << errno_string());
     }
@@ -352,6 +351,7 @@ void run_worker(const ec2_info &ec2i)
       auto ws = msg.mutable_worker_status();
       ws->set_cpu_count(std::thread::hardware_concurrency());
       ws->set_worker_id(worker_id);
+      anon_log("sending worker startup message");
       send_udp_message(msg);
     }
   }
@@ -510,6 +510,7 @@ void run_worker(const ec2_info &ec2i)
           ts->set_task_id(task_id);
           ts->set_completed(0.0f);
           ts->set_complete(false);
+          anon_log("sending task start message");
           send_udp_message(msg);
         }
 
@@ -530,6 +531,7 @@ void run_worker(const ec2_info &ec2i)
             ts->set_success(out.first);
             ts->set_duration(to_seconds(cur_time() - start_time));
             ts->set_message(out.second);
+            anon_log("sending task done message");
             send_udp_message(msg);
           }
 
@@ -560,6 +562,7 @@ void run_worker(const ec2_info &ec2i)
       auto ws = msg.mutable_worker_status();
       ws->set_cpu_count(0);
       ws->set_worker_id(worker_id);
+      anon_log("sending worker shutdown message");
       send_udp_message(msg);
     }
 
