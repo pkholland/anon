@@ -22,6 +22,10 @@
 
 #include "resin.h"
 #include "time_utils.h"
+#include "worker_message.pb.h"
+#include "big_id_serial.h"
+#include "big_id_crypto.h"
+#include "tcp_utils.h"
 #include <sys/timerfd.h>
 #include <signal.h>
 #include <poll.h>
@@ -29,6 +33,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include "nlohmann/json.hpp"
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/sqs/SQSClient.h>
@@ -238,12 +243,81 @@ std::pair<bool, std::string> exe_cmd(const std::string &cmd)
   return std::make_pair(false, std::string());
 }
 
-
 const int wait_secs = 10; // maximum time to wait for sqs messages
 const int default_idle_time = wait_secs;
 const int timeout_ms = wait_secs * 2 * 1000;
 const int visibility_secs = 60;
 const int visibility_refresh_secs = 30;
+int udp_sock = -1;
+sockaddr_in6 udp_addr;
+size_t udp_addr_sz;
+std::string worker_id;
+
+void init_udp_socket(const std::string& host, int port)
+{
+  anon_log("starting worker with upd_host: " << host << ", port: " << port);
+  struct addrinfo hints = {};
+  hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6, whichever
+  hints.ai_socktype = SOCK_STREAM;
+  char portString[8];
+  sprintf(&portString[0], "%d", port);
+  struct addrinfo *result;
+  auto err = getaddrinfo(host.c_str(), &portString[0], &hints, &result);
+  if (err == 0)
+  {
+    auto ipv6 = result->ai_addr->sa_family == AF_INET6;
+    udp_addr_sz = ipv6 ? sizeof(struct sockaddr_in6) : sizeof(struct sockaddr_in);
+    memcpy(&udp_addr, result->ai_addr, udp_addr_sz);
+    freeaddrinfo(result);
+
+    udp_sock = socket(ipv6 ? AF_INET6 : AF_INET, SOCK_DGRAM, 0);
+    if (udp_sock == -1)
+      do_error("socket(AF_INET6, SOCK_DGRAM, 0)");
+
+    // bind to any address that will route to this machine
+    struct sockaddr_in6 addr = {0};
+    socklen_t sz;
+    if (ipv6)
+    {
+      addr.sin6_family = AF_INET6;
+      addr.sin6_port = 0;
+      addr.sin6_addr = in6addr_any;
+      sz = sizeof(sockaddr_in6);
+    }
+    else
+    {
+      auto addr4 = (struct sockaddr_in*)&addr;
+      addr4->sin_family = AF_INET;
+      addr4->sin_port = 0;
+      addr4->sin_addr.s_addr = INADDR_ANY;
+      sz = sizeof(sockaddr_in);
+    }
+    if (bind(udp_sock, (struct sockaddr *)&addr, sz) != 0)
+    {
+      close(udp_sock);
+      udp_sock = -1;
+      do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << 0 << ", in6addr_any/INADDR_ANY>, sizeof(...))");
+    }
+    else {
+      worker_id = toHexString(small_rand_id());
+      anon_log("worker host bound to local addr: " << addr << ", worker_id: " << worker_id);
+    }
+  }
+}
+
+void send_udp_message(const resin_worker::Message& msg)
+{
+  std::string bytes;
+  if (msg.SerializeToString(&bytes)) {
+    anon_log("sending upd message");
+    if (::sendto(udp_sock, bytes.c_str(), bytes.size(), 0, (sockaddr*)&udp_addr, udp_addr_sz) == -1) {
+      anon_log("sendto failed with errno: " << errno_string());
+    }
+  }
+  else {
+    anon_log("msg.SerializeToString failed");
+  }
+}
 
 } // namespace
 
@@ -264,6 +338,22 @@ void run_worker(const ec2_info &ec2i)
   auto idle_time_it = ec2i.user_data_js.find("idle_time_in_seconds");
   if (idle_time_it != ec2i.user_data_js.end() && idle_time_it->is_number()) {
     idle_time = *idle_time_it;
+  }
+
+  auto udp_host_it = ec2i.user_data_js.find("status_udp_host");
+  auto udp_port_it = ec2i.user_data_js.find("status_udp_port");
+  if (udp_host_it != ec2i.user_data_js.end() && udp_host_it->is_string()
+    && udp_port_it != ec2i.user_data_js.end() && udp_port_it->is_number()) {
+
+    init_udp_socket(*udp_host_it, *udp_port_it);
+    if (udp_sock != -1) {
+      resin_worker::Message msg;
+      msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_WORKER_STATUS);
+      auto ws = msg.mutable_worker_status();
+      ws->set_cpu_count(std::thread::hardware_concurrency());
+      ws->set_worker_id(worker_id);
+      send_udp_message(msg);
+    }
   }
 
   Aws::SQS::SQSClient client(config);
@@ -361,7 +451,7 @@ void run_worker(const ec2_info &ec2i)
         auto valid_message = true;
         auto cmd = get_body(m);
         std::string bash_cmd;
-        std::string done_trigger_url;
+        std::string task_id;
         try {
           auto js = json::parse(cmd);
           auto type_it = js.find("type");
@@ -382,13 +472,9 @@ void run_worker(const ec2_info &ec2i)
             }
             else {
               bash_cmd = *cmd_it;
-              auto done_it = js.find("done_url");
-              if (done_it != js.end() && done_it->is_string()) {
-                done_trigger_url = *done_it;
-                if (done_trigger_url.find("https://") != 0) {
-                  anon_log("unsupported done trigger url: " << done_trigger_url);
-                  valid_message = false;
-                }
+              auto task_id_it = js.find("task_id");
+              if (task_id_it != js.end() && task_id_it->is_string()) {
+                task_id = *task_id_it;
               }
             }
           }
@@ -416,30 +502,35 @@ void run_worker(const ec2_info &ec2i)
           approx_receive_count = std::stoull(arc->second.c_str());
         }
 
-        if (!done_trigger_url.empty()) {
-          json js = {
-            {"status", "started"},
-          };
-          std::ostringstream oss;
-          oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
-          exe_cmd(oss.str());
+        if (udp_sock != -1 && !task_id.empty()) {
+          resin_worker::Message msg;
+          msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
+          auto ts = msg.mutable_task_status();
+          ts->set_worker_id(worker_id);
+          ts->set_task_id(task_id);
+          ts->set_completed(0.0f);
+          ts->set_complete(false);
+          send_udp_message(msg);
         }
+
         auto start_time = cur_time();
 
         auto out = exe_cmd(bash_cmd);
 
         if (out.first || approx_receive_count >= max_retries)
         {
-          if (!done_trigger_url.empty()) {
-            json js = {
-              {"status", out.first ? "complete" : "failed"},
-              {"success", out.first},
-              {"stdout", out.second},
-              {"exec_time", to_seconds(cur_time() - start_time)}
-            };
-            std::ostringstream oss;
-            oss << "curl -s -H 'content-type: application/json' " << done_trigger_url << " --data-binary '" << js.dump() << "' ";
-            exe_cmd(oss.str());
+          if (udp_sock != -1 && !task_id.empty()) {
+            resin_worker::Message msg;
+            msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
+            auto ts = msg.mutable_task_status();
+            ts->set_worker_id(worker_id);
+            ts->set_task_id(task_id);
+            ts->set_completed(1.0f);
+            ts->set_complete(true);
+            ts->set_success(out.first);
+            ts->set_duration(to_seconds(cur_time() - start_time));
+            ts->set_message(out.second);
+            send_udp_message(msg);
           }
 
           Aws::SQS::Model::DeleteMessageRequest req;
@@ -462,6 +553,15 @@ void run_worker(const ec2_info &ec2i)
       }
     }
   }
+
+    if (udp_sock != -1) {
+      resin_worker::Message msg;
+      msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_WORKER_STATUS);
+      auto ws = msg.mutable_worker_status();
+      ws->set_cpu_count(0);
+      ws->set_worker_id(worker_id);
+      send_udp_message(msg);
+    }
 
   // tell the keep_alive thread to wake up and exit.
   // then wait for it to have fully exited.

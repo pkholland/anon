@@ -4,3 +4,6 @@ secrets
 certs
 .vscode
 resin_root
+*dir.stamp
+*.pb.cc
+*.pb.h

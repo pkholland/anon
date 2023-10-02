@@ -1,0 +1,30 @@
+syntax = "proto2";
+option optimize_for = LITE_RUNTIME;
+
+package resin_worker;
+
+message Message {
+
+  enum MessageType {
+    WORKER_STATUS = 0;
+    TASK_STATUS = 1;
+  }
+  required MessageType message_type = 1;
+
+  message WorkerStatus {
+    required string worker_id = 1;
+    required uint32 cpu_count = 2;
+  }
+  optional WorkerStatus worker_status = 2;
+
+  message TaskStatus {
+    required string worker_id = 1;
+    required string task_id = 2;
+    required float completed = 3;
+    required bool complete = 4;
+    optional bool success = 5;
+    optional float duration = 6;
+    optional string message = 7;
+  }
+  optional TaskStatus task_status = 3;
+}
