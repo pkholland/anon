@@ -545,6 +545,16 @@ void run_worker(const ec2_info &ec2i)
     if (to_seconds(cur_time() - last_message_time) >= idle_time)
     {
       anon_log("no tasks after wating " << wait_secs << " seconds");
+      if (udp_sock != -1) {
+        resin_worker::Message msg;
+        msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_WORKER_STATUS);
+        auto ws = msg.mutable_worker_status();
+        ws->set_cpu_count(0);
+        ws->set_worker_id(worker_id);
+        anon_log("sending worker shutdown message");
+        send_udp_message(msg);
+      }
+
       if (should_shut_down(ec2i))
       {
         anon_log("no reason to keep running, executing done_action");
@@ -553,16 +563,6 @@ void run_worker(const ec2_info &ec2i)
       }
     }
   }
-
-    if (udp_sock != -1) {
-      resin_worker::Message msg;
-      msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_WORKER_STATUS);
-      auto ws = msg.mutable_worker_status();
-      ws->set_cpu_count(0);
-      ws->set_worker_id(worker_id);
-      anon_log("sending worker shutdown message");
-      send_udp_message(msg);
-    }
 
   // tell the keep_alive thread to wake up and exit.
   // then wait for it to have fully exited.
