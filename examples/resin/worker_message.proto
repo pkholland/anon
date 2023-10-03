@@ -27,4 +27,13 @@ message Message {
     optional string message = 7;
   }
   optional TaskStatus task_status = 3;
+
+  // whenever a TaskStatus is sent with
+  // 'complete' as true, the receiver 
+  // sends a TaskStatusAck back to the 
+  // caller
+  message TaskStatusAck {
+    required string task_id = 1;
+  }
+  optional TaskStatusAck task_status_ack = 4;
 }

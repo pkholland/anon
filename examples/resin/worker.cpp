@@ -530,6 +530,13 @@ void run_worker(const ec2_info &ec2i)
               ts->set_message(out.second);
               anon_log("sending task done message");
               send_udp_message(msg);
+
+              // TODO: get this to time out correctly, check
+              // what is being returned...
+              std::vector<char> buff(4069);
+              sockaddr_in6 addr;
+              socklen_t sz = sizeof(addr);
+              ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
             }
 
             Aws::SQS::Model::DeleteMessageRequest req;
