@@ -429,122 +429,120 @@ void run_worker(const ec2_info &ec2i)
     req.WithAttributeNames(std::move(att));
 
     auto outcome = client.ReceiveMessage(req);
-    if (!outcome.IsSuccess())
+    if (outcome.IsSuccess())
     {
-      anon_log("ReceiveMessage failed: " << outcome.GetError());
-      break;
-    }
-    auto &messages = outcome.GetResult().GetMessages();
-    if (messages.size() > 0)
-    {
+      auto &messages = outcome.GetResult().GetMessages();
+      if (messages.size() > 0)
       {
-        std::unique_lock<std::mutex> l(keep_alive_mutex);
-        for (auto &m : messages)
-          keep_alive_set[m.GetReceiptHandle()] = m.GetMessageId();
-      }
-      struct itimerspec t_spec = {0};
-      t_spec.it_value = cur_time();
-      timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
+        {
+          std::unique_lock<std::mutex> l(keep_alive_mutex);
+          for (auto &m : messages)
+            keep_alive_set[m.GetReceiptHandle()] = m.GetMessageId();
+        }
+        struct itimerspec t_spec = {0};
+        t_spec.it_value = cur_time();
+        timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
-      for (auto &m : messages)
-      {
-        auto valid_message = true;
-        auto cmd = get_body(m);
-        std::string bash_cmd;
-        std::string task_id;
-        try {
-          auto js = json::parse(cmd);
-          auto type_it = js.find("type");
-          if (type_it == js.end() || !type_it->is_string()) {
-            anon_log("\"type\" field is missing/incorrect");
-            valid_message = false;
-          }
-          else {
-            std::string type = *type_it;
-            if (type != "bash_command") {
-              anon_log("unsupported command type: " << type);
-              valid_message = false;
-            }
-            auto cmd_it = js.find("command");
-            if (cmd_it == js.end() || !cmd_it->is_string()) {
-              anon_log("\"command\" field is missing/incorrect");
+        for (auto &m : messages)
+        {
+          auto valid_message = true;
+          auto cmd = get_body(m);
+          std::string bash_cmd;
+          std::string task_id;
+          try {
+            auto js = json::parse(cmd);
+            auto type_it = js.find("type");
+            if (type_it == js.end() || !type_it->is_string()) {
+              anon_log("\"type\" field is missing/incorrect");
               valid_message = false;
             }
             else {
-              bash_cmd = *cmd_it;
-              auto task_id_it = js.find("task_id");
-              if (task_id_it != js.end() && task_id_it->is_string()) {
-                task_id = *task_id_it;
+              std::string type = *type_it;
+              if (type != "bash_command") {
+                anon_log("unsupported command type: " << type);
+                valid_message = false;
+              }
+              auto cmd_it = js.find("command");
+              if (cmd_it == js.end() || !cmd_it->is_string()) {
+                anon_log("\"command\" field is missing/incorrect");
+                valid_message = false;
+              }
+              else {
+                bash_cmd = *cmd_it;
+                auto task_id_it = js.find("task_id");
+                if (task_id_it != js.end() && task_id_it->is_string()) {
+                  task_id = *task_id_it;
+                }
               }
             }
           }
-        }
-        catch(...) {
-          anon_log("command message could not be parsed as json: " << cmd);
-          valid_message = false;
-        }
+          catch(...) {
+            anon_log("command message could not be parsed as json: " << cmd);
+            valid_message = false;
+          }
 
-        if (!valid_message) {
-          Aws::SQS::Model::DeleteMessageRequest req;
-          req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
-          auto outcome = client.DeleteMessage(req);
-          if (!outcome.IsSuccess())
-            anon_log("DeleteMessage failed: " << outcome.GetError());
-          continue;
-        }
+          if (!valid_message) {
+            Aws::SQS::Model::DeleteMessageRequest req;
+            req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
+            auto outcome = client.DeleteMessage(req);
+            if (!outcome.IsSuccess())
+              anon_log("DeleteMessage failed: " << outcome.GetError());
+            continue;
+          }
 
-        const auto max_retries = 2;
+          const auto max_retries = 2;
 
-        const auto &att = m.GetAttributes();
-        auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
-        auto approx_receive_count = 1000;
-        if (arc != att.end()) {
-          approx_receive_count = std::stoull(arc->second.c_str());
-        }
+          const auto &att = m.GetAttributes();
+          auto arc = att.find(Aws::SQS::Model::MessageSystemAttributeName::ApproximateReceiveCount);
+          auto approx_receive_count = 1000;
+          if (arc != att.end()) {
+            approx_receive_count = std::stoull(arc->second.c_str());
+          }
 
-        if (udp_sock != -1 && !task_id.empty()) {
-          resin_worker::Message msg;
-          msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
-          auto ts = msg.mutable_task_status();
-          ts->set_worker_id(worker_id);
-          ts->set_task_id(task_id);
-          ts->set_completed(0.0f);
-          ts->set_complete(false);
-          anon_log("sending task start message");
-          send_udp_message(msg);
-        }
-
-        auto start_time = cur_time();
-
-        auto out = exe_cmd(bash_cmd);
-
-        if (out.first || approx_receive_count >= max_retries)
-        {
           if (udp_sock != -1 && !task_id.empty()) {
             resin_worker::Message msg;
             msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
             auto ts = msg.mutable_task_status();
             ts->set_worker_id(worker_id);
             ts->set_task_id(task_id);
-            ts->set_completed(1.0f);
-            ts->set_complete(true);
-            ts->set_success(out.first);
-            ts->set_duration(to_seconds(cur_time() - start_time));
-            ts->set_message(out.second);
-            anon_log("sending task done message");
+            ts->set_completed(0.0f);
+            ts->set_complete(false);
+            anon_log("sending task start message");
             send_udp_message(msg);
           }
 
-          Aws::SQS::Model::DeleteMessageRequest req;
-          req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
-          auto outcome = client.DeleteMessage(req);
-          if (!outcome.IsSuccess())
-            anon_log("DeleteMessage failed: " << outcome.GetError());
+          auto start_time = cur_time();
+
+          auto out = exe_cmd(bash_cmd);
+
+          if (out.first || approx_receive_count >= max_retries)
+          {
+            if (udp_sock != -1 && !task_id.empty()) {
+              resin_worker::Message msg;
+              msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
+              auto ts = msg.mutable_task_status();
+              ts->set_worker_id(worker_id);
+              ts->set_task_id(task_id);
+              ts->set_completed(1.0f);
+              ts->set_complete(true);
+              ts->set_success(out.first);
+              ts->set_duration(to_seconds(cur_time() - start_time));
+              ts->set_message(out.second);
+              anon_log("sending task done message");
+              send_udp_message(msg);
+            }
+
+            Aws::SQS::Model::DeleteMessageRequest req;
+            req.WithQueueUrl(queue_url.c_str()).WithReceiptHandle(m.GetReceiptHandle());
+            auto outcome = client.DeleteMessage(req);
+            if (!outcome.IsSuccess())
+              anon_log("DeleteMessage failed: " << outcome.GetError());
+          }
         }
+        last_message_time = cur_time();
       }
-      last_message_time = cur_time();
     }
-    else if (to_seconds(cur_time() - last_message_time) >= idle_time)
+    if (to_seconds(cur_time() - last_message_time) >= idle_time)
     {
       anon_log("no tasks after wating " << wait_secs << " seconds");
       if (should_shut_down(ec2i))
