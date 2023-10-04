@@ -470,7 +470,11 @@ void run_worker(const ec2_info &ec2i)
               else {
                 bash_cmd = *cmd_it;
                 auto task_id_it = js.find("task_id");
-                if (task_id_it != js.end() && task_id_it->is_string()) {
+                if (task_id_it == js.end() || !task_id_it->is_string()) {
+                  anon_log("\"task_id\" field is missing/incorrect");
+                  valid_message = false;
+                }
+                else {
                   task_id = *task_id_it;
                 }
               }
@@ -499,7 +503,7 @@ void run_worker(const ec2_info &ec2i)
             approx_receive_count = std::stoull(arc->second.c_str());
           }
 
-          if (udp_sock != -1 && !task_id.empty()) {
+          if (udp_sock != -1) {
             resin_worker::Message msg;
             msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
             auto ts = msg.mutable_task_status();
@@ -517,7 +521,7 @@ void run_worker(const ec2_info &ec2i)
 
           if (out.first || approx_receive_count >= max_retries)
           {
-            if (udp_sock != -1 && !task_id.empty()) {
+            if (udp_sock != -1) {
               resin_worker::Message msg;
               msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
               auto ts = msg.mutable_task_status();
@@ -533,10 +537,14 @@ void run_worker(const ec2_info &ec2i)
 
               // TODO: get this to time out correctly, check
               // what is being returned...
-              std::vector<char> buff(4069);
-              sockaddr_in6 addr;
-              socklen_t sz = sizeof(addr);
-              ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
+              while (true) {
+                std::vector<char> buff(4069);
+                sockaddr_in6 addr;
+                socklen_t sz = sizeof(addr);
+                ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
+                anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
+                break;
+              }
             }
 
             Aws::SQS::Model::DeleteMessageRequest req;
