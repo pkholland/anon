@@ -519,9 +519,12 @@ void run_worker(const ec2_info &ec2i)
 
           auto out = exe_cmd(bash_cmd);
 
+          anon_log("bash command: " << bash_cmd << " exited : " << (out.first ? "true" : "false") << ", approx_receive_count: " << approx_receive_count);
+
           if (out.first || approx_receive_count >= max_retries)
           {
             if (udp_sock != -1) {
+              anon_log("sending reply");
               resin_worker::Message msg;
               msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
               auto ts = msg.mutable_task_status();
