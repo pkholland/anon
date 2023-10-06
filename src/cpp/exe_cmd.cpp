@@ -149,7 +149,12 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
               do_error("read_pipe.read(&buff[0], buff.size())");
             oss << std::string(&buff[0], bytes);
           }
+          catch(const fiber_io_error&)
+          {
+            break;
+          }
           catch(...) {
+            anon_log("caught unknown error reading from exe_cmd pipe");
             break;
           }
         }
