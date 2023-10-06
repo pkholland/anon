@@ -300,22 +300,25 @@ void init_udp_socket(const std::string& host, int port)
     }
     else {
       worker_id = toHexString(small_rand_id());
-      anon_log("worker host bound to local addr: " << addr << ", worker_id: " << worker_id);
+      anon_log("using worker_id: " << worker_id);
     }
   }
 }
 
-void send_udp_message(const resin_worker::Message& msg)
+bool send_udp_message(const resin_worker::Message& msg)
 {
   std::string bytes;
   if (msg.SerializeToString(&bytes)) {
     if (::sendto(udp_sock, bytes.c_str(), bytes.size(), 0, (sockaddr*)&udp_addr, udp_addr_sz) == -1) {
-      anon_log("sendto failed with errno: " << errno_string());
+      anon_log("sendto failed with errno: " << errno_string() << ", msg size: " << bytes.size());
+      return false;
     }
   }
   else {
     anon_log("msg.SerializeToString failed");
+    return false;
   }
+  return true;
 }
 
 } // namespace
@@ -531,19 +534,22 @@ void run_worker(const ec2_info &ec2i)
               ts->set_complete(true);
               ts->set_success(out.first);
               ts->set_duration(to_seconds(cur_time() - start_time));
+              if (out.second.size() > 32768) {
+                out.second.resize(32768);
+              }
               ts->set_message(out.second);
               anon_log("sending task done message");
-              send_udp_message(msg);
-
-              // TODO: get this to time out correctly, check
-              // what is being returned...
-              while (true) {
-                std::vector<char> buff(4069);
-                sockaddr_in6 addr;
-                socklen_t sz = sizeof(addr);
-                ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
-                anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
-                break;
+              if (send_udp_message(msg)) {
+                // TODO: get this to time out correctly, check
+                // what is being returned...
+                while (true) {
+                  std::vector<char> buff(4069);
+                  sockaddr_in6 addr;
+                  socklen_t sz = sizeof(addr);
+                  ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
+                  anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
+                  break;
+                }
               }
             }
 
