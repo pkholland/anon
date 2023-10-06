@@ -556,6 +556,15 @@ void run_worker(const ec2_info &ec2i)
         }
         last_message_time = cur_time();
       }
+      else if (udp_sock != -1) {
+        resin_worker::Message msg;
+        msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_WORKER_STATUS);
+        auto ws = msg.mutable_worker_status();
+        ws->set_cpu_count(std::thread::hardware_concurrency());
+        ws->set_worker_id(worker_id);
+        anon_log("sending worker keep alive message");
+        send_udp_message(msg);
+      }
     }
     if (to_seconds(cur_time() - last_message_time) >= idle_time)
     {
