@@ -542,13 +542,16 @@ void run_worker(const ec2_info &ec2i)
               if (send_udp_message(msg)) {
                 // TODO: get this to time out correctly, check
                 // what is being returned...
-                while (true) {
+                struct pollfd  pfd;
+                pfd.fd = udp_sock;
+                pfd.events = POLL_IN;
+                auto ready = poll(&pfd, 1, 500);
+                if (ready == 1) {
                   std::vector<char> buff(4069);
                   sockaddr_in6 addr;
                   socklen_t sz = sizeof(addr);
                   ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
                   anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
-                  break;
                 }
               }
             }
