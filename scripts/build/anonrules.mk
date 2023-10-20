@@ -216,7 +216,7 @@ endef
 define anon.protoc_compile_rule
 
 $(call anon.src_to_pb,$1): $1 $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_pb,$1))dir.stamp
-	$(call anon.CALL_TOOL,$(anon.protoc),--cpp_out . $$<,$$@)
+	$(call anon.CALL_TOOL,$(anon.protoc),--cpp_out $(dir $1) --proto_path $(dir $1) $$<,$$@)
 
 $(call anon.src_to_obj,$(basename $1)): $(basename $1).pb.cc $3 $(anon.INTERMEDIATE_DIR)/$(CONFIG)/compiler.opts | $(dir $(call anon.src_to_obj,$1))dir.stamp
 	$(call anon.CALL_TOOL,$(anon.cxx),-o $$@ -c $$< -MD -MF $(call anon.src_to_dep,$1) $2 -std=c++17 $(CFLAGS) $(CFLAGS_$(CONFIG)) $(CFLAGS_$1),$$@)
