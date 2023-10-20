@@ -89,11 +89,12 @@ public:
   {
     if (evt.events & EPOLLIN)
     {
+      auto stack_size = 8096 - 256;
       fiber::run_in_fiber([this] {
         fiber_lock l(mtx_);
         running_ = false;
         cond_.notify_one();
-      });
+      }, stack_size, "exe_cmd - io_avail");
     }
     else
       anon_log_error("child_proc_handler::io_avail called with event that does not have EPOLLIN set!");
@@ -158,7 +159,7 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
             break;
           }
         }
-      });
+      }, fiber::k_default_stack_size, "exe_cmd");
 
       // get a file descriptor that represents the process identified by 'pid'
       auto pid_fd = pidfd_open(pid, 0);

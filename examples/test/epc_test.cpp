@@ -95,12 +95,12 @@ void epc_test()
         fiber_lock lock(mtx);
         if (--remaining == 0)
           cond.notify_one();
-      });
+      }, fiber::k_default_stack_size, "examples_test");
     }
     fiber_lock lock(mtx);
     while (remaining)
       cond.wait(lock);
 
     anon_log("finished " << num_fibers * 100 << " connections in " << to_seconds(cur_time() - start_time) << " seconds");
-  });
+  }, fiber::k_default_stack_size, "examples_test");
 }

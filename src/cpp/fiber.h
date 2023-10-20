@@ -161,7 +161,7 @@ public:
 
   enum
   {
-    k_default_stack_size = 64 * 1024 - 256
+    k_default_stack_size = 96 * 1024 - 256
   };
 
   // run the given 'fn' in this fiber.  If you pass 'detached' true

@@ -151,6 +151,16 @@ public:
   void erase(const std::shared_ptr<endpoint> &ep);
   static void erase_all();
 
+  void disable_verify_peer()
+  {
+    verify_peer_ = false;
+  }
+
+  void disable_do_SNI()
+  {
+    do_SNI_ = false;
+  }
+
 private:
   void erase_if_empty(const std::shared_ptr<endpoint> &ep);
 
@@ -175,6 +185,9 @@ private:
   endpoint_cluster* next_epc_;
   endpoint_cluster* prev_epc_;
   static endpoint_cluster* first_epc_;
+
+  bool verify_peer_{true};
+  bool do_SNI_{true};
 
   enum
   {

@@ -299,7 +299,7 @@ public:
           auto ths = wp.lock();
           if (ths)
             ths->update_imds_token();
-        });
+        }, fiber::k_default_stack_size, "update_imds_token");
       }, cur_time() + (tok.second - 600));
     }
     fiber_lock l(m_tokenMutex);
@@ -632,7 +632,7 @@ void aws_client_init()
           auto mc = wp.lock();
           if (mc)
             mc->update_imds_token();
-        });
+        }, fiber::k_default_stack_size, "aws_client_init");
       }, cur_time() + imds_valid_seconds - 600);
 
     } else {

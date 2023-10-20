@@ -417,8 +417,8 @@ void endpoint_cluster::do_with_connected_pipe(const std::function<bool(const pip
       if (do_tls_)
         pipe = std::unique_ptr<pipe_t>(new tls_pipe(std::move(conn.second),
                                                     true, // client (not server)
-                                                    true, // verify_peer
-                                                    true, // doSNI
+                                                    verify_peer_,
+                                                    do_SNI_,
                                                     host_.c_str(),
                                                     *tls_ctx_));
       else

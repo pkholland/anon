@@ -226,7 +226,7 @@ extern "C" int main(int argc, char **argv)
             anon_log("in fiber, calling msleep(1000)");
             fiber::msleep(1000);
             anon_log("back from calling msleep(1000)");
-          });
+          }, fiber::k_default_stack_size, "examples_test");
         }
         else if (!strcmp(&msgBuff[0], "e"))
         {
@@ -241,7 +241,8 @@ extern "C" int main(int argc, char **argv)
         else if (!strcmp(&msgBuff[0], "f"))
         {
           anon_log("executing print statement from a fiber");
-          fiber::run_in_fiber([] { anon_log("hello from fiber " << get_current_fiber_id()); });
+          fiber::run_in_fiber([] { anon_log("hello from fiber " << get_current_fiber_id()); },
+            fiber::k_default_stack_size, "examples_test");
         }
         else if (!strcmp(&msgBuff[0], "ft"))
         {
@@ -266,7 +267,7 @@ extern "C" int main(int argc, char **argv)
                 if (v != rc)
                   anon_log("fiber read " << v << " instead of " << rc);
               }
-            });
+            }, fiber::k_default_stack_size, "examples_test");
           }
           fiber::run_in_fiber([fds, num_pipe_pairs, num_read_writes] {
             std::vector<std::unique_ptr<fiber_pipe>> pipes;
@@ -277,7 +278,7 @@ extern "C" int main(int argc, char **argv)
               for (int pc = 0; pc < num_pipe_pairs; pc++)
                 pipes[pc]->write(&wc, sizeof(wc));
             }
-          });
+          }, fiber::k_default_stack_size, "examples_test");
 
           fiber::wait_for_zero_fibers();
 
@@ -385,7 +386,7 @@ extern "C" int main(int argc, char **argv)
             sf2.join();
 
             anon_log("fibers " << sf1.get_fiber_id() << " and " << sf2.get_fiber_id() << " have exited");
-          });
+          }, fiber::k_default_stack_size, "examples_test");
 
           fiber::wait_for_zero_fibers();
           anon_log("all fibers done");
@@ -413,13 +414,13 @@ extern "C" int main(int argc, char **argv)
                   anon_log("last sub fiber, now notifying");
                   cond.notify_all();
                 }
-              });
+              }, fiber::k_default_stack_size, "examples_test");
             }
 
             fiber_lock lock(mutex);
             while (started != num_fibers)
               cond.wait(lock);
-          });
+          }, fiber::k_default_stack_size, "examples_test");
 
           fiber::wait_for_zero_fibers();
 
@@ -488,7 +489,7 @@ extern "C" int main(int argc, char **argv)
               anon_log("connected to \"" << host << "\", port " << port << ", now disconnecting");
             else
               anon_log("connection to \"" << host << "\", port " << port << " failed with error: " << (c.first > 0 ? error_string(c.first) : gai_strerror(c.first)));
-          });
+          }, fiber::k_default_stack_size, "exaples_test");
         }
         else if (!strcmp(&msgBuff[0], "cp"))
         {
@@ -548,7 +549,7 @@ extern "C" int main(int argc, char **argv)
                 else
                   anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (err_code > 0 ? error_string(err_code) : gai_strerror(err_code)));
               });
-          });
+          }, fiber::k_default_stack_size, "examples_test");
         }
         else if (!strcmp(&msgBuff[0], "id"))
         {
@@ -568,7 +569,7 @@ extern "C" int main(int argc, char **argv)
               else
                 anon_log("dns lookup for \"" << host << "\", port " << port << " failed with error: " << (ret > 0 ? error_string(ret) : gai_strerror(ret)));
             }
-          });
+          }, fiber::k_default_stack_size, "examples_test");
         }
         else if (!strcmp(&msgBuff[0], "h2"))
         {
@@ -594,7 +595,7 @@ extern "C" int main(int argc, char **argv)
               for (auto addr : addrs.second)
                 anon_log(" " << addr);
             }
-          });
+          }, fiber::k_default_stack_size, "examples_test");
         }
         else if (!strcmp(&msgBuff[0], "et"))
         {
@@ -749,7 +750,7 @@ extern "C" int main(int argc, char **argv)
             anon_log("  setting value for \"" << key << "\" to:  \"" << val << "\"");
             c.set(key, val, 1);
             anon_log(" fetching value for \"" << key << "\", got \"" << c.get(key) << "\"");
-          });
+          }, fiber::k_default_stack_size, "examples_test");
 
           std::unique_lock<std::mutex> l(mtx);
           while (running)

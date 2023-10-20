@@ -79,7 +79,8 @@ void tcp_server::io_avail(const struct epoll_event &event)
         anon_log_error("accept4(listen_sock_, (struct sockaddr*)&addr, &addr_len, SOCK_NONBLOCK | SOCK_CLOEXEC): " << error_string(errno));
         if (errno == EMFILE && !forced_close_) {
           forced_close_ = true;
-          fiber::run_in_fiber([]{io_params::sweep_hibernating_pipes();});
+          fiber::run_in_fiber([]{io_params::sweep_hibernating_pipes();},
+          fiber::k_default_stack_size, "tcp_server::io_avail - accept4");
         }
       }
 
