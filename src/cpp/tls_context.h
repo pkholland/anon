@@ -24,6 +24,7 @@
 
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
+#include <string>
 
 // a tls "context" object that holds a number of characteristics
 // about one or more tls connections that will be attempted with
@@ -31,6 +32,14 @@
 class tls_context
 {
 public:
+  tls_context(const tls_context& other)
+    : ctx_(other.ctx_),
+      sha256_digest_(other.sha256_digest_)
+  {
+    SSL_CTX_up_ref(ctx_);
+  }
+
+  // tls over TCP
   tls_context(bool client,             // vs. server
               const char *verify_cert, // file name of a single trusted cert (or NULL)
               const char *verify_loc,  // path to c_rehash dir of trusted certs (or NULL)
@@ -38,12 +47,22 @@ public:
               const char *server_key,  // if !client then path to server's key (in PEM format)
               int verify_depth);       // maximum length cert chain that is allowed
 
+  // DTLS
+  tls_context(bool client,              // vs. server
+              const char* cert,         // if !server and !null, path to server's cert (in PEM format)
+              const char* key,          // if !server and cert, path to the server's key (in PEM format)
+              int verify_depth);        // maximum length cert chain that is allowed
+
   ~tls_context();
 
   operator SSL_CTX *() const { return ctx_; }
 
+  // currently, this only returns non-empty for DTLS contexts
+  const std::string& sha256_digest() const { return sha256_digest_; }
+
 private:
   SSL_CTX *ctx_;
+  std::string sha256_digest_;
 
   // singlton object that should exist for the life of the process.
   // This object initializes openssl, and binds it to the fiber-based

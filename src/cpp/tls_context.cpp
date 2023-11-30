@@ -22,6 +22,8 @@
 
 #include "tls_context.h"
 #include "fiber.h"
+#include <sys/socket.h>
+#include <netinet/in.h>
 #include "passwords.h"
 
 #define OPENSSL_THREAD_DEFINES
@@ -48,7 +50,7 @@ struct CRYPTO_dynlock_value : public std::mutex
 {
 };
 
-static struct CRYPTO_dynlock_value *dyn_create_func(const char *file, int line)
+static CRYPTO_dynlock_value *dyn_create_func(const char *file, int line)
 {
   return new CRYPTO_dynlock_value;
 }
@@ -114,6 +116,71 @@ static unsigned long id_func(void)
 }
 #endif
 
+namespace {
+
+#define COOKIE_SECRET_LENGTH 16
+#define SHA1_DIGEST_LEN 20
+unsigned char cookie_secret[COOKIE_SECRET_LENGTH];
+
+std::vector<uint8_t> compute_cookie(SSL *ssl)
+{
+	union {
+		struct sockaddr_storage ss;
+		struct sockaddr_in6 s6;
+		struct sockaddr_in s4;
+	} peer;
+	(void) BIO_dgram_get_peer(SSL_get_rbio(ssl), &peer);
+
+	size_t length;
+	switch (peer.ss.ss_family) {
+		case AF_INET:
+			length = sizeof(struct in_addr);
+			break;
+		case AF_INET6:
+			length = sizeof(struct in6_addr);
+			break;
+		default:
+      anon_log("unrecognized network family (" << (int)peer.ss.ss_family << ")");
+			return {};
+	}
+	length += sizeof(in_port_t);
+  std::vector<uint8_t> buffer(length);
+
+  if (peer.ss.ss_family == AF_INET) {
+    memcpy(&buffer[0], &peer.s4.sin_port, sizeof(in_port_t));
+    memcpy(&buffer[sizeof(peer.s4.sin_port)], &peer.s4.sin_addr, sizeof(struct in_addr));
+  }
+  else {
+    memcpy(&buffer[0], &peer.s6.sin6_port, sizeof(in_port_t));
+    memcpy(&buffer[sizeof(in_port_t)], &peer.s6.sin6_addr, sizeof(struct in6_addr));
+  }
+
+  // SHA1_DIGEST_LEN == 20, which is less than DTLS1_COOKIE_LENGTH (>= 255)
+  std::vector<uint8_t> md(SHA1_DIGEST_LEN);
+  unsigned int mdLen = md.size();
+	HMAC(EVP_sha1(), (const void*)cookie_secret, COOKIE_SECRET_LENGTH, &buffer[0], length, &md[0], &mdLen);
+  return md;
+}
+
+int generate_dtls_cookie(SSL *ssl, unsigned char *cookie, unsigned int *cookie_len)
+{
+  auto md = compute_cookie(ssl);
+  if (md.size() != SHA1_DIGEST_LEN) {
+    return 0;
+  }
+  memcpy(cookie, &md[0], md.size());
+  *cookie_len = md.size();
+  return 1;
+}
+
+int verify_dtls_cookie(SSL *ssl, const unsigned char *cookie, unsigned int cookie_len)
+{
+  auto md = compute_cookie(ssl);
+  return cookie_len == md.size() && !memcmp(&md[0], cookie, cookie_len) ? 1 : 0;
+}
+
+}
+
 tls_context::fiber_init tls_context::fiber_init_;
 
 tls_context::fiber_init::fiber_init()
@@ -136,6 +203,8 @@ tls_context::fiber_init::fiber_init()
 #if (OPENSSL_VERSION_NUMBER & 0xf0000000) < 0x10000000
   CRYPTO_set_id_callback(id_func);
 #endif
+
+  RAND_bytes(cookie_secret, COOKIE_SECRET_LENGTH);
 }
 
 tls_context::fiber_init::~fiber_init()
@@ -507,6 +576,11 @@ struct auto_x509
       X509_free(x_);
   }
 
+  operator X509* ()
+  {
+    return x_;
+  }
+
   X509 *release()
   {
     auto ret = x_;
@@ -637,6 +711,33 @@ tls_context::tls_context(bool client,
 
   ctx_ = ctx.release();
 }
+
+tls_context::tls_context(bool client,
+            const char* cert,
+            const char* key,
+            int verify_depth)
+{
+  auto_ctx ctx(SSL_CTX_new(client ? DTLS_client_method() : DTLS_server_method()));
+  SSL_CTX_set_verify_depth(ctx, verify_depth);
+  if (!client) {
+    SSL_CTX_set_quiet_shutdown(ctx, 1);
+
+    auto_x509 x509(read_pem_cert(cert, ANON_SRV_KEY_PASSWORD));
+
+    unsigned char md[32];
+    unsigned int len = sizeof(md);
+    X509_digest(x509, EVP_sha256(), &md[0], &len);
+    sha256_digest_ = std::string((char*)&md[0], len);
+
+    if (SSL_CTX_use_certificate(ctx, x509.release()) <= 0 || SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM) <= 0)
+      throw_ssl_error();
+
+    SSL_CTX_set_cookie_generate_cb(ctx, generate_dtls_cookie);
+    SSL_CTX_set_cookie_verify_cb(ctx, &verify_dtls_cookie);
+  }
+  ctx_ = ctx.release();
+}
+
 
 tls_context::~tls_context()
 {
