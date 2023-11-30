@@ -322,6 +322,33 @@ struct auto_bio
   BIO *bio_;
 };
 
+struct auto_ssl
+{
+  auto_ssl(SSL *ssl)
+      : ssl_(ssl)
+  {
+    if (!ssl_)
+      throw_ssl_error();
+  }
+
+  ~auto_ssl()
+  {
+    if (ssl_)
+      SSL_free(ssl_);
+  }
+
+  operator SSL *() { return ssl_; }
+
+  SSL *release()
+  {
+    auto ssl = ssl_;
+    ssl_ = 0;
+    return ssl;
+  }
+
+  SSL *ssl_;
+};
+
 void throw_ssl_error_(BIO *fpb)
 {
   auto p = reinterpret_cast<fp_pipe *>(BIO_get_data(fpb));
@@ -364,44 +391,42 @@ tls_pipe::tls_pipe(std::unique_ptr<fiber_pipe> &&pipe, bool client, bool verify_
     : fp_(pipe.get())
 {
   auto_bio fp_bio(BIO_new_fp(std::move(pipe)));
-  auto_bio ssl_bio(BIO_new_ssl(context, client));
-  BIO_push(ssl_bio, fp_bio);
-
-  BIO_get_ssl(ssl_bio, &ssl_);
-  if (!ssl_)
-    throw_ssl_error_(fp_bio);
+  auto_ssl ssl(SSL_new(context));
+  if (client) {
+    SSL_set_connect_state(ssl);
+  }
+  else {
+    SSL_set_accept_state(ssl);
+  }
+  SSL_set_bio(ssl, fp_bio, fp_bio);
+  auto b = fp_bio.operator BIO*();
+  fp_bio.release();
 
   if (doSNI && host_name)
-    SSL_set_tlsext_host_name(ssl_, host_name);
+    SSL_set_tlsext_host_name(ssl, host_name);
 
-  if (BIO_do_handshake(ssl_bio) != 1)
-    throw_ssl_error_(fp_bio);
+  if (SSL_do_handshake(ssl) != 1)
+    throw_ssl_error_(b);
 
-  if (verify_peer)
-  {
-
-    if (host_name)
-    {
-      X509 *cert = SSL_get_peer_certificate(ssl_);
-      if (cert && verify_host_name(cert, host_name))
-      {
+  if (verify_peer) {
+    if (host_name) {
+      X509 *cert = SSL_get_peer_certificate(ssl);
+      if (cert && verify_host_name(cert, host_name)) {
         X509_free(cert);
       }
-      else
-      {
+      else {
         if (cert)
           X509_free(cert);
-        throw_ssl_error_(fp_bio, X509_V_ERR_APPLICATION_VERIFICATION);
+        throw_ssl_error_(b, X509_V_ERR_APPLICATION_VERIFICATION);
       }
     }
 
-    auto res = SSL_get_verify_result(ssl_);
+    auto res = SSL_get_verify_result(ssl);
     if (res != X509_V_OK)
-      throw_ssl_error_(fp_bio, (unsigned long)res);
+      throw_ssl_error_(b, (unsigned long)res);
   }
 
-  ssl_bio_ = ssl_bio.release();
-  fp_bio_ = fp_bio.release();
+  ssl_ = ssl.release();
 }
 
 tls_pipe::~tls_pipe()
@@ -410,15 +435,15 @@ tls_pipe::~tls_pipe()
   // we _dont_ want to have the BIO_free try to send more data
   // (that can fail, and throw, etc...)
   SSL_set_quiet_shutdown(ssl_, 1);
-  BIO_free(ssl_bio_);
-  BIO_free(fp_bio_);
+  
+  SSL_free(ssl_);
 }
 
 size_t tls_pipe::read(void *buff, size_t len) const
 {
   auto ret = SSL_read(ssl_, buff, len);
   if (ret <= 0)
-    throw_ssl_io_error_(fp_bio_, SSL_get_error(ssl_, ret));
+    throw_ssl_io_error_(SSL_get_rbio(ssl_), SSL_get_error(ssl_, ret));
   return ret;
 }
 
@@ -442,7 +467,7 @@ void tls_pipe::write(const void *buff, size_t len) const
     auto written = SSL_write(ssl_, &buf[tot_bytes], len - tot_bytes);
 #endif
     if (written < 0)
-      throw_ssl_io_error_(fp_bio_, SSL_get_error(ssl_, written));
+      throw_ssl_io_error_(SSL_get_wbio(ssl_), SSL_get_error(ssl_, written));
     tot_bytes += written;
   }
 }
