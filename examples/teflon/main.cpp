@@ -49,6 +49,8 @@ void server_term();
 void server_close_outgoing();
 std::vector<int> teflon_udp_ports_or_sockets;
 bool teflon_udps_are_file_descriptors = false;
+std::string teflon_server_cert_file_name;
+std::string teflon_server_key_file_name;
 
 
 #define SERVER_STACK_SIZE 64 * 1024 - 128
@@ -206,6 +208,11 @@ extern "C" int main(int argc, char **argv)
   dns_lookup::start_service();
   fiber::initialize();
   init_big_id_crypto();
+
+  if (cert && key) {
+    teflon_server_cert_file_name = cert;
+    teflon_server_key_file_name = key;
+  }
 
   int ret = 0;
   try
