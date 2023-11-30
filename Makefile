@@ -3,14 +3,11 @@
 all:
 
 #
-# set CONFIG for the convenience targets 'debug' and 'run_debug_server'
-# we don't need to worry about either of the release targets because
+# set CONFIG for the convenience target 'debug'
+# we don't need to worry about any of the release targets because
 # the default CONFIG is release
 #
 ifeq (debug,$(MAKECMDGOALS))
- CONFIG=debug
-endif
-ifeq (run_debug_server,$(MAKECMDGOALS))
  CONFIG=debug
 endif
 
