@@ -38,6 +38,7 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/engine.h>
+#include <openssl/srtp.h>
 
 // basic mutex locking functions
 // although we can almost use fiber_mutex's here, there is one case
@@ -719,6 +720,10 @@ tls_context::tls_context(bool client,
 {
   auto_ctx ctx(SSL_CTX_new(client ? DTLS_client_method() : DTLS_server_method()));
   SSL_CTX_set_verify_depth(ctx, verify_depth);
+  const char* all_srtp_rofiles = "SRTP_AES128_CM_SHA1_80:SRTP_AES128_CM_SHA1_32:SRTP_AEAD_AES_128_GCM:SRTP_AEAD_AES_256_GCM";
+  if (SSL_CTX_set_tlsext_use_srtp(ctx, all_srtp_rofiles) != 0) {
+    throw_ssl_error();
+  }
   if (!client) {
     SSL_CTX_set_quiet_shutdown(ctx, 1);
 
