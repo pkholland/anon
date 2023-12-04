@@ -767,7 +767,7 @@ extern "C" int main(int argc, char **argv)
                 for (auto i = 0; i < 100; i++) {
                   try {
                     try {
-                      throw 17;
+                      throw i;
                     }
                     catch(...) {
                       fiber::msleep(2);
@@ -775,6 +775,9 @@ extern "C" int main(int argc, char **argv)
                     }
                   }
                   catch(int val) {
+                    if (val != i) {
+                      anon_log("caught wrong value, caught: " << val << " but expected " << i);
+                    }
                   }
                   catch(...) {
                     anon_log("unable to catch a rethrown int");
