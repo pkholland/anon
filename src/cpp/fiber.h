@@ -32,6 +32,22 @@
 #include <exception>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <cxxabi.h>
+
+namespace __cxxabiv1 {
+// from libstdc++'s "unwind-cxx.h"
+// cxxabi.h defines this type as opque,
+// but we want the actual definition
+struct __cxa_eh_globals
+{
+  __cxa_exception *caughtExceptions;
+  unsigned int uncaughtExceptions;
+#ifdef __ARM_EABI_UNWINDER__
+  __cxa_exception* propagatingExceptions;
+#endif
+};
+
+}
 
 class fiber;
 struct fiber_lock;
@@ -173,6 +189,7 @@ public:
       : auto_free_(auto_free),
         running_(true),
         stack_(::operator new(stack_size)),
+        cxxGlobals_({0}),
         fiber_id_(++next_fiber_id_),
         timeout_pipe_(0),
         fiber_name_(fiber_name)
@@ -345,6 +362,7 @@ private:
       : auto_free_(false),
         running_(false),
         stack_(0),
+        cxxGlobals_({0}),
         fiber_name_("ioparams parent")
   {
     ++num_fibers_;
@@ -369,6 +387,49 @@ private:
 
   void switch_to_fiber(fiber *target)
   {
+    // some explanations are in order...
+    //
+    // __cxxabiv1 is the (somewhat) public api to libstdc++, which is where
+    // some of the more complicated runtime support for c++ is implemented
+    // -- including the support for exception handling.  __cxa_get_globals
+    // returns a pointer to a thread-local object that libstdc++ uses to
+    // make exception handling work.  There are a few other function calls
+    // that are exported from the library such as __cxa_throw, __cxa_rethrow,
+    // __cxa_begin_catch, __cxa_end_catch, etc... that the compiler generates
+    // calls to when you write try/catch/throw logic.
+    //
+    // We want to support try/throw/catch as much as possible in our fiber
+    // implementation, and given that our fibers sometimes migrate between
+    // OS threads we need a mechanism to make sure that the data structures
+    // that libstdc++ uses are kept in sync when we swap fibers.  Consider
+    // code like this...
+    //
+    //    try {
+    //      ... stuff that throws something ...  #1
+    //    }
+    //    catch(...) {                           #2
+    //      ... some code that might switch fibers/threads ...
+    //      throw;                               #3
+    //      etc...
+    //
+    // When the compiler compiles this code it generates a call to
+    // __cxa_throw at whatever the line is that calls "throw" (#1)
+    // It also generates a call to __cxa_begin_catch at the
+    // start of "catch" (#2).  Both of these calls make a call to
+    // __cxa_get_globals and manipulate the fields in this structure.
+    // This is the underlying mechanism that makes the throw/catch
+    // work correctly.  The call to "throw;" (at #3) calls __cxa_rethrow
+    // (which is what allows it to rethrow whatever #1 threw).  All
+    // of these __cxa calls assume that *__cxa_get_globals()
+    // is part of the same executing context.  In a normal OS thread
+    // implementation storing this as thread-local data allows it
+    // to behave that way.  But because we are using _fibers_ we need
+    // to manually ensure that the thread-local pointer is pointing
+    // to the data for the executing fiber's context.
+    auto ptr = __cxxabiv1::__cxa_get_globals(); // the thread-local ptr from libstdc++
+    cxxGlobals_ = *ptr;                         // capture this fiber's current exception context
+    *ptr = target->cxxGlobals_;                 // set libstdc++'s value to the context of the fiber we are jumping to
+
     swapcontext(&ucontext_, &target->ucontext_);
   }
 
@@ -389,6 +450,7 @@ private:
   fiber *next_wake_;
   void *stack_;
   ucontext_t ucontext_;
+  __cxxabiv1::__cxa_eh_globals cxxGlobals_;
   int fiber_id_;
   fiber_pipe *timeout_pipe_;
 

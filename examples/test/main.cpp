@@ -178,6 +178,8 @@ extern "C" int main(int argc, char **argv)
           anon_log("  ss - send a simple command to adobe's renga server");
           anon_log("  et - execute the endpoint_cluster tests");
           anon_log("  mc - execute the memcached tests");
+          anon_log("  th - execute try/throw/catch tests from fibers");
+          anon_log(" oth - execute try/throw/catch tests from OS threads");
         }
         else if (!strcmp(&msgBuff[0], "p"))
         {
@@ -755,6 +757,50 @@ extern "C" int main(int argc, char **argv)
           std::unique_lock<std::mutex> l(mtx);
           while (running)
             cond.wait(l);
+        }
+        else if (!strcmp(&msgBuff[0], "th"))
+        {
+          fiber::run_in_fiber([]{
+            std::vector<std::function<void()>> fns;
+            for (auto i = 0; i < 100; i++) {
+              fns.push_back([](){
+                for (auto i = 0; i < 100; i++) {
+                  try {
+                    try {
+                      throw 17;
+                    }
+                    catch(...) {
+                      fiber::msleep(2);
+                      throw;
+                    }
+                  }
+                  catch(int val) {
+                  }
+                  catch(...) {
+                    anon_log("unable to catch a rethrown int");
+                  }
+                }
+              });
+            }
+            fiber::run_in_parallel(fns);
+          });
+          fiber::wait_for_zero_fibers();
+          anon_log("finished throw test");
+        }
+        else if (!strcmp(&msgBuff[0], "oth")) {
+          try {
+            try {
+              throw 18;
+            }
+            catch(...) {
+              throw;
+            }
+          }
+          catch(int val) {
+          }
+          catch(...) {
+              anon_log("unable to catch a rethrown int");
+          }
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
