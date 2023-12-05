@@ -29,6 +29,8 @@
 #include <sys/timerfd.h>
 #include <openssl/err.h>
 #include <sys/signalfd.h>
+#include <cxxabi.h>
+
 
 namespace
 {
@@ -369,6 +371,13 @@ void io_dispatch::set_this_thread_countdown()
 void io_dispatch::epoll_loop()
 {
   anon_log("starting io_dispatch::epoll_loop");
+
+  // for any implementation of libstdc++ where there is a difference
+  // in speed between __cxa_get_globals and __cxa_get_globals_fast,
+  // we make sure that any thread that runs fibers has made at least
+  // one call to __cxa_get_globals prior to getting started with
+  // fiber switching - which can then call __cxa_get_globals_fast.
+  (void)__cxxabiv1::__cxa_get_globals();
 
   // record this thread id
   auto index = thread_init_index_.fetch_add(1, std::memory_order_relaxed);

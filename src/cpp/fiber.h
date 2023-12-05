@@ -393,7 +393,7 @@ private:
     //
     // __cxxabiv1 is the (somewhat) public api to libstdc++, which is where
     // some of the more complicated runtime support for c++ is implemented
-    // -- including the support for exception handling.  __cxa_get_globals
+    // -- including the support for exception handling.  __cxa_get_globals_fast
     // returns a pointer to a thread-local object that libstdc++ uses to
     // make exception handling work.  There are a few other function calls
     // that are exported from the library such as __cxa_throw, __cxa_rethrow,
@@ -418,19 +418,19 @@ private:
     // __cxa_throw at whatever the line is that calls "throw" (#1)
     // It also generates a call to __cxa_begin_catch at the
     // start of "catch" (#2).  Both of these calls make a call to
-    // __cxa_get_globals and manipulate the fields in this structure.
+    // __cxa_get_globals_fast and manipulate the fields in this structure.
     // This is the underlying mechanism that makes the throw/catch
     // work correctly.  The call to "throw;" (at #3) calls __cxa_rethrow
     // (which is what allows it to rethrow whatever #1 threw).  All
-    // of these __cxa calls assume that *__cxa_get_globals()
+    // of these __cxa calls assume that *__cxa_get_globals_fast()
     // is part of the same executing context.  In a normal OS thread
     // implementation storing this as thread-local data allows it
     // to behave that way.  But because we are using _fibers_ we need
     // to manually ensure that the thread-local pointer is pointing
     // to the data for the executing fiber's context.
-    auto ptr = __cxxabiv1::__cxa_get_globals(); // the thread-local ptr from libstdc++
-    cxxGlobals_ = *ptr;                         // capture this fiber's current exception context
-    *ptr = target->cxxGlobals_;                 // set libstdc++'s value to the context of the fiber we are jumping to
+    auto ptr = __cxxabiv1::__cxa_get_globals_fast();  // the thread-local ptr from libstdc++
+    cxxGlobals_ = *ptr;                               // capture this fiber's current exception context
+    *ptr = target->cxxGlobals_;                       // set libstdc++'s value to the context of the fiber we are jumping to
 
     #if defined(__has_feature)
     #if __has_feature(address_sanitizer)

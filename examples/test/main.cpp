@@ -788,7 +788,7 @@ extern "C" int main(int argc, char **argv)
             fiber::run_in_parallel(fns);
           });
           fiber::wait_for_zero_fibers();
-          anon_log("finished throw test");
+          anon_log("threw, rethrew and caught 10,000 exceptions from fibers");
         }
         else if (!strcmp(&msgBuff[0], "oth")) {
           try {
@@ -804,6 +804,7 @@ extern "C" int main(int argc, char **argv)
           catch(...) {
               anon_log("unable to catch a rethrown int");
           }
+          anon_log("finished simple throw/rethrow/catch from an OS thread");
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");
