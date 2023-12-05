@@ -32,6 +32,14 @@ thread_local io_params tls_io_params;
 
 void start_fiber_helper(int p1, int p2)
 {
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  const void* old_bottom;
+  size_t old_size;
+  __sanitizer_finish_switch_fiber(nullptr, &old_bottom, &old_size);
+  #endif
+  #endif
+
   auto vsm = ((size_t)p1 & 0x0ffffffff) + ((size_t)p2 << 32);
   fiber::start_fiber((void*)vsm);
 }

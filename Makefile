@@ -24,6 +24,11 @@ endif
 #   3 - 2) plus, general logging of what ips are connecting
 CFLAGS=$(cflags) -DANON_LOG_FIBER_IDS -DANON_LOG_NET_TRAFFIC=1 -DxANON_RUNTIME_CHECKS
 
+ifeq (1,$(ASAN))
+ CFLAGS+=-fsanitize=address -fno-omit-frame-pointer
+ LDFLAGS+=-fsanitize=address
+endif
+
 #
 # these two phony targets depend on (and so build) 'all'
 #

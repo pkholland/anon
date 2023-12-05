@@ -33,6 +33,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <cxxabi.h>
+#include <sanitizer/common_interface_defs.h>
 
 namespace __cxxabiv1 {
 // from libstdc++'s "unwind-cxx.h"
@@ -213,6 +214,7 @@ public:
       *s++ = 0xbaadf00d;
 #endif
     ucontext_.uc_stack.ss_sp = stack_;
+    ucontext_.uc_stack.ss_flags = 0;
     ucontext_.uc_stack.ss_size = stack_size;
     ucontext_.uc_link = NULL;
     auto sm = new start_mediator<Fn>(fn);
@@ -430,7 +432,21 @@ private:
     cxxGlobals_ = *ptr;                         // capture this fiber's current exception context
     *ptr = target->cxxGlobals_;                 // set libstdc++'s value to the context of the fiber we are jumping to
 
+    #if defined(__has_feature)
+    #if __has_feature(address_sanitizer)
+    __sanitizer_start_switch_fiber(&old_fake_base_, target->ucontext_.uc_stack.ss_sp, target->ucontext_.uc_stack.ss_size);
+    #endif
+    #endif
+
     swapcontext(&ucontext_, &target->ucontext_);
+
+    #if defined(__has_feature)
+    #if __has_feature(address_sanitizer)
+    const void* old_bottom;
+    size_t old_size;
+    __sanitizer_finish_switch_fiber(old_fake_base_, &old_bottom, &old_size);
+    #endif
+    #endif
   }
 
   static void write_on_one_command(char (&buf)[io_dispatch::k_oo_command_buf_size]);
@@ -451,6 +467,12 @@ private:
   void *stack_;
   ucontext_t ucontext_;
   __cxxabiv1::__cxa_eh_globals cxxGlobals_;
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  void* old_fake_base_;
+  #endif
+  #endif
+
   int fiber_id_;
   fiber_pipe *timeout_pipe_;
 
