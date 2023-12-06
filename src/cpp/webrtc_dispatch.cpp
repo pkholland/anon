@@ -114,6 +114,8 @@ webrtc_dispatch::webrtc_dispatch(int udp_socket,
 
 json webrtc_dispatch::parse_offer(const nlohmann::json& offer)
 {
+  // RFC 4145 for an explanation of the attributes in an sdp string
+  
   std::string type_str = "type";
   std::string offer_str = "offer";
   std::string answer_str = "answer";

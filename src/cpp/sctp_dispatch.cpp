@@ -59,6 +59,9 @@ void append_bytes(const unsigned char* bytes, size_t len, std::ostringstream& os
 
 }
 
+// SCTP on top of (UDP) DTLS
+// RFC 8261
+
 void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
 {
   std::ostringstream oss;
