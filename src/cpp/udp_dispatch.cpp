@@ -28,19 +28,22 @@ namespace {
 
 sockaddr_storage clean_sockaddr(const sockaddr_storage& addr)
 {
-  sockaddr_storage clean;
-  memset(&clean, 0, sizeof(clean));
+  sockaddr_storage clean = {0};
   if (addr.ss_family == AF_INET)
   {
-    ((sockaddr_in *)&clean)->sin_family = AF_INET;
-    ((sockaddr_in *)&clean)->sin_addr = ((sockaddr_in *)&addr)->sin_addr;
-    ((sockaddr_in *)&clean)->sin_port = ((sockaddr_in *)&addr)->sin_port;
+    auto c = (sockaddr_in *)&clean;
+    auto a = (sockaddr_in *)&addr;
+    c->sin_family = AF_INET;
+    c->sin_addr = a->sin_addr;
+    c->sin_port = a->sin_port;
   }
   else if (addr.ss_family == AF_INET6)
   {
-    ((sockaddr_in6 *)&clean)->sin6_family = AF_INET6;
-    ((sockaddr_in6 *)&clean)->sin6_addr = ((sockaddr_in6 *)&addr)->sin6_addr;
-    ((sockaddr_in6 *)&clean)->sin6_port = ((sockaddr_in6 *)&addr)->sin6_port;
+    auto c = (sockaddr_in6 *)&clean;
+    auto a = (sockaddr_in6 *)&addr;
+    c->sin6_family = AF_INET6;
+    c->sin6_addr = a->sin6_addr;
+    c->sin6_port = a->sin6_port;
   }
   return clean;
 }
@@ -127,8 +130,13 @@ void udp_dispatch::io_avail(const struct epoll_event &event)
           auto ths = wp.lock();
           if (ths)
           {
-            auto clean = clean_sockaddr(host);
-            ths->recv_msg(&(*buff)[0], dlen, &clean, host_addr_size);
+            try {
+              auto clean = clean_sockaddr(host);
+              ths->recv_msg(&(*buff)[0], dlen, &clean, host_addr_size);
+            }
+            catch(...) {
+              anon_log_error("caught exception while processing udp message");
+            }
             ths->release_buff(buff);
           }
         }, fiber::k_default_stack_size, "udp_dispatch::io_avail");

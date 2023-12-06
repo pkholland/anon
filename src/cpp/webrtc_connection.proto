@@ -1,0 +1,15 @@
+syntax = "proto3";
+option optimize_for = LITE_RUNTIME;
+
+package webrtc;
+
+message Connection
+{
+  string remote_ufrag = 1;
+  string remote_pwd = 2;
+  int32  remote_sctp_port = 3;
+  bytes remote_x509_digest = 4;
+  string local_ufrag = 5;
+  string local_pwd = 6;
+  int32  local_sctp_port = 7;
+}
