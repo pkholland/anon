@@ -25,6 +25,7 @@
 #include <netinet/in.h>
 #include <openssl/hmac.h>
 #include "log.h"
+#include "big_endian_access.h"
 #include "webrtc_connection.pb.h"
 
 namespace {
@@ -118,66 +119,15 @@ uint32_t raw_magic_cookie;
 // its first 12 bytes are this.  The last 4 are the ipv4 address itself.
 std::vector<unsigned char> ipv4_in_6_header = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff};
 
-// read and write various integer sizes to/from big-endian storage
-
-uint16_t get_uint16(const uint8_t *ptr)
-{
-  uint16_t val = ptr[0];
-  val <<= 8;
-  return val + ptr[1];
-}
-
-void set_uint16(uint16_t val, uint8_t *ptr)
-{
-  ptr[0] = (val >> 8) & 0x00ff;
-  ptr[1] = val & 0x00ff;
-}
-
-uint32_t get_uint32(const uint8_t *ptr)
-{
-  uint32_t val = ptr[0];
-  val <<= 8;
-  val += ptr[1];
-  val <<= 8;
-  val += ptr[2];
-  val <<= 8;
-  return val + ptr[3];
-}
-
-void set_uint32(uint32_t val, uint8_t *ptr)
-{
-  ptr[0] = (val >> 24) & 0x00ff;
-  ptr[1] = (val >> 16) & 0x00ff;
-  ptr[2] = (val >> 8) & 0x00ff;
-  ptr[3] = val & 0x00ff;
-}
-
-uint64_t get_uint64(const uint8_t *ptr)
-{
-  uint64_t val = 0;
-  for (auto i = 0; i < 8; i++) {
-    val <<= 8;
-    val += ptr[i];
-  }
-  return val;
-}
-
-void set_uint64(uint64_t val, uint8_t* ptr)
-{
-  for (auto i = 0; i < 8; i++) {
-    ptr[i] = (val >> (56 - i*8)) & 0x0ff;
-  }
-}
 
 // "standard" (defined by stun) crc32 value - followed by xoring the special value
 uint32_t crc32_xor(const void *buf, size_t size)
 {
   auto *p = (const uint8_t*)buf;
-  uint32_t crc;
+  uint32_t crc = ~0U;
 
-  crc = ~0U;
   while (size--) {
-    crc = crc32_tab[(crc ^ *p++) & 0xFF] ^ (crc >> 8);
+    crc = crc32_tab[(crc ^ *p++) & 0xff] ^ (crc >> 8);
   }
   return (crc ^ ~0U) ^ fingerprint_xor_value;
 }
@@ -258,7 +208,7 @@ struct stun_message_builder
   stun_message_builder(uint16_t message_type, const uint8_t* trans_id)
     : buff(20)
   {
-    set_uint16(message_type, &buff[0]);
+    set_be_uint16(message_type, &buff[0]);
     // buf[2] and [3] will be the length
     *(uint32_t*)&buff[4] = raw_magic_cookie;
     memcpy(&buff[8], &trans_id[0], 12);
@@ -267,9 +217,9 @@ struct stun_message_builder
   void add_ipv4_xor_mapped_address(uint16_t big_endian_port, const uint8_t* addr)
   {
     uint8_t attr[12] = {0};
-    set_uint16(XOR_MAPPED_ADDRESS, &attr[0]);
-    set_uint16(8/*len*/, &attr[2]);
-    set_uint16(1/*familiey == ipv4*/, &attr[4]);
+    set_be_uint16(XOR_MAPPED_ADDRESS, &attr[0]);
+    set_be_uint16(8/*len*/, &attr[2]);
+    set_be_uint16(1/*familiey == ipv4*/, &attr[4]);
     *(uint16_t*)&attr[6] = big_endian_port ^ *(uint16_t*)&buff[4]/*first two bytes of magic_cookie*/;
     auto s1 = addr;
     auto s2 = &buff[4];
@@ -293,9 +243,9 @@ struct stun_message_builder
       }
       else {
         uint8_t attr[24] = {0};
-        set_uint16(XOR_MAPPED_ADDRESS, &attr[0]);
-        set_uint16(20/*len*/, &attr[2]);
-        set_uint16(1/*family == ipv6*/, &attr[4]);
+        set_be_uint16(XOR_MAPPED_ADDRESS, &attr[0]);
+        set_be_uint16(20/*len*/, &attr[2]);
+        set_be_uint16(1/*family == ipv6*/, &attr[4]);
         *(uint16_t*)&attr[6] = addr6->sin6_port ^ *(uint16_t*)&buff[4]/*first two bytes of magic_cookie*/;
         auto s1 = &addr[0];
         auto s2 = &buff[4];
@@ -319,8 +269,8 @@ struct stun_message_builder
     auto sz = (buff.size() + 3) & 0x0fffc;
     auto usz = (uint16_t)user_name.size();
     buff.resize(sz + 4 + usz);
-    set_uint16(USERNAME, &buff[sz]);
-    set_uint16(usz, &buff[sz+2]);
+    set_be_uint16(USERNAME, &buff[sz]);
+    set_be_uint16(usz, &buff[sz+2]);
     memcpy(&buff[4], user_name.c_str(), usz);
   }
 
@@ -328,27 +278,27 @@ struct stun_message_builder
   {
     auto sz = (buff.size() + 3) & 0x0fffc;
     buff.resize(sz + 12);
-    set_uint16(ICE_CONTROLLED, &buff[sz]);
-    set_uint16(8, &buff[sz+2]);
-    set_uint64(0, &buff[sz+4]);
+    set_be_uint16(ICE_CONTROLLED, &buff[sz]);
+    set_be_uint16(8, &buff[sz+2]);
+    set_be_uint64(0, &buff[sz+4]);
   }
 
   void add_priority(uint32_t priority)
   {
     auto sz = (buff.size() + 3) & 0x0fffc;
     buff.resize(sz + 8);
-    set_uint16(PRIORITY, &buff[sz]);
-    set_uint16(4, &buff[sz+2]);
-    set_uint32(priority, &buff[sz+4]);
+    set_be_uint16(PRIORITY, &buff[sz]);
+    set_be_uint16(4, &buff[sz+2]);
+    set_be_uint32(priority, &buff[sz+4]);
   }
 
   void add_message_integrity(const std::string& pwd)
   {
     auto sz = (buff.size() + 3) &0x0fffc;
     buff.resize(sz + 24);
-    set_uint16(sz + 24 - stun_msg_header_size, &buff[2]);
-    set_uint16(MESSAGE_INTEGRITY, &buff[sz]);
-    set_uint16(20, &buff[sz+2]);
+    set_be_uint16(sz + 24 - stun_msg_header_size, &buff[2]);
+    set_be_uint16(MESSAGE_INTEGRITY, &buff[sz]);
+    set_be_uint16(20, &buff[sz+2]);
     unsigned int attr_len = 20;
     HMAC(EVP_sha1(), pwd.c_str(), pwd.size(), &buff[0], sz, &buff[sz+4], &attr_len);
   }
@@ -357,10 +307,10 @@ struct stun_message_builder
   {
     auto sz = (buff.size() + 3) & 0x0fffc;
     buff.resize(sz + 8);
-    set_uint16(sz + 8 - stun_msg_header_size, &buff[2]);
-    set_uint16(FINGERPRINT, &buff[sz]);
-    set_uint16(4, &buff[sz+2]);
-    set_uint32(crc32_xor(&buff[0], sz), &buff[sz+4]);
+    set_be_uint16(sz + 8 - stun_msg_header_size, &buff[2]);
+    set_be_uint16(FINGERPRINT, &buff[sz]);
+    set_be_uint16(4, &buff[sz+2]);
+    set_be_uint32(crc32_xor(&buff[0], sz), &buff[sz+4]);
   }
 };
 
@@ -402,13 +352,13 @@ stun_msg_parser::stun_msg stun_msg_parser::parse_stun_msg(const unsigned char *m
     return {};
   }
 
-  auto msgSize = get_uint16(&msg[2]);
+  auto msgSize = get_be_uint16(&msg[2]);
   if (len != msgSize + stun_msg_header_size) {
     anon_log("message size mismatch.  len: " << len << ", msgSize+stun_msg_header_size: " << msgSize+stun_msg_header_size);
     return {};
   }
 
-  auto mth = get_uint16(&msg[0]);
+  auto mth = get_be_uint16(&msg[0]);
   method = mth & ~method_class_mask;
   method_class = mth & method_class_mask;
   if (known_methods.find(method) == known_methods.end()) {
@@ -423,8 +373,8 @@ stun_msg_parser::stun_msg stun_msg_parser::parse_stun_msg(const unsigned char *m
       anon_log("invalid attribute data");
       return {};
     }
-    auto attr_type = get_uint16(&ptr[0]);
-    auto attr_len = get_uint16(&ptr[2]);
+    auto attr_type = get_be_uint16(&ptr[0]);
+    auto attr_len = get_be_uint16(&ptr[2]);
     if (ptr + attribute_header_size + attr_len > msg_end) {
       anon_log("next attribute value past end");
       return {};
@@ -496,7 +446,7 @@ stun_msg_parser::stun_msg stun_msg_parser::parse_stun_msg(const unsigned char *m
           auto cpy_size = ptr - msg;
           std::vector<uint8_t> cpy(cpy_size);
           memcpy(&cpy[0], msg, cpy_size);
-          set_uint16(modified_len, &cpy[2]);
+          set_be_uint16(modified_len, &cpy[2]);
           auto &pwd = conn.local_pwd();
 
           uint8_t md[20];
@@ -527,7 +477,7 @@ stun_msg_parser::stun_msg stun_msg_parser::parse_stun_msg(const unsigned char *m
           anon_log("wrong fingerprint length");
           return {};
         } else {
-          auto presented_crc = get_uint32(&ptr[attribute_header_size]);
+          auto presented_crc = get_be_uint32(&ptr[attribute_header_size]);
           auto computed_crc = crc32_xor(msg, ptr - msg);
           if (computed_crc != presented_crc) {
             anon_log("fingerprint mismatch");
