@@ -29,7 +29,7 @@
 #include <openssl/ssl.h>
 #include <vector>
 
-struct dtls_connection {
+struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
   SSL* ssl = nullptr;
   bool listened = false;
   bool accepted = false;
@@ -37,14 +37,24 @@ struct dtls_connection {
   timespec last_used_time;
 
   dtls_connection(const sockaddr_storage& client_addr, int fd, SSL_CTX* dtls_context)
-    : sctp(std::make_shared<sctp_dispatch>()),
-      last_used_time(cur_time())
+    : last_used_time(cur_time())
   {
     auto read_bio = BIO_new_simple_queue(client_addr);
     auto write_bio = BIO_new_udp_sock(fd, client_addr);
     ssl = SSL_new(dtls_context);
     SSL_set_bio(ssl, read_bio, write_bio);
     SSL_set_options(ssl, SSL_OP_COOKIE_EXCHANGE);
+  }
+
+  void set_sctp()
+  {
+    sctp = std::make_shared<sctp_dispatch>(
+      [wths = std::weak_ptr<dtls_connection>(shared_from_this())](const uint8_t* msg, size_t len)
+      {
+        if (auto ths = wths.lock()) {
+          SSL_write(ths->ssl, msg, len);
+        }
+      });
   }
 
   dtls_connection() = default;
@@ -129,6 +139,7 @@ void dtls_dispatch::register_address(const struct sockaddr_storage *sockaddr)
   auto it = dtls_connections.find(*sockaddr);
   if (it == dtls_connections.end()) {
     auto conn = std::make_shared<dtls_connection>(*sockaddr, udp_fd, *dtls_context);
+    conn->set_sctp();
     dtls_connections.emplace(std::make_pair(*sockaddr, conn));
     if (dtls_connections.size() == 1) {
       sweep_inactive();

@@ -22,13 +22,15 @@
 
 #pragma once
 
-#include <sys/socket.h>
 #include <cstdint>
+#include <functional>
 
 class sctp_dispatch
 {
+  std::function<void(const uint8_t* msg, size_t len)> send_reply;
+
 public:
-  sctp_dispatch() = default;
+  sctp_dispatch(std::function<void(const uint8_t* msg, size_t len)> send_reply);
   void recv_msg(const uint8_t *msg, ssize_t len);
 
 };

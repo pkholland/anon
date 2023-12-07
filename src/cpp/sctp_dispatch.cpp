@@ -26,8 +26,65 @@
 
 namespace {
 
+void append_nibble(uint8_t nib, std::ostringstream& oss, char a = 'a')
+{
+  char b[2] = {0};
+  if (nib < 10) {
+    b[0] = '0' + nib;
+  }
+  else {
+    b[0] = a + (nib - 10);
+  }
+  oss << &b[0];
+}
+
+// debugging helper
+void append_byte(unsigned char b, bool add_comma, std::ostringstream& oss)
+{
+  oss << "0x";
+  append_nibble(b >> 4, oss);
+  append_nibble(b & 0x0f, oss);
+  if (add_comma) {
+    oss << ", ";
+  }
+}
+
+// debugging helper
+void append_bytes(const unsigned char* bytes, size_t len, std::ostringstream& oss)
+{
+  oss << "[";
+  for (size_t i = 0; i < len; i++) {
+    append_byte(bytes[i], i != len - 1, oss);
+  }
+  oss << "]";
+}
+
 enum {
-  k_sctp_common_header_size = 12
+  k_sctp_common_header_size = 12,
+  k_sctp_chunk_header_size = 4,
+  k_sctp_option_header_size = 4,
+  k_init_chunk_header_size = 20,
+
+  CHNK_DATA = 0,
+  CHNK_INIT = 1,
+  CHNK_INIT_ACK = 2,
+  CHNK_SACK = 3,
+  CHNK_HEARTBEAT = 4,
+  CHNK_HEARTBEAT_ACK = 5,
+  CHNK_ABORT = 6,
+  CHNK_SHUTDOWN = 7,
+  CHNK_SHUTDOWN_ACK = 8,
+  CHNK_ERROR = 9,
+  CHNK_COOKIE_ECHO = 10,
+  CHNK_COOKIE_ECHO_ACK = 11,
+  CHNK_ECNE = 12,
+  CHNK_CWR = 13,
+  CHNK_SHUTDOWN_COMPLETE = 14,
+
+  OPT_FORWARD_TSN = 192,
+  OPT_SUPPORTED_EXTENSIONS_FIRST_BYTE = 0x80,
+  OPT_SUPPORTED_EXTENSIONS_SECOND_BYTE = 0x08,
+  OPT_COOKIE = 7
 };
 
 // the crc polynomial used by sctp
@@ -136,41 +193,214 @@ uint32_t crc32_sctp(const void *buf, size_t size)
   return crc;
 }
 
-
-void append_nibble(uint8_t nib, std::ostringstream& oss, char a = 'a')
+std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
 {
-  char b[2] = {0};
-  if (nib < 10) {
-    b[0] = '0' + nib;
+  std::ostringstream oss;
+
+  auto msg_end = msg + len;
+  auto chunk_start = msg + k_sctp_common_header_size;
+  while (chunk_start <= msg_end - k_sctp_chunk_header_size) {
+    auto chunk_type = chunk_start[0];
+    auto chunk_flags = chunk_start[1];
+    auto chunk_len = get_be_uint16(&chunk_start[2]);
+    auto rounded_chunk_len = ((chunk_len + 3) & ~3);
+    if (chunk_len < k_sctp_chunk_header_size) {
+      anon_log("invalid sctp chunk length field: " << chunk_len);
+      return {};
+    }
+    if (chunk_start + chunk_len <= msg_end) {
+      switch (chunk_type) {
+        case CHNK_DATA:
+          oss << "CHNK_DATA ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_INIT:
+          oss << "CHNK_INIT:\n";
+          //append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          //oss << "\n";
+          #if 0
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |   Type = 1    |  Chunk Flags  |      Chunk Length             |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |                         Initiate Tag                          |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |           Advertised Receiver Window Credit (a_rwnd)          |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |  Number of Outbound Streams   |  Number of Inbound Streams    |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |                          Initial TSN                          |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          \                                                               \
+          /              Optional/Variable-Length Parameters              /
+          \                                                               \
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          #endif
+          if (chunk_len < k_init_chunk_header_size) {
+            oss << "chunk length too small for CHNK_INIT\n";
+            return {};
+          }
+          {
+            auto chunk_size = get_be_uint16(&chunk_start[2]);
+            auto chunk_end = chunk_start + chunk_size;
+            auto init_tag = get_be_uint32(&chunk_start[4]);
+            auto window_credit = get_be_uint32(&chunk_start[8]);
+            auto out_streams = get_be_uint16(&chunk_start[12]);
+            auto in_streams = get_be_uint16(&chunk_start[14]);
+            auto init_tsn = get_be_uint32(&chunk_start[16]);
+            oss << " chunk_size: " << chunk_size << "\n";
+            oss << " init_tag: " << init_tag << "\n";
+            oss << " window_credit: " << window_credit << "\n";
+            oss << " out_streams: " << out_streams << "\n";
+            oss << " in_streams: " << in_streams << "\n";
+            oss << " init_tsn: " << init_tsn << "\n";
+            auto opt_start = &chunk_start[k_init_chunk_header_size];
+            while (opt_start + k_sctp_option_header_size < chunk_end) {
+              auto opt_type = opt_start[0];
+              auto opt_flags = opt_start[1];
+              auto opt_len = get_be_uint16(&opt_start[2]);
+              if (opt_len < k_sctp_option_header_size) {
+                anon_log("option length too small");
+                return {};
+              }
+              if (opt_start + opt_len > msg_end) {
+                anon_log("option length too big");
+              }
+              switch(opt_type) {
+                case OPT_FORWARD_TSN:
+                  oss << " supports Forward TSN\n";
+                  break;
+                case OPT_SUPPORTED_EXTENSIONS_FIRST_BYTE:
+                  if (opt_flags != OPT_SUPPORTED_EXTENSIONS_SECOND_BYTE) {
+                    anon_log("0x80 only permitted if second byte is 0x08");
+                    return {};
+                  }
+                  else {
+                    oss << " supports extensions: ";
+                    append_bytes(&opt_start[k_sctp_option_header_size], opt_len - k_sctp_option_header_size, oss);
+                    oss << "\n";
+                  }
+                  break;
+                default:
+                  anon_log("unknown option type: " << (int)opt_type);
+                  return {};
+              }
+              opt_start += (opt_len + 3) & ~3;
+            }
+            //append_bytes(&chunk_start[20], chunk_len-20, oss);
+
+            // the INIT_ACK is going to be a copy of the INIT we recieved with
+            // except with the "chunk_type" set to CHNK_INIT_ACK, and we copy
+            // the incomming "initiate tag" from the INIT chunk into the
+            // "verification tag" of the common header, and add a "cookie" option
+            auto rounded_chunk_end = chunk_start + rounded_chunk_len;
+            if (rounded_chunk_end >= msg_end) {
+              auto dummy_cookie_len = 8;
+              auto cookie_len = k_sctp_option_header_size + dummy_cookie_len;
+              auto len_with_cookie = (rounded_chunk_end - msg) + cookie_len;
+              std::vector<uint8_t> reply(len_with_cookie);
+              memcpy(&reply[0], msg, len);
+              set_be_uint32(init_tag, &reply[4]);
+              auto chk = &reply[k_sctp_common_header_size];
+              chk[0] = CHNK_INIT_ACK;
+              set_be_uint16(rounded_chunk_len + cookie_len, &chk[2]);
+              chk[rounded_chunk_len] = OPT_COOKIE;
+              set_be_uint16(cookie_len, &chk[rounded_chunk_len+2]);
+              auto new_crc = crc32_sctp(&reply[0], len_with_cookie);
+              set_be_uint32(new_crc, &reply[8]);
+              //anon_log("sctp chunks:\n" << oss.str());
+              return reply;
+            }
+          }
+          break;
+        case CHNK_INIT_ACK:
+          oss << "CHNK_INIT_ACK ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_SACK:
+          oss << "CHNK_SACK ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_HEARTBEAT:
+          oss << "CHNK_HEARTBEAT ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_HEARTBEAT_ACK:
+          oss << "CHNK_HEARTBEAT_ACK ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_ABORT:
+          oss << "CHNK_ABORT ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_SHUTDOWN:
+          oss << "CHNK_SHUTDOWN ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_SHUTDOWN_ACK:
+          oss << "CHNK_SHUTDOWN_ACK ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_ERROR:
+          oss << "CHNK_ERROR ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_COOKIE_ECHO:
+          oss << "CHNK_COOKIE_ECHO ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_COOKIE_ECHO_ACK:
+          oss << "CHNK_COOKIE_ECHO_ACK ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_ECNE:
+          oss << "CHNK_ECNE ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_CWR:
+          oss << "CHNK_CWR ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        case CHNK_SHUTDOWN_COMPLETE:
+          oss << "CHNK_SHUTDOWN_COMPLETE ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+        default:
+          oss << "unknown chunk type: " << chunk_type << " ";
+          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
+          oss << "\n";
+          break;
+      }
+    }
+    else {
+      anon_log("sctp msg only contains partial chunk");
+    }
+    chunk_start += rounded_chunk_len;
   }
-  else {
-    b[0] = a + (nib - 10);
-  }
-  oss << &b[0];
+  anon_log("sctp chunks:\n" << oss.str());
+  return {};
 }
 
-// debugging helper
-void append_byte(unsigned char b, bool add_comma, std::ostringstream& oss)
-{
-  oss << "0x";
-  append_nibble(b >> 4, oss);
-  append_nibble(b & 0x0f, oss);
-  if (add_comma) {
-    oss << ", ";
-  }
 }
 
-// debugging helper
-void append_bytes(const unsigned char* bytes, size_t len, std::ostringstream& oss)
-{
-  oss << "[";
-  for (size_t i = 0; i < len; i++) {
-    append_byte(bytes[i], i != len - 1, oss);
-  }
-  oss << "]";
-}
-
-}
+sctp_dispatch::sctp_dispatch(std::function<void(const uint8_t* msg, size_t len)> send_reply)
+  : send_reply(std::move(send_reply))
+{}
 
 // SCTP on top of (UDP) DTLS
 // RFC 8261
@@ -184,7 +414,17 @@ void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
   if (len >= k_sctp_common_header_size) {
     auto computed_crc = crc32_sctp(msg, len);
     auto provided_src = get_be_uint32(&msg[8]);
-    anon_log("crcs, computed: " << computed_crc << ", provided: " << provided_src);
+    if (computed_crc == provided_src) {
+      auto reply = parse_sctp_chunks(msg, len);
+      if (reply.size() > 0) {
+        std::ostringstream oss;
+        append_bytes(&reply[0], reply.size(), oss);
+        anon_log("will send back message:\n" << oss.str());
+        send_reply(&reply[0], reply.size());
+      }
+    } else {
+      anon_log("ignoring sctp msg with crc mismatch, should be: " << computed_crc << ", but was provided as: " << provided_src);
+    }
   }
 }
 
