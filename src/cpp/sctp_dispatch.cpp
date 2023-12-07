@@ -76,7 +76,7 @@ enum {
   CHNK_SHUTDOWN_ACK = 8,
   CHNK_ERROR = 9,
   CHNK_COOKIE_ECHO = 10,
-  CHNK_COOKIE_ECHO_ACK = 11,
+  CHNK_COOKIE_ACK = 11,
   CHNK_ECNE = 12,
   CHNK_CWR = 13,
   CHNK_SHUTDOWN_COMPLETE = 14,
@@ -297,8 +297,7 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
             // "verification tag" of the common header, and add a "cookie" option
             auto rounded_chunk_end = chunk_start + rounded_chunk_len;
             if (rounded_chunk_end >= msg_end) {
-              auto dummy_cookie_len = 8;
-              auto cookie_len = k_sctp_option_header_size + dummy_cookie_len;
+              auto cookie_len = k_sctp_option_header_size;
               auto len_with_cookie = (rounded_chunk_end - msg) + cookie_len;
               std::vector<uint8_t> reply(len_with_cookie);
               memcpy(&reply[0], msg, len);
@@ -306,7 +305,7 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
               auto chk = &reply[k_sctp_common_header_size];
               chk[0] = CHNK_INIT_ACK;
               set_be_uint16(rounded_chunk_len + cookie_len, &chk[2]);
-              chk[rounded_chunk_len] = OPT_COOKIE;
+              set_be_uint16(OPT_COOKIE, &chk[rounded_chunk_len]);
               set_be_uint16(cookie_len, &chk[rounded_chunk_len+2]);
               auto new_crc = crc32_sctp(&reply[0], len_with_cookie);
               set_be_uint32(new_crc, &reply[8]);
@@ -329,6 +328,15 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
           oss << "CHNK_HEARTBEAT ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
           oss << "\n";
+          {
+            std::vector<uint8_t> reply(len);
+            memcpy(&reply[0], msg, len);
+            auto chk = &reply[k_sctp_common_header_size];
+            chk[0] = CHNK_HEARTBEAT_ACK;
+            auto new_crc = crc32_sctp(&reply[0], reply.size());
+            set_be_uint32(new_crc, &reply[8]);
+            return reply;
+          }
           break;
         case CHNK_HEARTBEAT_ACK:
           oss << "CHNK_HEARTBEAT_ACK ";
@@ -359,9 +367,19 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
           oss << "CHNK_COOKIE_ECHO ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
           oss << "\n";
+          {
+            std::vector<uint8_t> reply(k_sctp_common_header_size+4);
+            memcpy(&reply[0], msg, k_sctp_common_header_size);
+            auto chk = &reply[k_sctp_common_header_size];
+            chk[0] = CHNK_COOKIE_ACK;
+            set_be_uint16(4, &chk[2]);
+            auto new_crc = crc32_sctp(&reply[0], reply.size());
+            set_be_uint32(new_crc, &reply[8]);
+            return reply;
+          }
           break;
-        case CHNK_COOKIE_ECHO_ACK:
-          oss << "CHNK_COOKIE_ECHO_ACK ";
+        case CHNK_COOKIE_ACK:
+          oss << "CHNK_COOKIE_ACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
           oss << "\n";
           break;
