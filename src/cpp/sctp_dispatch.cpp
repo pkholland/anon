@@ -64,6 +64,7 @@ enum {
   k_sctp_chunk_header_size = 4,
   k_sctp_option_header_size = 4,
   k_init_chunk_header_size = 20,
+  k_data_chunk_header_size = 16,
 
   CHNK_DATA = 0,
   CHNK_INIT = 1,
@@ -214,6 +215,88 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
           oss << "CHNK_DATA ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
           oss << "\n";
+          #if 0
+            0                   1                   2                   3
+            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |   Type = 0    | Reserved|U|B|E|    Length                     |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |                              TSN                              |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |      Stream Identifier S      |   Stream Sequence Number n    |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          |                  Payload Protocol Identifier                  |
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          \                                                               \
+          /                 User Data (seq n of Stream S)                 /
+          \                                                               \
+          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+          #endif
+          if (chunk_len < k_data_chunk_header_size)
+          {
+            anon_log("data chunk header too small");
+            return {};
+          }
+          else {
+            auto unordered = (chunk_start[1] & 0x04) != 0;
+            auto beginning = (chunk_start[1] & 0x02) != 0;
+            auto end = (chunk_start[1] & 0x01) != 0;
+            auto tsn = get_be_uint32(&chunk_start[4]);
+            auto stream_id = get_be_uint16(&chunk_start[8]);
+            auto stream_seq_num = get_be_uint16(&chunk_start[10]);
+            auto payload_proto_id = get_be_uint32(&chunk_start[12]);
+            oss << " unordered: " << (unordered ? "true\n" : "false\n");
+            oss << " beginning: " << (beginning ? "true\n" : "false\n");
+            oss << " end: " << (end ? "true\n" : "false\n");
+            oss << " tsn: 0x" << std::hex << tsn << std::dec << "\n";
+            oss << " stream_id: " << stream_id << "\n";
+            oss << " stream_seq_num: " << stream_seq_num << "\n";
+            oss << " payload_proto_id: " << payload_proto_id << "\n";
+            oss << " data: ";
+            append_bytes(&chunk_start[k_data_chunk_header_size], chunk_len - k_data_chunk_header_size, oss);
+
+            #if 0
+              0                   1                   2                   3
+              0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |   Type = 3    |Chunk  Flags   |      Chunk Length             |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |                      Cumulative TSN Ack                       |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |          Advertised Receiver Window Credit (a_rwnd)           |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            | Number of Gap Ack Blocks = N  |  Number of Duplicate TSNs = X |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |  Gap Ack Block #1 Start       |   Gap Ack Block #1 End        |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            /                                                               /
+            \                              ...                              \
+            /                                                               /
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |   Gap Ack Block #N Start      |  Gap Ack Block #N End         |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |                       Duplicate TSN 1                         |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            /                                                               /
+            \                              ...                              \
+            /                                                               /
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            |                       Duplicate TSN X                         |
+            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+            #endif
+
+            std::vector<uint8_t> reply(k_sctp_common_header_size + 16);
+            memcpy(&reply[0], msg, k_sctp_common_header_size);
+            auto chk = &reply[k_sctp_common_header_size];
+            chk[0] = CHNK_SACK;
+            set_be_uint16(16, &chk[2]);
+            set_be_uint32(tsn, &chk[4]);
+            set_be_uint32(65535, &chk[8]);
+            auto new_crc = crc32_sctp(&reply[0], reply.size());
+            set_be_uint32(new_crc, &reply[8]);
+            anon_log("sctp chunks:\n" << oss.str());
+            return reply;
+          }
           break;
         case CHNK_INIT:
           oss << "CHNK_INIT:\n";
@@ -425,9 +508,9 @@ sctp_dispatch::sctp_dispatch(std::function<void(const uint8_t* msg, size_t len)>
 
 void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
 {
-  std::ostringstream oss;
-  append_bytes(msg, len, oss);
-  anon_log("got sctp msg:\n" << oss.str());
+  // std::ostringstream oss;
+  // append_bytes(msg, len, oss);
+  // anon_log("got sctp msg:\n" << oss.str());
 
   if (len >= k_sctp_common_header_size) {
     auto computed_crc = crc32_sctp(msg, len);
@@ -435,9 +518,9 @@ void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
     if (computed_crc == provided_src) {
       auto reply = parse_sctp_chunks(msg, len);
       if (reply.size() > 0) {
-        std::ostringstream oss;
-        append_bytes(&reply[0], reply.size(), oss);
-        anon_log("will send back message:\n" << oss.str());
+        // std::ostringstream oss;
+        // append_bytes(&reply[0], reply.size(), oss);
+        // anon_log("will send back message:\n" << oss.str());
         send_reply(&reply[0], reply.size());
       }
     } else {
