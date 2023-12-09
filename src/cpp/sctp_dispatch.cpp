@@ -65,6 +65,7 @@ enum {
   k_sctp_option_header_size = 4,
   k_init_chunk_header_size = 20,
   k_data_chunk_header_size = 16,
+  k_sack_chunk_header_size = 16,
 
   CHNK_DATA = 0,
   CHNK_INIT = 1,
@@ -194,7 +195,95 @@ uint32_t crc32_sctp(const void *buf, size_t size)
   return crc;
 }
 
-std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
+}
+
+bool sctp_dispatch::do_chunk_init(const uint8_t* init_data, ssize_t init_len)
+{
+  #if 0
+  // RFC 4960, section 3.3.2
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |   Type = 1    |  Chunk Flags  |      Chunk Length             |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                         Initiate Tag                          |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |           Advertised Receiver Window Credit (a_rwnd)          |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |  Number of Outbound Streams   |  Number of Inbound Streams    |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                          Initial TSN                          |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  \                                                               \
+  /              Optional/Variable-Length Parameters              /
+  \                                                               \
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  #endif
+
+  if (init_len < k_init_chunk_header_size) {
+    anon_log("chunk length too small for CHNK_INIT");
+    return false;
+  }
+
+  auto init_end = init_data + init_len;
+  verification_tag = get_be_uint32(&init_data[4]);
+  auto window_credit = get_be_uint32(&init_data[8]);
+  auto out_streams = get_be_uint16(&init_data[12]);
+  auto in_streams = get_be_uint16(&init_data[14]);
+  last_complete_tsn = get_be_uint32(&init_data[16]) - 1;
+  auto opt_start = &init_data[k_init_chunk_header_size];
+
+  while (opt_start + k_sctp_option_header_size < init_end) {
+    auto opt_type = opt_start[0];
+    auto opt_flags = opt_start[1];
+    auto opt_len = get_be_uint16(&opt_start[2]);
+    if (opt_len < k_sctp_option_header_size) {
+      anon_log("option length too small");
+      return false;
+    }
+    if (opt_start + opt_len > init_end) {
+      anon_log("option length too big");
+      return false;
+    }
+    switch(opt_type) {
+      case OPT_FORWARD_TSN:
+        // good to know, no action
+        break;
+      case OPT_SUPPORTED_EXTENSIONS_FIRST_BYTE:
+        if (opt_flags != OPT_SUPPORTED_EXTENSIONS_SECOND_BYTE) {
+          anon_log("0x80 only permitted if second byte is 0x08");
+          return false;
+        }
+        break;
+      default:
+        anon_log("unknown option type: " << (int)opt_type);
+        return false;
+    }
+    opt_start += (opt_len + 3) & ~3;
+  }
+
+  // the INIT_ACK is going to be a copy of the INIT we recieved with
+  // some modifications:
+  //  1) we are required to return a cookie, but we don't use one
+  //     internally, so we return an empty one.
+  //  2) the chunk type is set to CHNK_INIT_ACK instead of CHNK_INIT
+
+  auto cookie_len = k_sctp_option_header_size;
+  auto rounded_init_len = (init_len + 3) & ~3;
+  auto len_with_cookie = rounded_init_len + cookie_len;
+  std::vector<uint8_t> ack_chunk(len_with_cookie);
+  memcpy(&ack_chunk[0], init_data, init_len);
+  //set_be_uint32(verification_tag, &reply[4]);
+  ack_chunk[0] = CHNK_INIT_ACK;
+  set_be_uint16(len_with_cookie, &ack_chunk[2]);
+  set_be_uint16(OPT_COOKIE, &ack_chunk[rounded_init_len]);
+  set_be_uint16(cookie_len, &ack_chunk[rounded_init_len+2]);
+  tsns.insert(last_complete_tsn + 1);
+  chunks.push_back(std::string((char*)&ack_chunk[0], ack_chunk.size()));
+  return true;
+}
+
+bool sctp_dispatch::parse_sctp_chunks(const uint8_t* msg, ssize_t len)
 {
   std::ostringstream oss;
 
@@ -207,301 +296,274 @@ std::vector<uint8_t> parse_sctp_chunks(const uint8_t* msg, ssize_t len)
     auto rounded_chunk_len = ((chunk_len + 3) & ~3);
     if (chunk_len < k_sctp_chunk_header_size) {
       anon_log("invalid sctp chunk length field: " << chunk_len);
-      return {};
+      return false;
     }
     if (chunk_start + chunk_len <= msg_end) {
       switch (chunk_type) {
         case CHNK_DATA:
-          oss << "CHNK_DATA ";
-          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
-          #if 0
-            0                   1                   2                   3
-            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |   Type = 0    | Reserved|U|B|E|    Length                     |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |                              TSN                              |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |      Stream Identifier S      |   Stream Sequence Number n    |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |                  Payload Protocol Identifier                  |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          \                                                               \
-          /                 User Data (seq n of Stream S)                 /
-          \                                                               \
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          #endif
-          if (chunk_len < k_data_chunk_header_size)
-          {
-            anon_log("data chunk header too small");
-            return {};
-          }
-          else {
-            auto unordered = (chunk_start[1] & 0x04) != 0;
-            auto beginning = (chunk_start[1] & 0x02) != 0;
-            auto end = (chunk_start[1] & 0x01) != 0;
-            auto tsn = get_be_uint32(&chunk_start[4]);
-            auto stream_id = get_be_uint16(&chunk_start[8]);
-            auto stream_seq_num = get_be_uint16(&chunk_start[10]);
-            auto payload_proto_id = get_be_uint32(&chunk_start[12]);
-            oss << " unordered: " << (unordered ? "true\n" : "false\n");
-            oss << " beginning: " << (beginning ? "true\n" : "false\n");
-            oss << " end: " << (end ? "true\n" : "false\n");
-            oss << " tsn: 0x" << std::hex << tsn << std::dec << "\n";
-            oss << " stream_id: " << stream_id << "\n";
-            oss << " stream_seq_num: " << stream_seq_num << "\n";
-            oss << " payload_proto_id: " << payload_proto_id << "\n";
-            oss << " data: ";
-            append_bytes(&chunk_start[k_data_chunk_header_size], chunk_len - k_data_chunk_header_size, oss);
-
-            #if 0
-              0                   1                   2                   3
-              0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |   Type = 3    |Chunk  Flags   |      Chunk Length             |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |                      Cumulative TSN Ack                       |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |          Advertised Receiver Window Credit (a_rwnd)           |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            | Number of Gap Ack Blocks = N  |  Number of Duplicate TSNs = X |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |  Gap Ack Block #1 Start       |   Gap Ack Block #1 End        |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            /                                                               /
-            \                              ...                              \
-            /                                                               /
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |   Gap Ack Block #N Start      |  Gap Ack Block #N End         |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |                       Duplicate TSN 1                         |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            /                                                               /
-            \                              ...                              \
-            /                                                               /
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            |                       Duplicate TSN X                         |
-            +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-            #endif
-
-            std::vector<uint8_t> reply(k_sctp_common_header_size + 16);
-            memcpy(&reply[0], msg, k_sctp_common_header_size);
-            auto chk = &reply[k_sctp_common_header_size];
-            chk[0] = CHNK_SACK;
-            set_be_uint16(16, &chk[2]);
-            set_be_uint32(tsn, &chk[4]);
-            set_be_uint32(65535, &chk[8]);
-            auto new_crc = crc32_sctp(&reply[0], reply.size());
-            set_be_uint32(new_crc, &reply[8]);
-            anon_log("sctp chunks:\n" << oss.str());
-            return reply;
-          }
+          dcd->recv_data_chunk(chunk_start, chunk_len);
           break;
         case CHNK_INIT:
-          oss << "CHNK_INIT:\n";
-          //append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          //oss << "\n";
-          #if 0
-            0                   1                   2                   3
-            0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |   Type = 1    |  Chunk Flags  |      Chunk Length             |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |                         Initiate Tag                          |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |           Advertised Receiver Window Credit (a_rwnd)          |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |  Number of Outbound Streams   |  Number of Inbound Streams    |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          |                          Initial TSN                          |
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          \                                                               \
-          /              Optional/Variable-Length Parameters              /
-          \                                                               \
-          +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-          #endif
-          if (chunk_len < k_init_chunk_header_size) {
-            oss << "chunk length too small for CHNK_INIT\n";
-            return {};
-          }
-          {
-            auto chunk_size = get_be_uint16(&chunk_start[2]);
-            auto chunk_end = chunk_start + chunk_size;
-            auto init_tag = get_be_uint32(&chunk_start[4]);
-            auto window_credit = get_be_uint32(&chunk_start[8]);
-            auto out_streams = get_be_uint16(&chunk_start[12]);
-            auto in_streams = get_be_uint16(&chunk_start[14]);
-            auto init_tsn = get_be_uint32(&chunk_start[16]);
-            oss << " chunk_size: " << chunk_size << "\n";
-            oss << " init_tag: " << init_tag << "\n";
-            oss << " window_credit: " << window_credit << "\n";
-            oss << " out_streams: " << out_streams << "\n";
-            oss << " in_streams: " << in_streams << "\n";
-            oss << " init_tsn: " << init_tsn << "\n";
-            auto opt_start = &chunk_start[k_init_chunk_header_size];
-            while (opt_start + k_sctp_option_header_size < chunk_end) {
-              auto opt_type = opt_start[0];
-              auto opt_flags = opt_start[1];
-              auto opt_len = get_be_uint16(&opt_start[2]);
-              if (opt_len < k_sctp_option_header_size) {
-                anon_log("option length too small");
-                return {};
-              }
-              if (opt_start + opt_len > msg_end) {
-                anon_log("option length too big");
-              }
-              switch(opt_type) {
-                case OPT_FORWARD_TSN:
-                  oss << " supports Forward TSN\n";
-                  break;
-                case OPT_SUPPORTED_EXTENSIONS_FIRST_BYTE:
-                  if (opt_flags != OPT_SUPPORTED_EXTENSIONS_SECOND_BYTE) {
-                    anon_log("0x80 only permitted if second byte is 0x08");
-                    return {};
-                  }
-                  else {
-                    oss << " supports extensions: ";
-                    append_bytes(&opt_start[k_sctp_option_header_size], opt_len - k_sctp_option_header_size, oss);
-                    oss << "\n";
-                  }
-                  break;
-                default:
-                  anon_log("unknown option type: " << (int)opt_type);
-                  return {};
-              }
-              opt_start += (opt_len + 3) & ~3;
-            }
-            //append_bytes(&chunk_start[20], chunk_len-20, oss);
-
-            // the INIT_ACK is going to be a copy of the INIT we recieved with
-            // except with the "chunk_type" set to CHNK_INIT_ACK, and we copy
-            // the incomming "initiate tag" from the INIT chunk into the
-            // "verification tag" of the common header, and add a "cookie" option
-            auto rounded_chunk_end = chunk_start + rounded_chunk_len;
-            if (rounded_chunk_end >= msg_end) {
-              auto cookie_len = k_sctp_option_header_size;
-              auto len_with_cookie = (rounded_chunk_end - msg) + cookie_len;
-              std::vector<uint8_t> reply(len_with_cookie);
-              memcpy(&reply[0], msg, len);
-              set_be_uint32(init_tag, &reply[4]);
-              auto chk = &reply[k_sctp_common_header_size];
-              chk[0] = CHNK_INIT_ACK;
-              set_be_uint16(rounded_chunk_len + cookie_len, &chk[2]);
-              set_be_uint16(OPT_COOKIE, &chk[rounded_chunk_len]);
-              set_be_uint16(cookie_len, &chk[rounded_chunk_len+2]);
-              auto new_crc = crc32_sctp(&reply[0], len_with_cookie);
-              set_be_uint32(new_crc, &reply[8]);
-              //anon_log("sctp chunks:\n" << oss.str());
-              return reply;
-            }
+          if (!do_chunk_init(chunk_start, chunk_len)) {
+            verification_tag = 0;
+            return false;
           }
           break;
         case CHNK_INIT_ACK:
           oss << "CHNK_INIT_ACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_SACK:
           oss << "CHNK_SACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_HEARTBEAT:
-          oss << "CHNK_HEARTBEAT ";
-          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
           {
-            std::vector<uint8_t> reply(len);
-            memcpy(&reply[0], msg, len);
-            auto chk = &reply[k_sctp_common_header_size];
-            chk[0] = CHNK_HEARTBEAT_ACK;
-            auto new_crc = crc32_sctp(&reply[0], reply.size());
-            set_be_uint32(new_crc, &reply[8]);
-            return reply;
+            std::string reply_chunk((char*)&chunk_start[0], chunk_len);
+            reply_chunk.data()[0] = CHNK_HEARTBEAT_ACK;
+            chunks.push_back(std::move(reply_chunk));
           }
           break;
         case CHNK_HEARTBEAT_ACK:
           oss << "CHNK_HEARTBEAT_ACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_ABORT:
           oss << "CHNK_ABORT ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_SHUTDOWN:
           oss << "CHNK_SHUTDOWN ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_SHUTDOWN_ACK:
           oss << "CHNK_SHUTDOWN_ACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_ERROR:
           oss << "CHNK_ERROR ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_COOKIE_ECHO:
-          oss << "CHNK_COOKIE_ECHO ";
-          append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
           {
-            std::vector<uint8_t> reply(k_sctp_common_header_size+4);
-            memcpy(&reply[0], msg, k_sctp_common_header_size);
-            auto chk = &reply[k_sctp_common_header_size];
-            chk[0] = CHNK_COOKIE_ACK;
-            set_be_uint16(4, &chk[2]);
-            auto new_crc = crc32_sctp(&reply[0], reply.size());
-            set_be_uint32(new_crc, &reply[8]);
-            return reply;
+            std::vector<uint8_t> reply_chunk(4);
+            reply_chunk[0] = CHNK_COOKIE_ACK;
+            set_be_uint16(4, &reply_chunk[2]);
+            chunks.push_back(std::string((char*)&reply_chunk[0], 4));
           }
           break;
         case CHNK_COOKIE_ACK:
           oss << "CHNK_COOKIE_ACK ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_ECNE:
           oss << "CHNK_ECNE ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_CWR:
           oss << "CHNK_CWR ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         case CHNK_SHUTDOWN_COMPLETE:
           oss << "CHNK_SHUTDOWN_COMPLETE ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
         default:
           oss << "unknown chunk type: " << chunk_type << " ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
-          oss << "\n";
+          anon_log(oss.str());
+          oss.clear();
           break;
       }
     }
     else {
       anon_log("sctp msg only contains partial chunk");
+      return false;
     }
     chunk_start += rounded_chunk_len;
   }
-  anon_log("sctp chunks:\n" << oss.str());
-  return {};
+  return true;
 }
 
+void sctp_dispatch::send_acks()
+{
+  #if 0
+  // RFC 4960, section 3.3.4 - SACK
+    0                   1                   2                   3
+    0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |   Type = 3    |Chunk  Flags   |      Chunk Length             |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                      Cumulative TSN Ack                       |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |          Advertised Receiver Window Credit (a_rwnd)           |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  | Number of Gap Ack Blocks = N  |  Number of Duplicate TSNs = X |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |  Gap Ack Block #1 Start       |   Gap Ack Block #1 End        |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  /                                                               /
+  \                              ...                              \
+  /                                                               /
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |   Gap Ack Block #N Start      |  Gap Ack Block #N End         |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                       Duplicate TSN 1                         |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  /                                                               /
+  \                              ...                              \
+  /                                                               /
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                       Duplicate TSN X                         |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  #endif
+
+  // move last_complete_tsn forward to account for
+  // all sequential tsns that we have received -
+  // and remove those from 'tsns'
+  for (auto it = tsns.begin(); it != tsns.end();) {
+    if (*it == last_complete_tsn + 1) {
+      ++last_complete_tsn;
+      it = tsns.erase(it);
+    }
+    else {
+      break;
+    }
+  }
+  // last_complete_tsn is now "Cumulative TSN Ack"
+
+  // now count and record the discontinuous tsns
+  // that we have already received after that
+  // are after last_complete_tsn
+  std::vector<std::pair<uint32_t, uint32_t>> tsn_blocks;
+  if (tsns.size() > 0) {
+    auto prev = *tsns.begin();
+    auto block_start = prev;
+    prev -= 1;
+    for (auto t : tsns) {
+      if (t != prev+1) {
+        tsn_blocks.push_back(std::make_pair(block_start-last_complete_tsn, prev-last_complete_tsn));
+        block_start = t;
+      }
+      prev = t;
+    }
+    tsn_blocks.push_back(std::make_pair(block_start-last_complete_tsn, prev-last_complete_tsn));
+  }
+
+  // the size of our SACK chunk
+  auto blocks_size = tsn_blocks.size() * 4;
+  auto dups_size = duplicate_tsns.size() * 4;
+  auto sack_size = k_sack_chunk_header_size + blocks_size + dups_size;
+
+  std::vector<uint8_t> sack(sack_size);
+  sack[0] = CHNK_SACK;
+  set_be_uint16(sack_size, &sack[2]);
+  set_be_uint32(last_complete_tsn, &sack[4]);
+  set_be_uint32(65536*4, &sack[8]);
+  set_be_uint16(tsn_blocks.size(), &sack[12]);
+  set_be_uint16(duplicate_tsns.size(), &sack[14]);
+  auto ptr = &sack[k_sack_chunk_header_size];
+  for (auto &b : tsn_blocks) {
+    set_be_uint16(b.first, &ptr[0]);
+    set_be_uint16(b.second, &ptr[2]);
+    ptr += 4;
+  }
+  for (auto dup : duplicate_tsns) {
+    set_be_uint16(dup, ptr);
+    ptr += 4;
+  }
+
+
+  #if 0
+  // RRC 4960, section 3.1 - Common Header
+  0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |     Source Port Number        |     Destination Port Number   |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                      Verification Tag                         |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  |                           Checksum                            |
+  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+  #endif
+
+  size_t total_reply_size = k_sctp_common_header_size;
+  for (auto &c : chunks) {
+    auto sz = c.size();
+    sz = (sz + 3) & ~3;
+    total_reply_size += sz;
+  }
+  total_reply_size += sack.size();
+
+  std::vector<uint8_t> reply(total_reply_size);
+  set_be_uint16(local_port, &reply[0]);
+  set_be_uint16(remote_port, &reply[2]);
+  set_be_uint32(verification_tag, &reply[4]);
+  ptr = &reply[k_sctp_common_header_size];
+  for (auto &c : chunks) {
+    auto sz = c.size();
+    memcpy(ptr, c.c_str(), sz);
+    sz = (sz + 3) & ~3;
+    ptr += sz;
+  }
+  memcpy(ptr, &sack[0], sack.size());
+  auto crc = crc32_sctp(&reply[0], reply.size());
+  set_be_uint32(crc, &reply[8]);
+
+  chunks.clear();
+  duplicate_tsns.clear();
+
+  send_reply(&reply[0], reply.size());
 }
 
-sctp_dispatch::sctp_dispatch(std::function<void(const uint8_t* msg, size_t len)> send_reply)
-  : send_reply(std::move(send_reply))
+sctp_dispatch::sctp_dispatch(uint16_t local_port, uint16_t remote_port)
+  : local_port(local_port),
+    remote_port(remote_port)
 {}
+
+void sctp_dispatch::connect(std::function<void(const uint8_t* msg, size_t len)>&& send_rep)
+{
+  send_reply = std::move(send_rep);
+  dcd = std::make_shared<data_channel_dispatch>(
+    [wp = std::weak_ptr<sctp_dispatch>(shared_from_this())]
+    (uint32_t tsn, const uint8_t* chunk, size_t len) {
+      // add this chunk to the set of chunks we will return in response to
+      // a call to our recv_msg, record which TSN's we are responding to
+      if (auto ths = wp.lock()) {
+        if (tsn > ths->last_complete_tsn) {
+          auto it = ths->tsns.insert(tsn);
+          if (!it.second) {
+            ths->duplicate_tsns.push_back(tsn);
+          }
+        }
+        if (len > 0) {
+          ths->chunks.push_back(std::string((char*)chunk, len));
+        }
+      }
+    });
+}
 
 // SCTP on top of (UDP) DTLS
 // RFC 8261
@@ -516,16 +578,11 @@ void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
     auto computed_crc = crc32_sctp(msg, len);
     auto provided_src = get_be_uint32(&msg[8]);
     if (computed_crc == provided_src) {
-      auto reply = parse_sctp_chunks(msg, len);
-      if (reply.size() > 0) {
-        // std::ostringstream oss;
-        // append_bytes(&reply[0], reply.size(), oss);
-        // anon_log("will send back message:\n" << oss.str());
-        send_reply(&reply[0], reply.size());
+      if (parse_sctp_chunks(msg, len)) {
+        send_acks();
       }
     } else {
       anon_log("ignoring sctp msg with crc mismatch, should be: " << computed_crc << ", but was provided as: " << provided_src);
     }
   }
 }
-

@@ -166,7 +166,7 @@ json webrtc_dispatch::parse_offer(const nlohmann::json& offer)
             ret_sdp << "a=setup:passive\r\n";
           }
           else if (!memcmp("a=sctp-port:", line_start, 12)) {
-            remote_sctp_port = std::atoi(&line_start[2]);
+            remote_sctp_port = std::atoi(&line_start[12]);
             ret_sdp << "a=sctp-port:" << local_sctp_port << "\r\n";
           }
           else if (!memcmp("a=fingerprint:sha-256 ", line_start, 22)) {
@@ -218,7 +218,7 @@ void webrtc_dispatch::recv_msg(
     if (first_byte <= 3) {
       if (auto s = stun.parse_stun_msg(msg, len)) {
         if (s.known_client) {
-          dtls->register_address(addr);
+          dtls->register_association(addr, s.local_sctp_port, s.remote_sctp_port);
           auto reply = stun.create_stun_reply(std::move(s), msg, addr);
           if (sendto(get_sock(), &reply[0], reply.size(), 0, (sockaddr*)addr, addr_len) == -1) {
             anon_log("sendto failed");

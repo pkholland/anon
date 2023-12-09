@@ -38,8 +38,10 @@ public:
     uint16_t method_class;
     std::string remote_ufrag;
     std::string remote_pwd;
+    uint16_t remote_sctp_port;
     std::string local_ufrag;
     std::string local_pwd;
+    uint16_t local_sctp_port;
     std::string user_name;
     bool valid;
     bool has_fingerprint;
@@ -52,8 +54,10 @@ public:
         uint16_t method_class,
         const std::string& remote_ufrag,
         const std::string& remote_pwd,
+        uint16_t remote_sctp_port,
         const std::string& local_ufrag,
         const std::string& local_pwd,
+        uint16_t local_sctp_port,
         bool has_fingerprint,
         bool has_use_candidate,
         bool has_ice_controlling,
@@ -61,9 +65,11 @@ public:
       : method(method),
         method_class(method_class),
         remote_ufrag(remote_ufrag),
+        remote_sctp_port(remote_sctp_port),
         remote_pwd(remote_pwd),
         local_ufrag(local_ufrag),
         local_pwd(local_pwd),
+        local_sctp_port(local_sctp_port),
         valid(true),
         has_fingerprint(has_fingerprint),
         has_use_candidate(has_use_candidate),

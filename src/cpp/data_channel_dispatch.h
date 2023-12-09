@@ -22,26 +22,50 @@
 
 #pragma once
 
-#include <sys/socket.h>
+#include <functional>
+#include <cinttypes>
+#include <map>
 #include <memory>
-#include "tls_context.h"
-#include "fiber.h"
+#include <string>
 
-struct sctp_association;
-
-class dtls_dispatch : public std::enable_shared_from_this<dtls_dispatch>
+class data_channel_dispatch
 {
-  std::shared_ptr<tls_context> dtls_context;
-  int udp_fd;
-  fiber_mutex dtls_mtx;
-  std::map<sockaddr_storage, std::shared_ptr<sctp_association>> sctp_associations;
-  io_dispatch::scheduled_task sweep_task;
+  std::function<void(uint32_t tsn, const uint8_t* chunk, size_t len)> add_chunk;
 
-  void sweep_inactive();
+  enum {
+    k_data_chunk_header_size = 16
+  };
+
+  class data_channel_stream {
+    int channel_type;
+    int priority;
+    int reliability;
+    std::string label;
+    std::string protocol;
+
+  public:
+    data_channel_stream(
+      int channel_type,
+      int priority,
+      int reliability,
+      std::string&& label,
+      std::string&& protocol);
+    void do_data(
+      data_channel_dispatch* cd,
+      uint32_t tsn,
+      uint16_t stream_sequency_num,
+      uint32_t ppid,
+      const uint8_t* data,
+      size_t len);
+  };
+  friend class data_channel_stream;
+
+  std::map<int, std::shared_ptr<data_channel_stream>> streams;
+
+  void do_dcep(uint32_t tsn, int stream_id, const uint8_t* data, size_t len);
 
 public:
-  dtls_dispatch(const std::shared_ptr<tls_context>& dtls_context, int udp_fd);
-  void register_association(const struct sockaddr_storage *sockaddr, uint16_t local_sctp_port, uint16_t remote_sctp_port);
-  void recv_msg(const uint8_t *msg, ssize_t len,
-                const struct sockaddr_storage *sockaddr);
+
+  data_channel_dispatch(std::function<void(uint32_t tsn, const uint8_t* chunk, size_t len)> add_chunk);
+  void recv_data_chunk(const uint8_t *chunk, ssize_t chunk_len);
 };

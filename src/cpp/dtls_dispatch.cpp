@@ -29,14 +29,14 @@
 #include <openssl/ssl.h>
 #include <vector>
 
-struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
+struct sctp_association : public std::enable_shared_from_this<sctp_association> {
   SSL* ssl = nullptr;
   bool listened = false;
   bool accepted = false;
   std::shared_ptr<sctp_dispatch> sctp;
   timespec last_used_time;
 
-  dtls_connection(const sockaddr_storage& client_addr, int fd, SSL_CTX* dtls_context)
+  sctp_association(const sockaddr_storage& client_addr, int fd, SSL_CTX* dtls_context)
     : last_used_time(cur_time())
   {
     auto read_bio = BIO_new_simple_queue(client_addr);
@@ -46,10 +46,12 @@ struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
     SSL_set_options(ssl, SSL_OP_COOKIE_EXCHANGE);
   }
 
-  void set_sctp()
+  void set_sctp(uint16_t local_port, uint16_t remote_port)
   {
-    sctp = std::make_shared<sctp_dispatch>(
-      [wths = std::weak_ptr<dtls_connection>(shared_from_this())](const uint8_t* msg, size_t len)
+    sctp = std::make_shared<sctp_dispatch>(local_port, remote_port);
+    sctp->connect(
+      [wths = std::weak_ptr<sctp_association>(shared_from_this())]
+      (const uint8_t* msg, size_t len)
       {
         if (auto ths = wths.lock()) {
           SSL_write(ths->ssl, msg, len);
@@ -57,9 +59,9 @@ struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
       });
   }
 
-  dtls_connection() = default;
+  sctp_association() = default;
 
-  ~dtls_connection()
+  ~sctp_association()
   {
     if (ssl) {
       SSL_shutdown(ssl);
@@ -84,6 +86,7 @@ struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
         return;
       }
       listened = true;
+      return;
     }
 
     if (!accepted) {
@@ -92,6 +95,7 @@ struct dtls_connection : public std::enable_shared_from_this<dtls_connection> {
       }
       accepted = true;
       anon_log("woot! we be accepted!!!");
+      return;
     }
 
     std::vector<uint8_t> decrypted(len + 20);
@@ -118,30 +122,30 @@ void dtls_dispatch::sweep_inactive()
     if (auto ths = wths.lock()) {
       auto now = cur_time();
       fiber_lock l(ths->dtls_mtx);
-      for (auto it = ths->dtls_connections.begin(); it != ths->dtls_connections.end();) {
+      for (auto it = ths->sctp_associations.begin(); it != ths->sctp_associations.end();) {
         if (it->second->last_used_time + 30 < now) {
-          it = ths->dtls_connections.erase(it);
+          it = ths->sctp_associations.erase(it);
         }
         else {
           it++;
         }
       }
-      if (ths->dtls_connections.size() > 0) {
+      if (ths->sctp_associations.size() > 0) {
         ths->sweep_inactive();
       }
     }
   }, cur_time() + 30);
 }
 
-void dtls_dispatch::register_address(const struct sockaddr_storage *sockaddr)
+void dtls_dispatch::register_association(const struct sockaddr_storage *sockaddr, uint16_t local_sctp_port, uint16_t remote_sctp_port)
 {
   fiber_lock l(dtls_mtx);
-  auto it = dtls_connections.find(*sockaddr);
-  if (it == dtls_connections.end()) {
-    auto conn = std::make_shared<dtls_connection>(*sockaddr, udp_fd, *dtls_context);
-    conn->set_sctp();
-    dtls_connections.emplace(std::make_pair(*sockaddr, conn));
-    if (dtls_connections.size() == 1) {
+  auto it = sctp_associations.find(*sockaddr);
+  if (it == sctp_associations.end()) {
+    auto conn = std::make_shared<sctp_association>(*sockaddr, udp_fd, *dtls_context);
+    conn->set_sctp(local_sctp_port, remote_sctp_port);
+    sctp_associations.emplace(std::make_pair(*sockaddr, conn));
+    if (sctp_associations.size() == 1) {
       sweep_inactive();
     }
   }
@@ -152,8 +156,8 @@ void dtls_dispatch::recv_msg(const uint8_t *msg,
               const struct sockaddr_storage *sockaddr)
 {
   fiber_lock l(dtls_mtx);
-  auto it = dtls_connections.find(*sockaddr);
-  if (it != dtls_connections.end()) {
+  auto it = sctp_associations.find(*sockaddr);
+  if (it != sctp_associations.end()) {
     auto conn = it->second;
     l.unlock();
     conn->recv_msg(msg, len);

@@ -24,13 +24,30 @@
 
 #include <cstdint>
 #include <functional>
+#include <memory>
+#include <set>
+#include <queue>
+#include "data_channel_dispatch.h"
 
-class sctp_dispatch
+class sctp_dispatch : public std::enable_shared_from_this<sctp_dispatch>
 {
+  uint16_t local_port;
+  uint16_t remote_port;
   std::function<void(const uint8_t* msg, size_t len)> send_reply;
+  std::shared_ptr<data_channel_dispatch> dcd;
+  std::set<uint32_t> tsns;
+  std::vector<std::string> chunks;
+  std::vector<uint32_t> duplicate_tsns;
+  uint32_t verification_tag{0};
+  uint32_t last_complete_tsn{0};
+
+  bool parse_sctp_chunks(const uint8_t* msg, ssize_t len);
+  void send_acks();
+  bool do_chunk_init(const uint8_t* init_data, ssize_t init_len);
 
 public:
-  sctp_dispatch(std::function<void(const uint8_t* msg, size_t len)> send_reply);
+  sctp_dispatch(uint16_t local_port, uint16_t remote_port);
+  void connect(std::function<void(const uint8_t* msg, size_t len)>&& send_reply);
   void recv_msg(const uint8_t *msg, ssize_t len);
 
 };
