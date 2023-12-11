@@ -189,7 +189,7 @@ public:
         const char *fiber_name = "unknown1")
       : auto_free_(auto_free),
         running_(true),
-        stack_(::operator new(stack_size)),
+        stack_(stack_size),
         cxxGlobals_({0}),
         fiber_id_(++next_fiber_id_),
         timeout_pipe_(0),
@@ -199,6 +199,7 @@ public:
         stack_size_(stack_size)
 #endif
   {
+    anon_log("new fiber, stack: " << (void*)&stack_[0] << ", sz: " << stack_.size());
     ++num_fibers_;
 
     if (!auto_free_)
@@ -208,12 +209,12 @@ public:
     }
     getcontext(&ucontext_);
 #if defined(ANON_RUNTIME_CHECKS)
-    int *s = (int *)stack_;
+    int *s = (int *)&stack_[0];
     int *se = s + (stack_size_ / sizeof(int));
     while (s < se)
       *s++ = 0xbaadf00d;
 #endif
-    ucontext_.uc_stack.ss_sp = stack_;
+    ucontext_.uc_stack.ss_sp = &stack_[0];
     ucontext_.uc_stack.ss_flags = 0;
     ucontext_.uc_stack.ss_size = stack_size;
     ucontext_.uc_link = NULL;
@@ -227,16 +228,16 @@ public:
   ~fiber()
   {
 #if defined(ANON_RUNTIME_CHECKS)
-    if (stack_)
+    if (stack_.size())
     {
-      int *s = (int *)stack_;
+      int *s = (int *)&stack_[0];
       int *se = s + (stack_size_ / sizeof(int));
       while (s < se && *s == 0xbaadf00d)
         ++s;
-      anon_log("fiber \"" << fiber_name_ << "\" consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)stack_ << " untouched");
+      anon_log("fiber \"" << fiber_name_ << "\" consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)&stack_[0] << " untouched");
     }
 #endif
-    ::operator delete(stack_);
+    //::operator delete(stack_);
     --num_fibers_;
   }
 
@@ -363,7 +364,6 @@ private:
   fiber()
       : auto_free_(false),
         running_(false),
-        stack_(0),
         cxxGlobals_({0}),
         fiber_name_("ioparams parent")
   {
@@ -387,67 +387,7 @@ private:
     Fn fn_;
   };
 
-  void switch_to_fiber(fiber *target)
-  {
-    // some explanations are in order...
-    //
-    // __cxxabiv1 is the (somewhat) public api to libstdc++, which is where
-    // some of the more complicated runtime support for c++ is implemented
-    // -- including the support for exception handling.  __cxa_get_globals_fast
-    // returns a pointer to a thread-local object that libstdc++ uses to
-    // make exception handling work.  There are a few other function calls
-    // that are exported from the library such as __cxa_throw, __cxa_rethrow,
-    // __cxa_begin_catch, __cxa_end_catch, etc... that the compiler generates
-    // calls to when you write try/catch/throw logic.
-    //
-    // We want to support try/throw/catch as much as possible in our fiber
-    // implementation, and given that our fibers sometimes migrate between
-    // OS threads we need a mechanism to make sure that the data structures
-    // that libstdc++ uses are kept in sync when we swap fibers.  Consider
-    // code like this...
-    //
-    //    try {
-    //      ... stuff that throws something ...  #1
-    //    }
-    //    catch(...) {                           #2
-    //      ... some code that might switch fibers/threads ...
-    //      throw;                               #3
-    //      etc...
-    //
-    // When the compiler compiles this code it generates a call to
-    // __cxa_throw at whatever the line is that calls "throw" (#1)
-    // It also generates a call to __cxa_begin_catch at the
-    // start of "catch" (#2).  Both of these calls make a call to
-    // __cxa_get_globals_fast and manipulate the fields in this structure.
-    // This is the underlying mechanism that makes the throw/catch
-    // work correctly.  The call to "throw;" (at #3) calls __cxa_rethrow
-    // (which is what allows it to rethrow whatever #1 threw).  All
-    // of these __cxa calls assume that *__cxa_get_globals_fast()
-    // is part of the same executing context.  In a normal OS thread
-    // implementation storing this as thread-local data allows it
-    // to behave that way.  But because we are using _fibers_ we need
-    // to manually ensure that the thread-local pointer is pointing
-    // to the data for the executing fiber's context.
-    auto ptr = __cxxabiv1::__cxa_get_globals_fast();  // the thread-local ptr from libstdc++
-    cxxGlobals_ = *ptr;                               // capture this fiber's current exception context
-    *ptr = target->cxxGlobals_;                       // set libstdc++'s value to the context of the fiber we are jumping to
-
-    #if defined(__has_feature)
-    #if __has_feature(address_sanitizer)
-    __sanitizer_start_switch_fiber(&old_fake_base_, target->ucontext_.uc_stack.ss_sp, target->ucontext_.uc_stack.ss_size);
-    #endif
-    #endif
-
-    swapcontext(&ucontext_, &target->ucontext_);
-
-    #if defined(__has_feature)
-    #if __has_feature(address_sanitizer)
-    const void* old_bottom;
-    size_t old_size;
-    __sanitizer_finish_switch_fiber(old_fake_base_, &old_bottom, &old_size);
-    #endif
-    #endif
-  }
+  void switch_to_fiber(fiber *target);
 
   static void write_on_one_command(char (&buf)[io_dispatch::k_oo_command_buf_size]);
 
@@ -464,14 +404,9 @@ private:
   fiber_mutex stop_mutex_;
   fiber_cond stop_condition_;
   fiber *next_wake_;
-  void *stack_;
+  std::vector<uint8_t> stack_;
   ucontext_t ucontext_;
   __cxxabiv1::__cxa_eh_globals cxxGlobals_;
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
-  void* old_fake_base_;
-  #endif
-  #endif
 
   int fiber_id_;
   fiber_pipe *timeout_pipe_;
@@ -668,6 +603,11 @@ struct io_params
         wake_head_(0),
         timeout_expired_(0)
   {
+    #if defined(__has_feature)
+    #if __has_feature(address_sanitizer)
+    record_os_stack();
+    #endif
+    #endif
   }
 
   void wake_all(fiber *first);
@@ -695,6 +635,16 @@ struct io_params
   {
     sweep_timed_out_pipes(true);
   }
+
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  void* fake_base_;
+  void* stack_base_;
+  size_t stack_size_;
+  bool exit_fiber_switch_{false};
+  void record_os_stack();
+  #endif
+  #endif
 };
 
 inline void fiber_mutex::lock()

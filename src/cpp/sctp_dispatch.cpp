@@ -582,7 +582,9 @@ void sctp_dispatch::recv_msg(const uint8_t *msg, ssize_t len)
         send_acks();
       }
     } else {
-      anon_log("ignoring sctp msg with crc mismatch, should be: " << computed_crc << ", but was provided as: " << provided_src);
+      std::ostringstream oss;
+      append_bytes(msg, len, oss);
+      anon_log("ignoring sctp msg with crc mismatch, should be: " << computed_crc << ", but was provided as: " << provided_src << "\n" << oss.str());
     }
   }
 }

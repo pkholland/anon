@@ -24,6 +24,13 @@
 #include "time_utils.h"
 #include <fcntl.h>
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#include <pthread.h>
+#endif
+#endif
+
+
 #if defined(ANON_LOG_KEEP_RECENT)
 recent_logs recent_logs::singleton;
 #endif
@@ -34,9 +41,10 @@ void start_fiber_helper(int p1, int p2)
 {
   #if defined(__has_feature)
   #if __has_feature(address_sanitizer)
-  const void* old_bottom;
-  size_t old_size;
-  __sanitizer_finish_switch_fiber(nullptr, &old_bottom, &old_size);
+  const void* bottom_old;
+  size_t size_old;
+  __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
+  anon_log("init finish switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
   #endif
   #endif
 
@@ -200,7 +208,95 @@ void fiber::stop_fiber()
   params = &tls_io_params;
 
   params->opcode_ = io_params::oc_exit_fiber;
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  params->exit_fiber_switch_ = true;
+  #endif
+  #endif
   f->switch_to_fiber(params->parent_fiber_);
+}
+
+void fiber::switch_to_fiber(fiber *target)
+{
+  // some explanations are in order...
+  //
+  // __cxxabiv1 is the (somewhat) public api to libstdc++, which is where
+  // some of the more complicated runtime support for c++ is implemented
+  // -- including the support for exception handling.  __cxa_get_globals_fast
+  // returns a pointer to a thread-local object that libstdc++ uses to
+  // make exception handling work.  There are a few other function calls
+  // that are exported from the library such as __cxa_throw, __cxa_rethrow,
+  // __cxa_begin_catch, __cxa_end_catch, etc... that the compiler generates
+  // calls to when you write try/catch/throw logic.
+  //
+  // We want to support try/throw/catch as much as possible in our fiber
+  // implementation, and given that our fibers sometimes migrate between
+  // OS threads we need a mechanism to make sure that the data structures
+  // that libstdc++ uses are kept in sync when we swap fibers.  Consider
+  // code like this...
+  //
+  //    try {
+  //      ... stuff that throws something ...  #1
+  //    }
+  //    catch(...) {                           #2
+  //      ... some code that might switch fibers/threads ...
+  //      throw;                               #3
+  //      etc...
+  //
+  // When the compiler compiles this code it generates a call to
+  // __cxa_throw at whatever the line is that calls "throw" (#1)
+  // It also generates a call to __cxa_begin_catch at the
+  // start of "catch" (#2).  Both of these calls make a call to
+  // __cxa_get_globals_fast and manipulate the fields in this structure.
+  // This is the underlying mechanism that makes the throw/catch
+  // work correctly.  The call to "throw;" (at #3) calls __cxa_rethrow
+  // (which is what allows it to rethrow whatever #1 threw).  All
+  // of these __cxa calls assume that *__cxa_get_globals_fast()
+  // is part of the same executing context.  In a normal OS thread
+  // implementation storing this as thread-local data allows it
+  // to behave that way.  But because we are using _fibers_ we need
+  // to manually ensure that the thread-local pointer is pointing
+  // to the data for the executing fiber's context.
+  auto ptr = __cxxabiv1::__cxa_get_globals_fast();  // the thread-local ptr from libstdc++
+  cxxGlobals_ = *ptr;                               // capture this fiber's current exception context
+  *ptr = target->cxxGlobals_;                       // set libstdc++'s value to the context of the fiber we are jumping to
+
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  auto params = &tls_io_params;
+  auto do_exit = params->exit_fiber_switch_;
+  params->exit_fiber_switch_ = false;
+  void** fake_base = do_exit ? nullptr : &params->fake_base_;
+  const void *bottom;
+  size_t size;
+  if (target->stack_.size() > 0) {
+    bottom = target->ucontext_.uc_stack.ss_sp;
+    size = target->ucontext_.uc_stack.ss_size;
+  }
+  else {
+    bottom = params->stack_base_;
+    size = params->stack_size_;
+  }
+  __sanitizer_start_switch_fiber(fake_base, bottom, size);
+  if (fake_base) {
+    anon_log("start_switch, fake_base: " << *fake_base << ", new_stack: " << bottom << ", sz: " << size);
+  }
+  else {
+    anon_log("exit fiber switch, new_stack: " << bottom << ", sz: " << size);
+  }
+  #endif
+  #endif
+
+  swapcontext(&ucontext_, &target->ucontext_);
+
+  #if defined(__has_feature)
+  #if __has_feature(address_sanitizer)
+  const void *bottom_old;
+  size_t size_old;
+  __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
+  anon_log("finish_switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
+  #endif
+  #endif
 }
 
 int fiber::get_current_fiber_id()
@@ -468,7 +564,6 @@ void io_params::wake_all(fiber *first)
 
   while (wake_head_)
   {
-
     auto wake = wake_head_;
     wake_head_ = wake->next_wake_;
     current_fiber_ = wake;
@@ -515,8 +610,9 @@ void io_params::wake_all(fiber *first)
 
     case oc_exit_fiber:
     {
-      if (current_fiber_->auto_free_)
+      if (current_fiber_->auto_free_) {
         delete current_fiber_;
+      }
       anon::unique_lock<std::mutex> lock(fiber::zero_fiber_mutex_);
       if (--fiber::num_running_fibers_ == 0)
         fiber::zero_fiber_cond_.notify_all();
@@ -686,3 +782,16 @@ void io_params::msleep(int milliseconds)
   sleep_dur_.tv_nsec = (milliseconds - sleep_dur_.tv_sec * 1000) * 1000000;
   current_fiber_->switch_to_fiber(parent_fiber_);
 }
+
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+void io_params::record_os_stack()
+{
+  pthread_attr_t attr;
+  pthread_getattr_np(pthread_self(), &attr);
+  pthread_attr_getstack(&attr, &stack_base_, &stack_size_);
+  pthread_attr_destroy(&attr);
+  anon_log("stack, base: " << stack_base_ << ", size: " << stack_size_);
+}
+#endif
+#endif
