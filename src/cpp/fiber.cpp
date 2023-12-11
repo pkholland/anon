@@ -24,10 +24,8 @@
 #include "time_utils.h"
 #include <fcntl.h>
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
+#ifdef ANON_USE_ASAN
 #include <pthread.h>
-#endif
 #endif
 
 
@@ -39,13 +37,11 @@ thread_local io_params tls_io_params;
 
 void start_fiber_helper(int p1, int p2)
 {
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
+  #ifdef ANON_USE_ASAN
   const void* bottom_old;
   size_t size_old;
   __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
   anon_log("init finish switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
-  #endif
   #endif
 
   auto vsm = ((size_t)p1 & 0x0ffffffff) + ((size_t)p2 << 32);
@@ -208,10 +204,8 @@ void fiber::stop_fiber()
   params = &tls_io_params;
 
   params->opcode_ = io_params::oc_exit_fiber;
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
+  #ifdef ANON_USE_ASAN
   params->exit_fiber_switch_ = true;
-  #endif
   #endif
   f->switch_to_fiber(params->parent_fiber_);
 }
@@ -261,8 +255,7 @@ void fiber::switch_to_fiber(fiber *target)
   cxxGlobals_ = *ptr;                               // capture this fiber's current exception context
   *ptr = target->cxxGlobals_;                       // set libstdc++'s value to the context of the fiber we are jumping to
 
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
+  #ifdef ANON_USE_ASAN
   auto params = &tls_io_params;
   auto do_exit = params->exit_fiber_switch_;
   params->exit_fiber_switch_ = false;
@@ -285,17 +278,14 @@ void fiber::switch_to_fiber(fiber *target)
     anon_log("exit fiber switch, new_stack: " << bottom << ", sz: " << size);
   }
   #endif
-  #endif
 
   swapcontext(&ucontext_, &target->ucontext_);
 
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
+  #ifdef ANON_USE_ASAN
   const void *bottom_old;
   size_t size_old;
   __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
   anon_log("finish_switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
-  #endif
   #endif
 }
 
@@ -783,8 +773,7 @@ void io_params::msleep(int milliseconds)
   current_fiber_->switch_to_fiber(parent_fiber_);
 }
 
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
+#ifdef ANON_USE_ASAN
 void io_params::record_os_stack()
 {
   pthread_attr_t attr;
@@ -793,5 +782,4 @@ void io_params::record_os_stack()
   pthread_attr_destroy(&attr);
   anon_log("stack, base: " << stack_base_ << ", size: " << stack_size_);
 }
-#endif
 #endif

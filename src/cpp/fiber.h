@@ -35,6 +35,12 @@
 #include <cxxabi.h>
 #include <sanitizer/common_interface_defs.h>
 
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define ANON_USE_ASAN
+#endif
+#endif
+
 namespace __cxxabiv1 {
 // from libstdc++'s "unwind-cxx.h"
 // cxxabi.h defines this type as opque,
@@ -178,7 +184,12 @@ public:
 
   enum
   {
-    k_default_stack_size = 96 * 1024 - 256
+    k_default_stack_size = 96 * 1024 - 256,
+    #ifdef ANON_USE_ASAN
+    k_small_stack_size = 16 * 1024 - 256
+    #else
+    k_small_stack_size = 8 * 1024 - 256
+    #endif
   };
 
   // run the given 'fn' in this fiber.  If you pass 'detached' true
@@ -603,10 +614,8 @@ struct io_params
         wake_head_(0),
         timeout_expired_(0)
   {
-    #if defined(__has_feature)
-    #if __has_feature(address_sanitizer)
+    #ifdef ANON_USE_ASAN
     record_os_stack();
-    #endif
     #endif
   }
 
@@ -636,14 +645,12 @@ struct io_params
     sweep_timed_out_pipes(true);
   }
 
-  #if defined(__has_feature)
-  #if __has_feature(address_sanitizer)
+  #ifdef ANON_USE_ASAN
   void* fake_base_;
   void* stack_base_;
   size_t stack_size_;
   bool exit_fiber_switch_{false};
   void record_os_stack();
-  #endif
   #endif
 };
 

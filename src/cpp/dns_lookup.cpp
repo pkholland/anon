@@ -367,12 +367,11 @@ private:
 #endif
             }
             auto fn = cr->fn;
-            auto stack_size = 8 * 1024 - 256;
             fiber::run_in_fiber(
                 [err, addrs, fn] {
                   fn(err, addrs);
                 },
-                stack_size, "getaddr_notifictaion");
+                fiber::k_small_stack_size, "getaddr_notifictaion");
           }
         });
   }
