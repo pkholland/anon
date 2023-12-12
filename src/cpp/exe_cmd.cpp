@@ -34,6 +34,10 @@
 
 namespace {
 
+bool forking = false;
+fiber_mutex forking_mtx;
+fiber_cond forking_cond;
+
 // glibc doesn't provide pidfd_open.  Documentation for
 // it frequently discusses the need to directly call
 // syscall exactly like this...
@@ -89,12 +93,11 @@ public:
   {
     if (evt.events & EPOLLIN)
     {
-      auto stack_size = 8096 - 256;
       fiber::run_in_fiber([this] {
         fiber_lock l(mtx_);
         running_ = false;
         cond_.notify_one();
-      }, stack_size, "exe_cmd - io_avail");
+      }, fiber::k_small_stack_size, "exe_cmd - io_avail");
     }
     else
       anon_log_error("child_proc_handler::io_avail called with event that does not have EPOLLIN set!");
@@ -119,7 +122,15 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   int exit_status = 0;
 
   {
+    fiber_lock one_at_a_time(forking_mtx);
+    while (forking) {
+      forking_cond.wait(one_at_a_time);
+    }
+    forking = true;
     auto pid = fork();
+    forking = false;
+    one_at_a_time.unlock();
+
     if (pid == -1)
       do_error("fork()");
     if (pid != 0)
@@ -176,6 +187,8 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
           running_cond.wait(l);
         }
       }
+      io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pid_fd, 0, &child);
+
       // at this point the child process is no longer running, we can now call waitpid
       // to get the exit status info and reap the child's process record
       waitpid(pid, &exit_status, 0);
