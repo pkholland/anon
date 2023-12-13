@@ -20,6 +20,8 @@
  THE SOFTWARE.
 */
 
+#include <sys/types.h>
+#include <signal.h>
 #include "io_dispatch.h"
 #include "fiber.h"
 #include "tls_context.h"
@@ -187,6 +189,35 @@ extern "C" int main(int argc, char **argv)
   }
 
   anon_log("teflon server process starting");
+
+#ifndef ANON_USE_ASAN
+  // We want to allow fibers with very small stacks.
+  // But if a signal is delivered to our process while
+  // one of these fibers is running, and the OS
+  // selects that thread/stack to execute the signal
+  // handler on, the stack can be too small to safely
+  // execute the handler.  Executing the signal handler
+  // on that stack can overwrite the end of the stack,
+  // corrupting the heap.  This sets the process into
+  // a state where the OS uses this allocation for
+  // the signal-handling stack.
+  stack_t sigstk;
+  auto stk_sz = SIGSTKSZ;
+  if ((sigstk.ss_sp = malloc(stk_sz)) == NULL) {
+    return 1;
+  }
+  sigstk.ss_size = stk_sz;
+  sigstk.ss_flags = 0;
+  if (sigaltstack(&sigstk,0) < 0) {
+    return 1;
+  }
+  auto num_ints = stk_sz / sizeof(uint32_t);
+  auto ptr = (uint32_t*)sigstk.ss_sp;
+  for (auto i = 0; i < num_ints; i++) {
+    *ptr++ = 0xbaadf00d;
+  }
+  anon_log("using " << (void*)sigstk.ss_sp << " - " << (void*)(((char*)sigstk.ss_sp) + stk_sz) << " for signal handling stack");
+#endif
 
   // initialize the io dispatch and fiber code
   // the last 'true' parameter says that we will be using
@@ -465,6 +496,16 @@ extern "C" int main(int argc, char **argv)
     anon_log_error("caught unknown exception");
     ret = 1;
   }
+
+#ifndef ANON_USE_ASAN
+  auto old_ptr = sigstk.ss_sp;
+  sigstk.ss_sp = 0;
+  sigstk.ss_size = 0;
+  sigstk.ss_flags = SS_DISABLE;
+  if (sigaltstack(&sigstk,0) >= 0) {
+    free(old_ptr);
+  }
+#endif
 
   anon_log("teflon server process exiting");
   return ret;

@@ -23,6 +23,7 @@ $(ANON_ROOT)/src/cpp/tls_context.cpp\
 $(ANON_ROOT)/src/cpp/tls_pipe.cpp\
 $(ANON_ROOT)/src/cpp/epc.cpp\
 $(ANON_ROOT)/src/cpp/mcdc.cpp\
+$(ANON_ROOT)/src/cpp/exe_cmd.cpp\
 $(ANON_PARENT)/http-parser/http_parser.c\
 #$(ANON_ROOT)/examples/test/http2_test.cpp\
 #$(ANON_ROOT)/src/cpp/b64.cpp\

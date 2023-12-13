@@ -93,7 +93,7 @@ int simple_queue_read(BIO *b, char *out, int outl)
     auto& f = ioq->buffs_.front();
     auto sz = f.size();
     if (sz > outl) {
-      anon_log("only returing partial data");
+      anon_log("only returing partial data, avail: " << sz << ", requested: " << outl);
       sz = outl;
     }
     memcpy(out, &f[0], sz);

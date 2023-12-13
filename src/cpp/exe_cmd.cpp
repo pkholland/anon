@@ -34,10 +34,6 @@
 
 namespace {
 
-bool forking = false;
-fiber_mutex forking_mtx;
-fiber_cond forking_cond;
-
 // glibc doesn't provide pidfd_open.  Documentation for
 // it frequently discusses the need to directly call
 // syscall exactly like this...
@@ -121,111 +117,116 @@ std::string exe_cmd_(const std::function<void(std::ostream &formatter)>& fn, boo
   std::ostringstream oss;
   int exit_status = 0;
 
-  {
-    fiber_lock one_at_a_time(forking_mtx);
-    while (forking) {
-      forking_cond.wait(one_at_a_time);
-    }
-    forking = true;
-    auto pid = fork();
-    forking = false;
-    one_at_a_time.unlock();
+  auto bash_file_name = "/bin/bash";
+  auto bash_fd = open(bash_file_name, O_RDONLY);
+  if (bash_fd == -1) {
+    do_error("open(\"/bin/bash\")");
+  }
 
-    if (pid == -1)
-      do_error("fork()");
-    if (pid != 0)
-    {
-      // the calling parent process
+  const char *dash_c = "-c";
+  const char *script = bash_cmd.c_str();
+  char *args[]{
+      const_cast<char *>(bash_file_name),
+      const_cast<char *>(dash_c),
+      const_cast<char *>(script),
+      0};
 
-      // close the socket that the child will use for its stdout
-      iop.close(0);
+  auto pid = fork();
+  if (pid == -1) {
+    do_error("fork()");
+  }
+  if (pid == 0) {
+    // the child process
+    dup2(iop.sv[0], 1); // reset stdout (1) to iop.sv[0]
+    iop.close(0);
+    iop.close(1);
 
-      // build a (non-blocking) fiber_pipe, allowing us to read
-      // whatever the child writes into their stdout.  This will get
-      // built up and stored into 'oss'
-      auto rfd = iop.sv[1];
-      if (fcntl(rfd, F_SETFL, fcntl(rfd, F_GETFL) | O_NONBLOCK) != 0)
-        do_error("fcntl(rfd, F_SETFL, fnctl(rfd, F_GETFL) | O_NONBLOCK)");
-      fiber_pipe read_pipe(rfd, fiber_pipe::unix_domain);
-      iop.sv[1] = 0;
+    fexecve(bash_fd, &args[0], environ);
 
-      // create and run the fiber that does this reading and recording
-      fiber::run_in_fiber([&read_pipe, &oss] {
-        std::vector<char> buff(4096);
-        while (true) {
-          try {
-            auto bytes = read_pipe.read(&buff[0], buff.size());
-            if (bytes == 0)
-              break;
-            if (bytes < 0)
-              do_error("read_pipe.read(&buff[0], buff.size())");
-            oss << std::string(&buff[0], bytes);
-          }
-          catch(const fiber_io_error&)
-          {
-            break;
-          }
-          catch(...) {
-            anon_log("caught unknown error reading from exe_cmd pipe");
-            break;
-          }
-        }
-      }, fiber::k_default_stack_size, "exe_cmd");
+    // if fexecve succeeded then we never get here.  So getting here is a failure,
+    // but we are already in the child process at this point, so we do what we can
+    // to signifify the error and then exit
+    fprintf(stderr, "fexecve(%d, ...) failed with errno: %d - %s\n", bash_fd, errno, strerror(errno));
+    exit(1);
+  }
+  // else we are in the original/parent process here
 
-      // get a file descriptor that represents the process identified by 'pid'
-      auto pid_fd = pidfd_open(pid, 0);
+  // close the bash fd
+  close(bash_fd);
 
-      // wait/watch for the process exit
-      bool running = true;
-      fiber_mutex running_mtx;
-      fiber_cond running_cond;
-      child_proc_handler child(running, running_mtx, running_cond);
-      io_dispatch::epoll_ctl(EPOLL_CTL_ADD, pid_fd, EPOLLIN, &child);
+  // close the socket that the child will use for its stdout
+  iop.close(0);
+
+  // build a (non-blocking) fiber_pipe, allowing us to read
+  // whatever the child writes into their stdout.  This will get
+  // built up and stored into 'oss'
+  auto rfd = iop.sv[1];
+  if (fcntl(rfd, F_SETFL, fcntl(rfd, F_GETFL) | O_NONBLOCK) != 0)
+    do_error("fcntl(rfd, F_SETFL, fnctl(rfd, F_GETFL) | O_NONBLOCK)");
+  fiber_pipe read_pipe(rfd, fiber_pipe::unix_domain);
+  iop.sv[1] = 0;
+
+  // get a file descriptor that represents the process identified by 'pid'
+  auto pid_fd = pidfd_open(pid, 0);
+
+  // wait/watch for the process exit
+  bool child_running = true;
+  fiber_mutex child_running_mtx;
+  fiber_cond child_running_cond;
+  child_proc_handler child(child_running, child_running_mtx, child_running_cond);
+  io_dispatch::epoll_ctl(EPOLL_CTL_ADD, pid_fd, EPOLLIN | EPOLLONESHOT, &child);
+
+  // create and run the fiber that does this reading and recording
+  bool fiber_running = true;
+  fiber_mutex fiber_running_mtx;
+  fiber_cond fiber_running_cond;
+  fiber::run_in_fiber([&] {
+    ((fiber*)get_current_fiber())->report_stack_usage();
+    std::vector<char> buff(4096);
+    while (true) {
+      try {
+        ((fiber*)get_current_fiber())->report_stack_usage();
+        auto bytes = read_pipe.read(&buff[0], buff.size());
+        ((fiber*)get_current_fiber())->report_stack_usage();
+        if (bytes == 0)
+          break;
+        if (bytes < 0)
+          do_error("read_pipe.read(&buff[0], buff.size())");
+        oss << std::string(&buff[0], bytes);
+      }
+      catch(const fiber_io_error&)
       {
-        fiber_lock l(running_mtx);
-        while (running) {
-          running_cond.wait(l);
-        }
+        break;
       }
-      io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pid_fd, 0, &child);
-
-      // at this point the child process is no longer running, we can now call waitpid
-      // to get the exit status info and reap the child's process record
-      waitpid(pid, &exit_status, 0);
-      close(pid_fd);
+      catch(...) {
+        anon_log("caught unknown error reading from exe_cmd pipe");
+        break;
+      }
     }
-    else
-    {
-      // the child process
-      dup2(iop.sv[0], 1); // reset stdout (1) to iop.sv[0] 
-      iop.close(0);
-      iop.close(1);
+    fiber_lock l(fiber_running_mtx);
+    fiber_running = false;
+    fiber_running_cond.notify_all();
+  }, fiber::k_small_stack_size, "exe_cmd");
 
-      auto bash_file_name = "/bin/bash";
-      auto bash_fd = open(bash_file_name, O_RDONLY);
-      if (bash_fd == -1) {
-        fprintf(stderr, "open(%s, ...) failed with errno: %d - %s\n", bash_file_name, errno, strerror(errno));
-        exit(1);
-      }
-
-      const char *dash_c = "-c";
-      const char *script = bash_cmd.c_str();
-
-      char *args[]{
-          const_cast<char *>(bash_file_name),
-          const_cast<char *>(dash_c),
-          const_cast<char *>(script),
-          0};
-
-      fexecve(bash_fd, &args[0], environ);
-
-      // if fexecve succeeded then we never get here.  So getting here is a failure,
-      // but we are already in the child process at this point, so we do what we can
-      // to signifify the error and then exit
-      fprintf(stderr, "fexecve(%d, ...) failed with errno: %d - %s\n", bash_fd, errno, strerror(errno));
-      exit(1);
+  {
+    fiber_lock l(child_running_mtx);
+    while (child_running) {
+      child_running_cond.wait(l);
     }
   }
+  io_dispatch::epoll_ctl(EPOLL_CTL_DEL, pid_fd, 0, &child);
+
+  {
+    fiber_lock l(fiber_running_mtx);
+    while (fiber_running) {
+      fiber_running_cond.wait(l);
+    }
+  }
+
+  // at this point the child process is no longer running, we can now call waitpid
+  // to get the exit status info and reap the child's process record
+  waitpid(pid, &exit_status, 0);
+  close(pid_fd);
 
   int exit_code = 1;
   if (WIFEXITED(exit_status))

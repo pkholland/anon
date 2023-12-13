@@ -39,6 +39,7 @@
 #include "tls_pipe.h"
 #include "epc_test.h"
 #include "mcdc.h"
+#include "exe_cmd.h"
 //#include "http2_handler.h"
 //#include "http2_test.h"
 
@@ -180,6 +181,7 @@ extern "C" int main(int argc, char **argv)
           anon_log("  mc - execute the memcached tests");
           anon_log("  th - execute try/throw/catch tests from fibers");
           anon_log(" oth - execute try/throw/catch tests from OS threads");
+          anon_log(" frk - execute child process stuff in a loop");
         }
         else if (!strcmp(&msgBuff[0], "p"))
         {
@@ -805,6 +807,15 @@ extern "C" int main(int argc, char **argv)
               anon_log("unable to catch a rethrown int");
           }
           anon_log("finished simple throw/rethrow/catch from an OS thread");
+        }
+        else if (!strcmp(&msgBuff[0], "frk")) {
+          std::atomic_int count{0};
+          for (auto i = 0; i < 100; i++) {
+            fiber::run_in_fiber([&](){
+              auto reply = exe_cmd1("echo \"hello world\"");
+              anon_log("\"" << reply << "\" - count: " << ++count);
+            });
+          }
         }
         else
           anon_log("unknown command - \"" << &msgBuff[0] << "\", type \"h <return>\" for help");

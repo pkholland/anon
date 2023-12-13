@@ -185,10 +185,14 @@ public:
   enum
   {
     k_default_stack_size = 96 * 1024 - 256,
+
+    // note that throwing and catching an exception
+    // can consume about 5k of stack space.  ASAN
+    // builds also increase stack space usage.
     #ifdef ANON_USE_ASAN
-    k_small_stack_size = 16 * 1024 - 256
+    k_small_stack_size = 32 * 1024 - 256
     #else
-    k_small_stack_size = 8 * 1024 - 256
+    k_small_stack_size = 16 * 1024 - 256
     #endif
   };
 
@@ -205,12 +209,7 @@ public:
         fiber_id_(++next_fiber_id_),
         timeout_pipe_(0),
         fiber_name_(fiber_name)
-#if defined(ANON_RUNTIME_CHECKS)
-        ,
-        stack_size_(stack_size)
-#endif
   {
-    anon_log("new fiber, stack: " << (void*)&stack_[0] << ", sz: " << stack_.size());
     ++num_fibers_;
 
     if (!auto_free_)
@@ -220,8 +219,9 @@ public:
     }
     getcontext(&ucontext_);
 #if defined(ANON_RUNTIME_CHECKS)
+    anon_log("new fiber, name " << fiber_name << ", sz: " << stack_.size());
     int *s = (int *)&stack_[0];
-    int *se = s + (stack_size_ / sizeof(int));
+    int *se = s + (stack_.size() / sizeof(int));
     while (s < se)
       *s++ = 0xbaadf00d;
 #endif
@@ -238,18 +238,22 @@ public:
 
   ~fiber()
   {
+    report_stack_usage();
+    --num_fibers_;
+  }
+
+  void report_stack_usage()
+  {
 #if defined(ANON_RUNTIME_CHECKS)
     if (stack_.size())
     {
       int *s = (int *)&stack_[0];
-      int *se = s + (stack_size_ / sizeof(int));
+      int *se = s + (stack_.size() / sizeof(int));
       while (s < se && *s == 0xbaadf00d)
         ++s;
       anon_log("fiber \"" << fiber_name_ << "\" consumed " << (char *)se - (char *)s << " bytes of stackspace, leaving " << (char *)s - (char *)&stack_[0] << " untouched");
     }
 #endif
-    //::operator delete(stack_);
-    --num_fibers_;
   }
 
   // note! calling join can switch threads -- that is, you can
@@ -422,9 +426,6 @@ private:
   int fiber_id_;
   fiber_pipe *timeout_pipe_;
 
-#if defined(ANON_RUNTIME_CHECKS)
-  size_t stack_size_;
-#endif
   std::string fiber_name_;
 
   static int num_running_fibers_;

@@ -41,7 +41,7 @@ void start_fiber_helper(int p1, int p2)
   const void* bottom_old;
   size_t size_old;
   __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
-  anon_log("init finish switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
+  //anon_log("init finish switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
   #endif
 
   auto vsm = ((size_t)p1 & 0x0ffffffff) + ((size_t)p2 << 32);
@@ -271,12 +271,12 @@ void fiber::switch_to_fiber(fiber *target)
     size = params->stack_size_;
   }
   __sanitizer_start_switch_fiber(fake_base, bottom, size);
-  if (fake_base) {
-    anon_log("start_switch, fake_base: " << *fake_base << ", new_stack: " << bottom << ", sz: " << size);
-  }
-  else {
-    anon_log("exit fiber switch, new_stack: " << bottom << ", sz: " << size);
-  }
+  // if (fake_base) {
+  //   anon_log("start_switch, fake_base: " << *fake_base << ", new_stack: " << bottom << ", sz: " << size);
+  // }
+  // else {
+  //   anon_log("exit fiber switch, new_stack: " << bottom << ", sz: " << size);
+  // }
   #endif
 
   swapcontext(&ucontext_, &target->ucontext_);
@@ -285,7 +285,7 @@ void fiber::switch_to_fiber(fiber *target)
   const void *bottom_old;
   size_t size_old;
   __sanitizer_finish_switch_fiber(tls_io_params.fake_base_, &bottom_old, &size_old);
-  anon_log("finish_switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
+  // anon_log("finish_switch, base: " << tls_io_params.fake_base_ << ", bottom_old: " << bottom_old << ", size_old: " << size_old);
   #endif
 }
 
