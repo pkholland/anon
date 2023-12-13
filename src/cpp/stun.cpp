@@ -414,7 +414,6 @@ stun_msg_parser::stun_msg stun_msg_parser::parse_stun_msg(const unsigned char *m
         user_name = std::string((const char*)&ptr[attribute_header_size], attr_len);
         auto res = lookup(user_name);
         if (!res) {
-          anon_log("no rtc connection registered for: " << user_name);
           return {};
         }
         if (!conn.ParseFromString(*res)) {

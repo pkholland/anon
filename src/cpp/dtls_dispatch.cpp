@@ -86,7 +86,6 @@ struct sctp_association : public std::enable_shared_from_this<sctp_association> 
         return;
       }
       listened = true;
-      return;
     }
 
     if (!accepted) {
@@ -94,18 +93,16 @@ struct sctp_association : public std::enable_shared_from_this<sctp_association> 
         return;
       }
       accepted = true;
-      anon_log("woot! we be accepted!!!");
-      return;
     }
 
-    std::vector<uint8_t> decrypted(len + 20);
-    auto ret = SSL_read(ssl, &decrypted[0], decrypted.size());
-    if (ret < 0) {
-      anon_log("decryption failed");
-      return;
+    std::vector<uint8_t> decrypted(len+100);
+    while (true) {
+      auto ret = SSL_read(ssl, &decrypted[0], decrypted.size());
+      if (ret <= 0) {
+        return;
+      }
+      sctp->recv_msg(&decrypted[0], ret);
     }
-
-    sctp->recv_msg(&decrypted[0], ret);
   }
 };
 
@@ -163,6 +160,6 @@ void dtls_dispatch::recv_msg(const uint8_t *msg,
     conn->recv_msg(msg, len);
   }
   else {
-    anon_log("possible DTLS message from unknown source addr");
+    anon_log("possible DTLS message from unknown source addr: " << *sockaddr);
   }
 }

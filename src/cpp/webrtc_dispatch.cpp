@@ -225,9 +225,6 @@ void webrtc_dispatch::recv_msg(
           }
         }
       }
-      else {
-        anon_log("failed to parse as stun");
-      }
     }
     else if (first_byte >= 16 && first_byte <= 19) {
       anon_log("ignoring likely ZRTP message (" << (int)first_byte << ")");

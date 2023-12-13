@@ -23,6 +23,7 @@
 #include "sctp_dispatch.h"
 #include "fiber.h"
 #include "big_endian_access.h"
+#include "tcp_utils.h"
 
 namespace {
 
@@ -391,7 +392,7 @@ bool sctp_dispatch::parse_sctp_chunks(const uint8_t* msg, ssize_t len)
           oss.clear();
           break;
         default:
-          oss << "unknown chunk type: " << chunk_type << " ";
+          oss << "unknown chunk type: " << std::hex << (int)chunk_type << std::dec << " ";
           append_bytes(&chunk_start[k_sctp_chunk_header_size], chunk_len-k_sctp_chunk_header_size, oss);
           anon_log(oss.str());
           oss.clear();
