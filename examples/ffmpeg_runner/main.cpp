@@ -124,7 +124,6 @@ void process_progress(const char* data)
   auto pos = strstr(data, "frame=");
   if (pos) {
     auto f = atoi(pos + 6);
-    anon_log("processed frame: " << f);
     resin_worker::Message msg;
     msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
     auto ts = msg.mutable_task_status();
