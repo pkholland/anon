@@ -21,10 +21,11 @@ message Message {
     required string worker_id = 1;
     required string task_id = 2;
     required float completed = 3;
-    required bool complete = 4;
-    optional bool success = 5;
-    optional float duration = 6;
-    optional string message = 7;
+    optional uint32 completed_items = 4;
+    required bool complete = 5;
+    optional bool success = 6;
+    optional float duration = 7;
+    optional string message = 8;
   }
   optional TaskStatus task_status = 3;
 

@@ -81,6 +81,11 @@ include examples/rez/rez.mk
 rez_SOURCES:=$(SOURCES)
 SOURCES:=
 
+include examples/ffmpeg_runner/ffmpeg_runner.mk
+
+ffmpeg_runner_SOURCES:=$(SOURCES)
+SOURCES:=
+
 include secrets.mk
 
 include scripts/build/anonrules.mk
@@ -102,6 +107,8 @@ $(eval $(call anon.BUILD_RULES,teflon_hello,$(teflon_SOURCES),$(sort $(INC_DIRS)
 $(eval $(call anon.BUILD_RULES,srv_test,$(srv_test_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 $(eval $(call anon.BUILD_RULES,rez,$(rez_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
+
+$(eval $(call anon.BUILD_RULES,ffmpeg_runner,$(ffmpeg_runner_SOURCES),$(sort $(INC_DIRS)),$(LIBS)))
 
 all: $(SECRET_FILES)
 

@@ -480,6 +480,26 @@ void run_worker(const ec2_info &ec2i)
                 else {
                   task_id = *task_id_it;
                 }
+                auto pass_progress_it = js.find("pass_progress");
+                if (pass_progress_it != js.end() && pass_progress_it->is_boolean() && *pass_progress_it) {
+                  // here we only support bash commands where the tool name
+                  // doesn't have any spaces in it.  The fifst space character
+                  // marks the end of the tool name.
+                  auto first_space_pos = bash_cmd.find(" ");
+                  if (first_space_pos != std::string::npos) {
+                    auto tool = bash_cmd.substr(0, first_space_pos);
+                    std::string udp_host = *udp_host_it;
+                    int udp_port = *udp_port_it;
+                    std::ostringstream oss;
+                    oss
+                      << " -status_udp_host " << udp_host
+                      << " -status_udp_port " << udp_port
+                      << " -task_id " << task_id
+                      << " -worker_id " << worker_id
+                      << " -";
+                    bash_cmd = tool + oss.str() + bash_cmd.substr(first_space_pos);
+                  }
+                }
               }
             }
           }
