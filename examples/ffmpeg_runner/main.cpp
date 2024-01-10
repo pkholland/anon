@@ -40,7 +40,6 @@ int total_frames;
 
 void init_udp_socket(const std::string& host, int port)
 {
-  anon_log("starting ffmpeg_runner with upd_host: " << host << ", port: " << port);
   struct addrinfo hints = {};
   hints.ai_family = AF_UNSPEC; // use IPv4 or IPv6, whichever
   hints.ai_socktype = SOCK_STREAM;
@@ -84,7 +83,6 @@ void init_udp_socket(const std::string& host, int port)
       do_error("bind(<AF_INET/6 SOCK_DGRAM socket>, <" << 0 << ", in6addr_any/INADDR_ANY>, sizeof(...))");
     }
     else {
-      anon_log("using worker_id: " << worker_id);
     }
   }
 }
