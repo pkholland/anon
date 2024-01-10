@@ -20,12 +20,13 @@ message Message {
   message TaskStatus {
     required string worker_id = 1;
     required string task_id = 2;
-    required float completed = 3;
-    optional uint32 completed_items = 4;
-    required bool complete = 5;
-    optional bool success = 6;
-    optional float duration = 7;
-    optional string message = 8;
+    required uint32 cpu_count = 3;
+    required float completed = 4;
+    optional uint32 completed_items = 5;
+    required bool complete = 6;
+    optional bool success = 7;
+    optional float duration = 8;
+    optional string message = 9;
   }
   optional TaskStatus task_status = 3;
 

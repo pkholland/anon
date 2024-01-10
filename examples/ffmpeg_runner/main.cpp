@@ -25,6 +25,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <thread>
 #include "log.h"
 #include "worker_message.pb.h"
 
@@ -130,6 +131,7 @@ void process_progress(const char* data)
     auto ts = msg.mutable_task_status();
     ts->set_worker_id(worker_id);
     ts->set_task_id(task_id);
+    ts->set_cpu_count(std::thread::hardware_concurrency());
     ts->set_completed(0.0f);
     ts->set_completed_items(total_frames);
     ts->set_complete(false);

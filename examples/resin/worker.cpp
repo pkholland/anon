@@ -532,6 +532,7 @@ void run_worker(const ec2_info &ec2i)
             auto ts = msg.mutable_task_status();
             ts->set_worker_id(worker_id);
             ts->set_task_id(task_id);
+            ts->set_cpu_count(0);
             ts->set_completed(0.0f);
             ts->set_complete(false);
             anon_log("sending task start message");
@@ -550,6 +551,7 @@ void run_worker(const ec2_info &ec2i)
               auto ts = msg.mutable_task_status();
               ts->set_worker_id(worker_id);
               ts->set_task_id(task_id);
+              ts->set_cpu_count(0);
               ts->set_completed(1.0f);
               ts->set_complete(true);
               ts->set_success(out.first);
