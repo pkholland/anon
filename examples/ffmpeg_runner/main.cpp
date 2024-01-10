@@ -22,7 +22,9 @@
 
 #include <netdb.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include "log.h"
 #include "worker_message.pb.h"
 
@@ -34,6 +36,7 @@ size_t udp_addr_sz;
 std::string task_id;
 std::string worker_id;
 int progress_pipe[2];
+int total_frames;
 
 void init_udp_socket(const std::string& host, int port)
 {
@@ -123,14 +126,14 @@ void process_progress(const char* data)
 {
   auto pos = strstr(data, "frame=");
   if (pos) {
-    auto f = atoi(pos + 6);
+    total_frames = atoi(pos + 6);
     resin_worker::Message msg;
     msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
     auto ts = msg.mutable_task_status();
     ts->set_worker_id(worker_id);
     ts->set_task_id(task_id);
     ts->set_completed(0.0f);
-    ts->set_completed_items(f);
+    ts->set_completed_items(total_frames);
     ts->set_complete(false);
     send_udp_message(msg);
   }
@@ -210,6 +213,15 @@ extern "C" int main(int argc, char** argv)
       // here we are the child, close progress_pipe[0] and exec to ffmpeg
       close(progress_pipe[0]);
 
+      // the parent uses its stdout to communicate back, and ffmpeg
+      // can, in some cases also attempt to use std out for various
+      // purposes.  We don't support those use cases and don't want
+      // ffmpeg's stdout to interfere with ffmpeg_runner's stdout.
+      // So redirect stdout to /dev/null.  Note that much of ffmpeg's
+      // "logging" actually goes out to stderr (2) - not stdout (1)
+      auto n = open("/dev/null", O_WRONLY);
+      dup2(n, 1);
+
       std::vector<char *> args2;
 
       args2.push_back(&ff_loc[0]);
@@ -240,5 +252,9 @@ extern "C" int main(int argc, char** argv)
     return 0;
   }
   catch(...) {}
+  std::ostringstream oss;
+  oss << "total_frames=" << total_frames << "\n";
+  auto frames_msg = oss.str();
+  write(1, frames_msg.c_str(), frames_msg.size());
   return 1;
 }
