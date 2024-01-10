@@ -248,13 +248,9 @@ extern "C" int main(int argc, char** argv)
       fprintf(stderr, "execve(ffmpeg, ...) failed with errno: %d - %s\n", errno, strerror(errno));
       exit(1);
     }
-
+    anon_log("ffmpeg_runner:total_frames=" << total_frames);
     return 0;
   }
   catch(...) {}
-  std::ostringstream oss;
-  oss << "total_frames=" << total_frames << "\n";
-  auto frames_msg = oss.str();
-  write(1, frames_msg.c_str(), frames_msg.size());
   return 1;
 }
