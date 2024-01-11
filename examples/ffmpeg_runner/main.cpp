@@ -171,6 +171,16 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
+  {
+    std::ostringstream oss;
+    oss << "ffmpeg_runner";
+    for (auto i = 1; i < argc; i++) {
+      oss << " " << argv[i];
+    }
+    anon_log(oss.str());
+  }
+
+
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
   auto sz = fread(&ff_loc[0], 1, sizeof(ff_loc), ff);
