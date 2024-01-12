@@ -39,6 +39,8 @@ std::string worker_id;
 int progress_pipe[2];
 int total_frames;
 int num_progress_reports = 0;
+int num_frame_progress_reports = 0;
+int num_non_zero_frame_progress_reports = 0;
 
 void init_udp_socket(const std::string& host, int port)
 {
@@ -127,7 +129,11 @@ void process_progress(const char* data)
   ++num_progress_reports;
   auto pos = strstr(data, "frame=");
   if (pos) {
+    ++num_frame_progress_reports;
     total_frames = atoi(pos + 6);
+    if (total_frames > 0) {
+      ++num_non_zero_frame_progress_reports;
+    }
     resin_worker::Message msg;
     msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
     auto ts = msg.mutable_task_status();
@@ -261,7 +267,7 @@ extern "C" int main(int argc, char** argv)
       fprintf(stderr, "execve(ffmpeg, ...) failed with errno: %d - %s\n", errno, strerror(errno));
       exit(1);
     }
-    anon_log("ffmpeg_runner:num_progress_reports=" << num_progress_reports);
+    anon_log("progress_reports=" << num_progress_reports << ", with frame: " << num_frame_progress_reports << ", non-zero: " << num_non_zero_frame_progress_reports);
     anon_log("ffmpeg_runner:total_frames=" << total_frames);
     return 0;
   }
