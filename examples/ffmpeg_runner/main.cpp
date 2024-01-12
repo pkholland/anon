@@ -124,13 +124,13 @@ void show_help(int argc, char** argv)
   printf("\n");
 }
 
-void process_progress(const char* data)
+void process_progress(const std::string& data)
 {
   ++num_progress_reports;
-  auto pos = strstr(data, "frame=");
-  if (pos) {
+  auto pos = data.find("frame=");
+  if (pos != std::string::npos) {
     ++num_frame_progress_reports;
-    total_frames = atoi(pos + 6);
+    total_frames = atoi(&data.c_str()[pos + 6]);
     if (total_frames > 0) {
       ++num_non_zero_frame_progress_reports;
     }
@@ -144,6 +144,9 @@ void process_progress(const char* data)
     ts->set_completed_items(total_frames);
     ts->set_complete(false);
     send_udp_message(msg);
+  }
+  else {
+    anon_log("progress report with no frame=\n" << data);
   }
 }
 
