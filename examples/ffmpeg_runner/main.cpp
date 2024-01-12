@@ -38,6 +38,7 @@ std::string task_id;
 std::string worker_id;
 int progress_pipe[2];
 int total_frames;
+int num_progress_reports = 0;
 
 void init_udp_socket(const std::string& host, int port)
 {
@@ -123,6 +124,7 @@ void show_help(int argc, char** argv)
 
 void process_progress(const char* data)
 {
+  ++num_progress_reports;
   auto pos = strstr(data, "frame=");
   if (pos) {
     total_frames = atoi(pos + 6);
@@ -171,6 +173,7 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
+#if 0
   {
     std::ostringstream oss;
     oss << "ffmpeg_runner";
@@ -179,7 +182,7 @@ extern "C" int main(int argc, char** argv)
     }
     anon_log(oss.str());
   }
-
+#endif
 
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
@@ -258,6 +261,7 @@ extern "C" int main(int argc, char** argv)
       fprintf(stderr, "execve(ffmpeg, ...) failed with errno: %d - %s\n", errno, strerror(errno));
       exit(1);
     }
+    anon_log("ffmpeg_runner:num_progress_reports=" << num_progress_reports);
     anon_log("ffmpeg_runner:total_frames=" << total_frames);
     return 0;
   }
