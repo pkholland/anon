@@ -221,9 +221,9 @@ extern "C" int main(int argc, char** argv)
       close(progress_pipe[1]);
 
       // read from progress_pipe[0] until progress_pipe[1] closes
-      std::vector<char> buff(1024*16);
+      std::vector<char> buff(1024*32);
       while (true) {
-        auto rd = read(progress_pipe[0], &buff[0], buff.size() - 1);
+        auto rd = read(progress_pipe[0], &buff[0], buff.size());
         if (rd <= 0) {
           break;
         }
@@ -240,8 +240,8 @@ extern "C" int main(int argc, char** argv)
       // ffmpeg's stdout to interfere with ffmpeg_runner's stdout.
       // So redirect stdout to /dev/null.  Note that much of ffmpeg's
       // "logging" actually goes out to stderr (2) - not stdout (1)
-      auto n = open("/dev/null", O_WRONLY);
-      dup2(n, 1);
+      // auto n = open("/dev/null", O_WRONLY);
+      // dup2(n, 1);
 
       std::vector<char *> args2;
 
