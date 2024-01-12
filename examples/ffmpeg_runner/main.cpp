@@ -227,8 +227,7 @@ extern "C" int main(int argc, char** argv)
         if (rd <= 0) {
           break;
         }
-        buff[rd] = 0;
-        process_progress(&buff[0]);
+        process_progress(std::string(&buff[0], rd));
       }
     }
     else {
