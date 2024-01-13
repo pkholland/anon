@@ -38,9 +38,6 @@ std::string task_id;
 std::string worker_id;
 int progress_pipe[2];
 int total_frames;
-int num_progress_reports = 0;
-int num_frame_progress_reports = 0;
-int num_non_zero_frame_progress_reports = 0;
 
 void init_udp_socket(const std::string& host, int port)
 {
@@ -126,14 +123,9 @@ void show_help(int argc, char** argv)
 
 void process_progress(const std::string& data)
 {
-  ++num_progress_reports;
   auto pos = data.find("frame=");
   if (pos != std::string::npos) {
-    ++num_frame_progress_reports;
     total_frames = atoi(&data.c_str()[pos + 6]);
-    if (total_frames > 0) {
-      ++num_non_zero_frame_progress_reports;
-    }
     resin_worker::Message msg;
     msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
     auto ts = msg.mutable_task_status();
@@ -144,9 +136,6 @@ void process_progress(const std::string& data)
     ts->set_completed_items(total_frames);
     ts->set_complete(false);
     send_udp_message(msg);
-  }
-  else {
-    anon_log("progress report with no frame=\n" << data);
   }
 }
 
@@ -181,17 +170,6 @@ extern "C" int main(int argc, char** argv)
     show_help(argc, argv);
     exit(1);
   }
-
-#if 0
-  {
-    std::ostringstream oss;
-    oss << "ffmpeg_runner";
-    for (auto i = 1; i < argc; i++) {
-      oss << " " << argv[i];
-    }
-    anon_log(oss.str());
-  }
-#endif
 
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
@@ -254,10 +232,10 @@ extern "C" int main(int argc, char** argv)
       pipe_oss << "pipe:" << progress_pipe[1];
       auto pipe_arg = pipe_oss.str();
       args2.push_back(pipe_arg.data());
-      std::string loglevel("-loglevel");
-      std::string quiet("quiet");
-      args2.push_back(loglevel.data());
-      args2.push_back(quiet.data());
+      // std::string loglevel("-loglevel");
+      // std::string quiet("quiet");
+      // args2.push_back(loglevel.data());
+      // args2.push_back(quiet.data());
       while (ffparams < &argv[argc]) {
         args2.push_back(*ffparams);
         ++ffparams;
@@ -269,7 +247,6 @@ extern "C" int main(int argc, char** argv)
       fprintf(stderr, "execve(ffmpeg, ...) failed with errno: %d - %s\n", errno, strerror(errno));
       exit(1);
     }
-    anon_log("progress_reports=" << num_progress_reports << ", with frame: " << num_frame_progress_reports << ", non-zero: " << num_non_zero_frame_progress_reports);
     anon_log("ffmpeg_runner:total_frames=" << total_frames);
     return 0;
   }
