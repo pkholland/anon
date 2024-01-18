@@ -501,6 +501,7 @@ void run_worker(const ec2_info &ec2i)
                   }
                 }
               }
+              bash_cmd = std::string("AWS_DEFAULT_REGION=") + config.region + " " + bash_cmd;
             }
           }
           catch(...) {
