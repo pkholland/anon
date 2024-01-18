@@ -243,10 +243,10 @@ extern "C" int main(int argc, char** argv)
       pipe_oss << "pipe:" << progress_pipe[1];
       auto pipe_arg = pipe_oss.str();
       args2.push_back(pipe_arg.data());
-      // std::string loglevel("-loglevel");
-      // std::string quiet("quiet");
-      // args2.push_back(loglevel.data());
-      // args2.push_back(quiet.data());
+      std::string loglevel("-loglevel");
+      std::string quiet("quiet");
+      args2.push_back(loglevel.data());
+      args2.push_back(quiet.data());
       while (ffparams < &argv[argc]) {
         args2.push_back(*ffparams);
         ++ffparams;
