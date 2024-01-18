@@ -26,6 +26,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <thread>
+#include <sys/wait.h>
 #include "log.h"
 #include "worker_message.pb.h"
 
@@ -183,6 +184,8 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
+  int exit_code = 0;
+
   try {
     init_udp_socket(udp_host, udp_port);
     if (socketpair(AF_UNIX, SOCK_STREAM, 0, &progress_pipe[0]) != 0)
@@ -206,6 +209,14 @@ extern "C" int main(int argc, char** argv)
           break;
         }
         process_progress(std::string(&buff[0], rd));
+      }
+      int exit_status;
+      waitpid(pid, &exit_status, 0);
+      if (WIFSIGNALED(exit_status)) {
+        exit_code = WTERMSIG(exit_status);
+      }
+      else {
+        exit_code = WEXITSTATUS(exit_status);
       }
     }
     else {
@@ -248,7 +259,7 @@ extern "C" int main(int argc, char** argv)
       exit(1);
     }
     anon_log("ffmpeg_runner:total_frames=" << total_frames);
-    return 0;
+    return exit_code;
   }
   catch(...) {}
   return 1;
