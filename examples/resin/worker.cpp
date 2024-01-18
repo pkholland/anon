@@ -228,7 +228,7 @@ void start_done_action(const ec2_info &ec2i)
 std::pair<bool, std::string> exe_cmd(const std::string &cmd)
 {
   std::string out;
-  auto f = popen(cmd.c_str(), "r");
+  auto f = popen((cmd + " 2>&1").c_str(), "r");
   if (f) {
     char buff[1024];
     while (true) {
