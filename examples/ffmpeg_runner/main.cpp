@@ -29,6 +29,7 @@
 #include <sys/wait.h>
 #include "log.h"
 #include "worker_message.pb.h"
+#include "aws_client.h"
 
 namespace {
 
@@ -172,6 +173,8 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
+  aws_client_init();
+
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
   auto sz = fread(&ff_loc[0], 1, sizeof(ff_loc), ff);
@@ -267,10 +270,12 @@ extern "C" int main(int argc, char** argv)
           oss << " ";
         }
       }
-      anon_log("failed command line:\n" << oss.str());
+      anon_log("region: " << aws_get_default_region() << ", failed command line:\n" << oss.str());
     }
+    aws_client_term();
     return exit_code;
   }
   catch(...) {}
+  aws_client_term();
   return 1;
 }
