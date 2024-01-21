@@ -29,8 +29,6 @@
 #include <sys/wait.h>
 #include "log.h"
 #include "worker_message.pb.h"
-#include <thread>
-#include <condition_variable>
 
 namespace {
 
