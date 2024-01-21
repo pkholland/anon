@@ -30,6 +30,7 @@
 #include "log.h"
 #include "worker_message.pb.h"
 #include <aws/crt/ImdsClient.h>
+#include <aws/core/Aws.h>
 #include <aws/core/Globals.h>
 #include <thread>
 #include <condition_variable>
@@ -176,27 +177,6 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
-  Aws::Crt::Imds::ImdsClientConfig imdsConfig;
-  imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
-  Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
-  std::string region;
-  std::condition_variable cond;
-  std::mutex mtx;
-  bool running{true};
-  
-  imdsClient.GetInstanceInfo([&](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
-    Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
-    std::lock_guard<std::mutex> l(mtx);
-    region = inf.region;
-    running = false;
-    cond.notify_all();
-  }, nullptr);
-
-  {
-    std::unique_lock<std::mutex> l(mtx);
-    while (running) {cond.wait(l);}
-  }
-
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
   auto sz = fread(&ff_loc[0], 1, sizeof(ff_loc), ff);
@@ -292,6 +272,30 @@ extern "C" int main(int argc, char** argv)
           oss << " ";
         }
       }
+
+      Aws::SDKOptions options;
+      Aws::InitAPI(options);
+      Aws::Crt::Imds::ImdsClientConfig imdsConfig;
+      imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
+      Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
+      std::string region;
+      std::condition_variable cond;
+      std::mutex mtx;
+      bool running{true};
+      
+      imdsClient.GetInstanceInfo([&](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
+        Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
+        std::lock_guard<std::mutex> l(mtx);
+        region = inf.region;
+        running = false;
+        cond.notify_all();
+      }, nullptr);
+      {
+        std::unique_lock<std::mutex> l(mtx);
+        while (running) {cond.wait(l);}
+      }
+      Aws::ShutdownAPI(options);
+
       anon_log("region: " << region << ", failed command line:\n" << oss.str());
     }
     return exit_code;
