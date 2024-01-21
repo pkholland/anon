@@ -259,6 +259,16 @@ extern "C" int main(int argc, char** argv)
       exit(1);
     }
     anon_log("ffmpeg_runner:total_frames=" << total_frames);
+    if (exit_code != 0) {
+      std::ostringstream oss;
+      for (auto i = 0; i < argc; i++) {
+        oss << argv[i];
+        if (i < argc - 1) {
+          oss << " ";
+        }
+      }
+      anon_log("failed command line:\n" << oss.str());
+    }
     return exit_code;
   }
   catch(...) {}
