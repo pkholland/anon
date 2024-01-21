@@ -30,6 +30,7 @@
 #include "log.h"
 #include "worker_message.pb.h"
 #include "aws_client.h"
+#include "dns_lookup.h"
 
 namespace {
 
@@ -173,7 +174,9 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
+  dns_lookup::start_service();
   aws_client_init();
+  
 
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
@@ -273,9 +276,11 @@ extern "C" int main(int argc, char** argv)
       anon_log("region: " << aws_get_default_region() << ", failed command line:\n" << oss.str());
     }
     aws_client_term();
+    dns_lookup::end_service();
     return exit_code;
   }
   catch(...) {}
+  dns_lookup::end_service();
   aws_client_term();
   return 1;
 }
