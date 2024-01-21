@@ -29,8 +29,10 @@
 #include <sys/wait.h>
 #include "log.h"
 #include "worker_message.pb.h"
-#include "aws_client.h"
-#include "dns_lookup.h"
+#include <aws/crt/ImdsClient.h>
+#include <aws/core/Globals.h>
+#include <thread>
+#include <condition_variable>
 
 namespace {
 
@@ -174,9 +176,26 @@ extern "C" int main(int argc, char** argv)
     exit(1);
   }
 
-  dns_lookup::start_service();
-  aws_client_init();
+  Aws::Crt::Imds::ImdsClientConfig imdsConfig;
+  imdsConfig.Bootstrap = Aws::GetDefaultClientBootstrap();
+  Aws::Crt::Imds::ImdsClient imdsClient(imdsConfig);
+  std::string region;
+  std::condition_variable cond;
+  std::mutex mtx;
+  bool running{true};
   
+  imdsClient.GetInstanceInfo([&](const Aws::Crt::Imds::InstanceInfoView &instanceInfo, int errorCode, void *userData){
+    Aws::Crt::Imds::InstanceInfo inf(instanceInfo);
+    std::lock_guard<std::mutex> l(mtx);
+    region = inf.region;
+    running = false;
+    cond.notify_all();
+  }, nullptr);
+
+  {
+    std::unique_lock<std::mutex> l(mtx);
+    while (running) {cond.wait(l);}
+  }
 
   auto ff = popen("which ffmpeg", "r");
   char ff_loc[1024];
@@ -273,14 +292,10 @@ extern "C" int main(int argc, char** argv)
           oss << " ";
         }
       }
-      anon_log("region: " << aws_get_default_region() << ", failed command line:\n" << oss.str());
+      anon_log("region: " << region << ", failed command line:\n" << oss.str());
     }
-    aws_client_term();
-    dns_lookup::end_service();
     return exit_code;
   }
   catch(...) {}
-  dns_lookup::end_service();
-  aws_client_term();
   return 1;
 }
