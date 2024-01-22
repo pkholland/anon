@@ -28,6 +28,7 @@ message Message {
     optional bool success = 7;
     optional float duration = 8;
     optional string message = 9;
+    optional string region = 10;
   }
   optional TaskStatus task_status = 3;
 

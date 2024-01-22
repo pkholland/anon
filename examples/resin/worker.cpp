@@ -534,6 +534,7 @@ void run_worker(const ec2_info &ec2i)
             ts->set_cpu_count(0);
             ts->set_completed(0.0f);
             ts->set_complete(false);
+            ts->set_region(ec2i.default_region);
             anon_log("sending task start message");
             send_udp_message(msg);
           }
@@ -558,6 +559,7 @@ void run_worker(const ec2_info &ec2i)
                 out.second.resize(32768);
               }
               ts->set_message(out.second);
+              ts->set_region(ec2i.default_region);
               anon_log("sending task done message");
               auto num_done_tries = 0;
               while (num_done_tries < 8) {
