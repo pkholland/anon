@@ -435,8 +435,7 @@ void run_worker(const ec2_info &ec2i)
     if (outcome.IsSuccess())
     {
       auto &messages = outcome.GetResult().GetMessages();
-      if (messages.size() > 0)
-      {
+      if (messages.size() > 0) {
         {
           std::unique_lock<std::mutex> l(keep_alive_mutex);
           for (auto &m : messages)
@@ -446,8 +445,7 @@ void run_worker(const ec2_info &ec2i)
         t_spec.it_value = cur_time();
         timerfd_settime(timerfd, TFD_TIMER_ABSTIME, &t_spec, 0);
 
-        for (auto &m : messages)
-        {
+        for (auto &m : messages) {
           auto valid_message = true;
           auto cmd = get_body(m);
           std::string bash_cmd;
@@ -543,8 +541,7 @@ void run_worker(const ec2_info &ec2i)
 
           auto out = exe_cmd(bash_cmd);
 
-          if (out.first || approx_receive_count >= max_retries)
-          {
+          //if (out.first || approx_receive_count >= max_retries) {
             if (udp_sock != -1) {
               resin_worker::Message msg;
               msg.set_message_type(resin_worker::Message_MessageType::Message_MessageType_TASK_STATUS);
@@ -583,7 +580,7 @@ void run_worker(const ec2_info &ec2i)
             auto outcome = client.DeleteMessage(req);
             if (!outcome.IsSuccess())
               anon_log("DeleteMessage failed: " << outcome.GetError());
-          }
+          //}
         }
         last_message_time = cur_time();
       }
