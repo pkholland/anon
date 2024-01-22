@@ -559,19 +559,33 @@ void run_worker(const ec2_info &ec2i)
               }
               ts->set_message(out.second);
               anon_log("sending task done message");
-              if (send_udp_message(msg)) {
-                // TODO: get this to time out correctly, check
-                // what is being returned...
-                struct pollfd  pfd;
-                pfd.fd = udp_sock;
-                pfd.events = POLL_IN;
-                auto ready = poll(&pfd, 1, 500);
-                if (ready == 1) {
-                  std::vector<char> buff(4069);
-                  sockaddr_in6 addr;
-                  socklen_t sz = sizeof(addr);
-                  ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
-                  anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
+              auto num_done_tries = 0;
+              while (num_done_tries < 8) {
+                if (send_udp_message(msg)) {
+                  anon_log("task done message sent, waiting for reply, try #" << num_done_tries+1);
+                  // TODO: get this to time out correctly, check
+                  // what is being returned...
+                  struct pollfd  pfd;
+                  pfd.fd = udp_sock;
+                  pfd.events = POLL_IN;
+                  auto ready = poll(&pfd, 1, 500);
+                  if (ready == 1) {
+                    std::vector<char> buff(4069);
+                    sockaddr_in6 addr;
+                    socklen_t sz = sizeof(addr);
+                    ::recvfrom(udp_sock, &buff[0], buff.size(), 0, (sockaddr*)&addr, &sz);
+                    anon_log("recived " << sz << " length reply from " << addr << ", assuming it is the ack...");
+                    break;
+                  }
+                  else {
+                    ++num_done_tries;
+                    if (num_done_tries >= 8) {
+                      anon_log("no reply from udp server, moving on...");
+                    }
+                  }
+                } else {
+                  anon_log("failed to send done message, moving on...");
+                  break;
                 }
               }
             }
