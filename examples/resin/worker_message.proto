@@ -14,6 +14,7 @@ message Message {
   message WorkerStatus {
     required string worker_id = 1;
     required uint32 cpu_count = 2;
+    required string region = 3;
   }
   optional WorkerStatus worker_status = 2;
 

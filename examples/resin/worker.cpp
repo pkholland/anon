@@ -354,6 +354,7 @@ void run_worker(const ec2_info &ec2i)
       auto ws = msg.mutable_worker_status();
       ws->set_cpu_count(std::thread::hardware_concurrency());
       ws->set_worker_id(worker_id);
+      ws->set_region(ec2i.default_region);
       anon_log("sending worker startup message");
       send_udp_message(msg);
     }
@@ -590,6 +591,7 @@ void run_worker(const ec2_info &ec2i)
         auto ws = msg.mutable_worker_status();
         ws->set_cpu_count(std::thread::hardware_concurrency());
         ws->set_worker_id(worker_id);
+        ws->set_region(ec2i.default_region);
         anon_log("sending worker keep alive message");
         send_udp_message(msg);
       }
@@ -603,6 +605,7 @@ void run_worker(const ec2_info &ec2i)
         auto ws = msg.mutable_worker_status();
         ws->set_cpu_count(0);
         ws->set_worker_id(worker_id);
+        ws->set_region(ec2i.default_region);
         anon_log("sending worker shutdown message");
         send_udp_message(msg);
       }
