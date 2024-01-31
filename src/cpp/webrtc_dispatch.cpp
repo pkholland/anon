@@ -227,19 +227,19 @@ void webrtc_dispatch::recv_msg(
       }
     }
     else if (first_byte >= 16 && first_byte <= 19) {
-      anon_log("ignoring likely ZRTP message (" << (int)first_byte << ")");
+      //anon_log("ignoring likely ZRTP message (" << (int)first_byte << ")");
     }
     else if (first_byte >= 20 && first_byte <= 63) {
       dtls->recv_msg(msg, len, addr);
     }
     else if (first_byte >= 64 && first_byte <= 79) {
-      anon_log("ignoring likely TURN Channel message (" << (int)first_byte << ")");
+      //anon_log("ignoring likely TURN Channel message (" << (int)first_byte << ")");
     }
     else if (first_byte >= 128 && first_byte <= 191) {
-      anon_log("TODO: ignoring likely RTP/RTCP message (" << (int)first_byte << ")");
+      //anon_log("TODO: ignoring likely RTP/RTCP message (" << (int)first_byte << ")");
     }
     else {
-      anon_log("unknown first byte range: (" << (int)first_byte << ")");
+      //anon_log("unknown first byte range: (" << (int)first_byte << ")");
     }
   }
 }

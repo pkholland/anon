@@ -160,6 +160,6 @@ void dtls_dispatch::recv_msg(const uint8_t *msg,
     conn->recv_msg(msg, len);
   }
   else {
-    anon_log("possible DTLS message from unknown source addr: " << *sockaddr);
+    //anon_log("possible DTLS message from unknown source addr: " << *sockaddr);
   }
 }
