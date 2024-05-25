@@ -428,9 +428,9 @@ void run_worker(const ec2_info &ec2i)
   {
     Aws::SQS::Model::ReceiveMessageRequest req;
     req.WithQueueUrl(queue_url.c_str()).WithMaxNumberOfMessages(1).WithWaitTimeSeconds(wait_secs);
-    Aws::Vector<Aws::SQS::Model::QueueAttributeName> att;
-    att.push_back(Aws::SQS::Model::QueueAttributeName::All);
-    req.WithAttributeNames(std::move(att));
+    Aws::Vector<Aws::SQS::Model::MessageSystemAttributeName> att;
+    att.push_back(Aws::SQS::Model::MessageSystemAttributeName::All);
+    req.WithMessageSystemAttributeNames(std::move(att));
 
     auto outcome = client.ReceiveMessage(req);
     if (outcome.IsSuccess())

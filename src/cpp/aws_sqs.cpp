@@ -169,9 +169,9 @@ void aws_sqs_listener::start_listen()
 {
   Model::ReceiveMessageRequest req;
   req.WithQueueUrl(_queue_url).WithMaxNumberOfMessages(_single_concurrent_message ? 1 : _max_read_messages).WithWaitTimeSeconds(read_wait_time);
-  Aws::Vector<Model::QueueAttributeName> att;
-  att.push_back(Model::QueueAttributeName::All);
-  req.WithAttributeNames(std::move(att));
+  Aws::Vector<Model::MessageSystemAttributeName> att;
+  att.push_back(Model::MessageSystemAttributeName::All);
+  req.WithMessageSystemAttributeNames(std::move(att));
   std::weak_ptr<aws_sqs_listener> wp = shared_from_this();
 #if EXTENSIVE_AWS_LOGS > 1
   anon_log("aws_sqs, calling ReceiveMessageAsync");
